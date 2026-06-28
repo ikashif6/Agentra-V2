@@ -176,7 +176,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#E8470A" }} />
+        <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#D85A30" }} />
       </div>
     );
   }
@@ -220,7 +220,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
               <div className="flex items-center gap-2 flex-wrap">
                 {isStaff && !isClosed && (
                   <Select onValueChange={(v: string | null) => { if (v) updateStatus(v); }} disabled={statusUpdating}>
-                    <SelectTrigger className="w-36 text-xs focus:ring-[#E8470A]">
+                    <SelectTrigger className="w-36 text-xs focus:ring-[#D85A30]">
                       <SelectValue placeholder="Change status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -299,7 +299,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
                 <div key={msg._id} className={`flex gap-3 ${isMe ? "flex-row-reverse" : ""}`}>
                   <Avatar className="h-8 w-8 shrink-0">
                     <AvatarFallback className="text-xs font-semibold"
-                      style={{ background: isMe ? "#E8470A" : "#F3F4F6", color: isMe ? "white" : "#374151" }}>
+                      style={{ background: isMe ? "#D85A30" : "#F3F4F6", color: isMe ? "white" : "#374151" }}>
                       {initials(msg.sender?.fullName ?? msg.senderEmail ?? "?")}
                     </AvatarFallback>
                   </Avatar>
@@ -321,14 +321,14 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
                           ? "bg-amber-50 border border-amber-100 text-amber-900"
                           : isMe ? "text-white" : "bg-white border border-gray-100 text-gray-700"
                       }`}
-                      style={isMe && !msg.isInternal ? { background: "#E8470A" } : {}}>
+                      style={isMe && !msg.isInternal ? { background: "#D85A30" } : {}}>
                       {msg.body}
                     </div>
                     {msg.attachments.length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {msg.attachments.map((a, i) => (
                           <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"
-                            className="text-xs flex items-center gap-1 hover:underline" style={{ color: "#E8470A" }}>
+                            className="text-xs flex items-center gap-1 hover:underline" style={{ color: "#D85A30" }}>
                             <Paperclip className="h-3 w-3" /> {a.filename}
                           </a>
                         ))}
@@ -352,7 +352,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendMessage();
                 }}
                 placeholder={isInternal ? "Write an internal note…" : "Write a reply… (Ctrl+Enter to send)"}
-                className={`min-h-[100px] resize-none focus-visible:ring-[#E8470A] ${isInternal ? "bg-amber-50 border-amber-200" : ""}`}
+                className={`min-h-[100px] resize-none focus-visible:ring-[#D85A30] ${isInternal ? "bg-amber-50 border-amber-200" : ""}`}
               />
               <div className="flex items-center justify-between flex-wrap gap-3">
                 {isStaff ? (
@@ -363,8 +363,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
                     </Label>
                   </div>
                 ) : <div />}
-                <Button onClick={sendMessage} disabled={sending || !msgBody.trim()} size="sm"
-                  style={{ background: "#E8470A" }}>
+                <Button onClick={sendMessage} disabled={sending || !msgBody.trim()} size="sm">
                   {sending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
                   {isInternal ? "Add note" : "Send reply"}
                 </Button>
@@ -390,7 +389,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
               {ticket.assigned_agent ? (
                 <div className="flex items-center gap-2.5">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-xs font-bold" style={{ background: "#E8470A", color: "white" }}>
+                    <AvatarFallback className="text-xs font-bold bg-primary text-primary-foreground">
                       {initials(ticket.assigned_agent.firstName + " " + ticket.assigned_agent.lastName)}
                     </AvatarFallback>
                   </Avatar>
@@ -419,7 +418,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
                 onValueChange={(v: string | null) => { if (v) handleAssignDept(v); }}
                 disabled={assigningDept}
               >
-                <SelectTrigger className="text-sm focus:ring-[#E8470A]">
+                <SelectTrigger className="text-sm focus:ring-[#D85A30]">
                   {assigningDept ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SelectValue placeholder="None" />}
                 </SelectTrigger>
                 <SelectContent>
@@ -437,7 +436,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
                 onValueChange={(v: string | null) => { if (v) handleAssignTeam(v); }}
                 disabled={assigningTeam}
               >
-                <SelectTrigger className="text-sm focus:ring-[#E8470A]">
+                <SelectTrigger className="text-sm focus:ring-[#D85A30]">
                   {assigningTeam ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SelectValue placeholder="None" />}
                 </SelectTrigger>
                 <SelectContent>
@@ -456,7 +455,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
                   <select
                     value={personRole}
                     onChange={(e) => setPersonRole(e.target.value as typeof personRole)}
-                    className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-500 focus:outline-none focus:ring-1 focus:ring-[#E8470A]"
+                    className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-gray-500 focus:outline-none focus:ring-1 focus:ring-[#D85A30]"
                   >
                     <option value="agent">agent</option>
                     <option value="customer">customer</option>
@@ -465,7 +464,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
                   <button
                     onClick={() => setPersonPickerOpen(true)}
                     className="flex items-center gap-1 text-xs font-medium hover:underline"
-                    style={{ color: "#E8470A" }}
+                    style={{ color: "#D85A30" }}
                   >
                     <UserPlus className="h-3.5 w-3.5" /> Add
                   </button>
@@ -480,7 +479,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
                     <div key={i} className="flex items-center gap-2 group">
                       <Avatar className="h-7 w-7 shrink-0">
                         <AvatarFallback className="text-[10px] font-bold"
-                          style={{ background: "#FFF0EB", color: "#E8470A" }}>
+                          style={{ background: "#FDEBE4", color: "#D85A30" }}>
                           {initials(p.user?.fullName ?? p.user?.firstName ?? "?")}
                         </AvatarFallback>
                       </Avatar>

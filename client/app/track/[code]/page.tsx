@@ -96,7 +96,7 @@ export default function TrackTicketDetailPage({ params }: { params: Promise<{ co
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#E8470A" }} />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#D85A30" }} />
       </div>
     );
   }
@@ -107,7 +107,7 @@ export default function TrackTicketDetailPage({ params }: { params: Promise<{ co
         <div className="text-center space-y-4 max-w-sm">
           <AlertCircle className="h-12 w-12 text-red-400 mx-auto" />
           <h2 className="text-xl font-semibold text-gray-900">{error ?? "Something went wrong"}</h2>
-          <Button onClick={() => router.push("/track")} style={{ background: "#E8470A" }}>
+          <Button onClick={() => router.push("/track")}>
             Track another ticket
           </Button>
         </div>
@@ -123,7 +123,7 @@ export default function TrackTicketDetailPage({ params }: { params: Promise<{ co
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#E8470A" }}>
+            <div className="flex size-8 items-center justify-center rounded-lg bg-primary">
               <span className="text-white font-bold text-sm">A</span>
             </div>
             <div>
@@ -180,7 +180,7 @@ export default function TrackTicketDetailPage({ params }: { params: Promise<{ co
             return (
               <div key={msg._id} className={`flex gap-3 ${isOwn ? "flex-row-reverse" : ""}`}>
                 <Avatar className="h-8 w-8 shrink-0">
-                  <AvatarFallback className="text-xs" style={{ background: "#FFF0EB", color: "#E8470A" }}>
+                  <AvatarFallback className="text-xs" style={{ background: "#FDEBE4", color: "#D85A30" }}>
                     {initials(msg.sender?.fullName ?? msg.senderEmail ?? "?")}
                   </AvatarFallback>
                 </Avatar>
@@ -198,7 +198,7 @@ export default function TrackTicketDetailPage({ params }: { params: Promise<{ co
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {msg.attachments.map((a, i) => (
                         <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"
-                          className="text-xs text-[#E8470A] hover:underline flex items-center gap-1">
+                          className="text-xs text-[#D85A30] hover:underline flex items-center gap-1">
                           <Paperclip className="h-3 w-3" /> {a.filename}
                         </a>
                       ))}
@@ -223,7 +223,7 @@ export default function TrackTicketDetailPage({ params }: { params: Promise<{ co
               value={msgBody}
               onChange={(e) => setMsgBody(e.target.value)}
               placeholder="Write a reply..."
-              className="min-h-[100px] resize-none focus-visible:ring-[#E8470A] border-gray-200"
+              className="min-h-[100px] resize-none focus-visible:ring-[#D85A30] border-gray-200"
             />
             <div className="flex items-center justify-between">
               <button
@@ -235,7 +235,7 @@ export default function TrackTicketDetailPage({ params }: { params: Promise<{ co
                 Close this ticket
               </button>
               <Button onClick={sendMessage} disabled={sending || !msgBody.trim()}
-                size="sm" style={{ background: "#E8470A" }}>
+                size="sm">
                 {sending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
                 Send
               </Button>

@@ -91,7 +91,7 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
     } finally { setCreating(false); }
   };
 
-  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" style={{ color: "#E8470A" }} /></div>;
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" style={{ color: "#D85A30" }} /></div>;
   if (!department) return null;
 
   const headIds = department.heads.map((h) => h._id);
@@ -111,7 +111,7 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
             {department.description && <p className="text-sm text-gray-500 mt-1">{department.description}</p>}
           </div>
           {canManage && (
-            <Button onClick={() => setCreateTeamOpen(true)} style={{ background: "#E8470A" }} size="sm">
+            <Button onClick={() => setCreateTeamOpen(true)} size="sm">
               <Plus className="h-4 w-4 mr-2" /> New team
             </Button>
           )}
@@ -134,13 +134,13 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
             <div className="flex flex-wrap gap-2">
               {department.heads.map((h) => (
                 <div key={h._id}
-                  className="flex items-center gap-2 bg-orange-50 border border-orange-100 px-3 py-1.5 rounded-full">
+                  className="flex items-center gap-2 bg-brand-muted border border-brand-muted px-3 py-1.5 rounded-full">
                   <Avatar className="h-5 w-5">
-                    <AvatarFallback className="text-[10px] font-bold" style={{ background: "#E8470A", color: "white" }}>
+                    <AvatarFallback className="text-[10px] font-bold bg-primary text-primary-foreground">
                       {initials(h)}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-xs font-medium text-[#E8470A]">{h.firstName} {h.lastName}</span>
+                  <span className="text-xs font-medium text-[#D85A30]">{h.firstName} {h.lastName}</span>
                   {isOwnerAdmin && (
                     <button
                       onClick={() => handleRemoveHead(h._id)}
@@ -167,7 +167,7 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
             <Users className="h-8 w-8 mx-auto mb-2 text-gray-200" />
             <p className="text-sm text-gray-400">No teams in this department yet</p>
             {canManage && (
-              <Button onClick={() => setCreateTeamOpen(true)} className="mt-3" size="sm" style={{ background: "#E8470A" }}>
+              <Button onClick={() => setCreateTeamOpen(true)} className="mt-3" size="sm">
                 Create first team
               </Button>
             )}
@@ -176,14 +176,14 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
           <div className="grid gap-3 sm:grid-cols-2">
             {teams.map((team) => (
               <Link key={team._id} href={`/teams/${team._id}`}
-                className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-[#E8470A] hover:shadow-md transition-all group">
+                className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-[#D85A30] hover:shadow-md transition-all group">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold text-gray-900 group-hover:text-[#E8470A] transition-colors">{team.name}</h4>
+                  <h4 className="font-semibold text-gray-900 group-hover:text-[#D85A30] transition-colors">{team.name}</h4>
                   <Badge variant="secondary" className="text-xs">{team.members.length} members</Badge>
                 </div>
                 {team.description && <p className="text-xs text-gray-500 mb-3 line-clamp-2">{team.description}</p>}
                 <div className="flex items-center gap-1.5 text-xs text-gray-500 pt-2 border-t border-gray-50">
-                  <Crown className="h-3 w-3" style={{ color: "#E8470A" }} />
+                  <Crown className="h-3 w-3" style={{ color: "#D85A30" }} />
                   <span>{team.teamLead.firstName} {team.teamLead.lastName}</span>
                 </div>
               </Link>
@@ -210,21 +210,21 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
             <div className="space-y-1">
               <Label>Team name</Label>
               <Input value={teamName} onChange={(e) => setTeamName(e.target.value)}
-                placeholder="e.g. Frontend Support" className="focus-visible:ring-[#E8470A]" />
+                placeholder="e.g. Frontend Support" className="focus-visible:ring-[#D85A30]" />
             </div>
             <div className="space-y-1">
               <Label>Description <span className="text-gray-400 text-xs">(optional)</span></Label>
               <Input value={teamDesc} onChange={(e) => setTeamDesc(e.target.value)}
-                placeholder="What does this team handle?" className="focus-visible:ring-[#E8470A]" />
+                placeholder="What does this team handle?" className="focus-visible:ring-[#D85A30]" />
             </div>
 
             {/* Team lead picker */}
             <div className="space-y-1">
               <Label>Team Lead</Label>
               {teamLead ? (
-                <div className="flex items-center gap-3 p-3 rounded-xl border border-orange-100 bg-orange-50">
+                <div className="flex items-center gap-3 p-3 rounded-xl border border-brand-muted bg-brand-muted">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-xs font-bold" style={{ background: "#E8470A", color: "white" }}>
+                    <AvatarFallback className="text-xs font-bold bg-primary text-primary-foreground">
                       {initials(teamLead)}
                     </AvatarFallback>
                   </Avatar>
@@ -246,7 +246,7 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
 
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setCreateTeamOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreateTeam} disabled={creating} style={{ background: "#E8470A" }}>
+              <Button onClick={handleCreateTeam} disabled={creating}>
                 {creating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 Create team
               </Button>

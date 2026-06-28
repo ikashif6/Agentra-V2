@@ -38,7 +38,7 @@ export default function TeamsPage() {
     <div className="space-y-4">
       <div className="relative w-64">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input placeholder="Search teams…" className="pl-9 focus-visible:ring-[#E8470A]"
+        <Input placeholder="Search teams…" className="pl-9 focus-visible:ring-[#D85A30]"
           value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
@@ -54,14 +54,14 @@ export default function TeamsPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#E8470A" }} />
+            <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#D85A30" }} />
           </div>
         ) : teams.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-sm text-gray-400">
             <Users className="h-8 w-8 text-gray-200" />
             {search ? "No teams match your search." : "No teams yet. Create one from a department."}
             {!search && (
-              <Link href="/departments" className="text-sm font-medium hover:underline" style={{ color: "#E8470A" }}>
+              <Link href="/departments" className="text-sm font-medium hover:underline" style={{ color: "#D85A30" }}>
                 Go to Departments →
               </Link>
             )}
@@ -73,7 +73,7 @@ export default function TeamsPage() {
                 className="grid grid-cols-[2fr_2fr_1fr_1fr_32px] gap-4 items-center px-5 py-4 hover:bg-gray-50 transition-colors group">
                 {/* Team name */}
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 group-hover:text-[#E8470A] truncate transition-colors">
+                  <p className="text-sm font-semibold text-gray-900 group-hover:text-[#D85A30] truncate transition-colors">
                     {team.name}
                   </p>
                   {team.description && (
@@ -84,14 +84,14 @@ export default function TeamsPage() {
                 {/* Lead */}
                 <div className="flex items-center gap-2 min-w-0">
                   <Avatar className="h-6 w-6 shrink-0">
-                    <AvatarFallback className="text-[10px] font-bold" style={{ background: "#E8470A", color: "white" }}>
+                    <AvatarFallback className="text-[10px] font-bold bg-primary text-primary-foreground">
                       {team.teamLead.firstName[0]}{team.teamLead.lastName[0]}
                     </AvatarFallback>
                   </Avatar>
                   <span className="text-sm text-gray-700 truncate">
                     {team.teamLead.firstName} {team.teamLead.lastName}
                   </span>
-                  <Crown className="h-3 w-3 shrink-0" style={{ color: "#E8470A" }} />
+                  <Crown className="h-3 w-3 shrink-0" style={{ color: "#D85A30" }} />
                 </div>
 
                 {/* Department */}
@@ -104,7 +104,7 @@ export default function TeamsPage() {
                   {team.members.length} member{team.members.length !== 1 ? "s" : ""}
                 </Badge>
 
-                <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-[#E8470A] transition-colors" />
+                <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-[#D85A30] transition-colors" />
               </Link>
             ))}
           </div>

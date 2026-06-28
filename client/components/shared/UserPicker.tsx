@@ -107,7 +107,7 @@ export default function UserPicker({
               placeholder="Search by name or email…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 focus-visible:ring-[#E8470A]"
+              className="pl-9 focus-visible:ring-[#D85A30]"
             />
           </div>
         </div>
@@ -116,7 +116,7 @@ export default function UserPicker({
         <div className="overflow-y-auto max-h-72 px-2 pb-2">
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#E8470A" }} />
+              <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#D85A30" }} />
             </div>
           ) : users.length === 0 ? (
             <p className="text-center text-sm text-gray-400 py-8">
@@ -134,7 +134,7 @@ export default function UserPicker({
                   <Avatar className="h-9 w-9 shrink-0">
                     <AvatarFallback
                       className="text-xs font-semibold"
-                      style={{ background: "#FFF0EB", color: "#E8470A" }}
+                      style={{ background: "#FDEBE4", color: "#D85A30" }}
                     >
                       {initials(u)}
                     </AvatarFallback>
@@ -150,7 +150,7 @@ export default function UserPicker({
                       {u.role}
                     </Badge>
                     {multi && isSelected && (
-                      <Check className="h-4 w-4" style={{ color: "#E8470A" }} />
+                      <Check className="h-4 w-4" style={{ color: "#D85A30" }} />
                     )}
                   </div>
                 </button>
@@ -165,8 +165,7 @@ export default function UserPicker({
             <span className="text-xs text-gray-400">{selected.length} selected</span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button size="sm" disabled={selected.length === 0} onClick={confirm}
-                style={{ background: "#E8470A" }}>
+              <Button size="sm" disabled={selected.length === 0} onClick={confirm}>
                 {confirmLabel}
               </Button>
             </div>

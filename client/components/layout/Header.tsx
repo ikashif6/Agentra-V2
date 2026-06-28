@@ -59,10 +59,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
         {/* Notification bell */}
         <button className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors">
           <Bell className="h-5 w-5 text-gray-500" />
-          <span
-            className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full border-2 border-white"
-            style={{ background: "#E8470A" }}
-          />
+          <span className="absolute top-1.5 right-1.5 size-2 rounded-full border-2 border-white bg-primary" />
         </button>
 
         {/* Profile dropdown */}
@@ -71,8 +68,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             <button className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl hover:bg-gray-100 transition-colors focus:outline-none">
               <Avatar className="h-8 w-8">
                 <AvatarFallback
-                  className="text-xs font-bold"
-                  style={{ background: "#E8470A", color: "white" }}
+                  className="text-xs font-bold bg-primary text-primary-foreground"
                 >
                   {initials(user?.fullName ?? user?.firstName ?? "?")}
                 </AvatarFallback>
@@ -91,7 +87,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             {/* Profile card inside dropdown */}
             <DropdownMenuLabel className="p-0">
               <div className="px-4 py-4 flex items-center gap-3"
-                style={{ background: "linear-gradient(135deg,#E8470A,#C73A08)" }}>
+                style={{ background: "linear-gradient(135deg,#D85A30,#B84A28)" }}>
                 <Avatar className="h-11 w-11 shrink-0">
                   <AvatarFallback className="text-sm font-bold bg-white/20 text-white">
                     {initials(user?.fullName ?? user?.firstName ?? "?")}

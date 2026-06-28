@@ -120,13 +120,13 @@ export default function TicketsPage() {
           {/* Search */}
           <div className="relative w-56">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input placeholder="Search tickets…" className="pl-9 focus-visible:ring-[#E8470A]"
+            <Input placeholder="Search tickets…" className="pl-9 focus-visible:ring-[#D85A30]"
               value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
 
           {/* Status */}
           <Select value={statusFilter} onValueChange={(v: string | null) => setStatusFilter(v ?? "all")}>
-            <SelectTrigger className="w-36 focus:ring-[#E8470A]">
+            <SelectTrigger className="w-36 focus:ring-[#D85A30]">
               <Filter className="h-3.5 w-3.5 mr-1 text-gray-400" />
               <SelectValue placeholder="Status" />
             </SelectTrigger>
@@ -140,7 +140,7 @@ export default function TicketsPage() {
 
           {/* Priority */}
           <Select value={priorityFilter} onValueChange={(v: string | null) => setPriorityFilter(v ?? "all")}>
-            <SelectTrigger className="w-32 focus:ring-[#E8470A]">
+            <SelectTrigger className="w-32 focus:ring-[#D85A30]">
               <SelectValue placeholder="Priority" />
             </SelectTrigger>
             <SelectContent>
@@ -154,7 +154,7 @@ export default function TicketsPage() {
           {/* Department filter — staff only */}
           {isStaff && departments.length > 0 && (
             <Select value={deptFilter} onValueChange={(v: string | null) => setDeptFilter(v ?? "all")}>
-              <SelectTrigger className="w-40 focus:ring-[#E8470A]">
+              <SelectTrigger className="w-40 focus:ring-[#D85A30]">
                 <SelectValue placeholder="Department" />
               </SelectTrigger>
               <SelectContent>
@@ -169,7 +169,7 @@ export default function TicketsPage() {
           {/* Team filter — staff only */}
           {isStaff && teams.length > 0 && (
             <Select value={teamFilter} onValueChange={(v: string | null) => setTeamFilter(v ?? "all")}>
-              <SelectTrigger className="w-36 focus:ring-[#E8470A]">
+              <SelectTrigger className="w-36 focus:ring-[#D85A30]">
                 <SelectValue placeholder="Team" />
               </SelectTrigger>
               <SelectContent>
@@ -183,7 +183,7 @@ export default function TicketsPage() {
         </div>
 
         {!isOwner && (
-          <Button onClick={() => setCreateOpen(true)} style={{ background: "#E8470A" }}>
+          <Button onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4 mr-2" /> New ticket
           </Button>
         )}
@@ -193,7 +193,7 @@ export default function TicketsPage() {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#E8470A" }} />
+            <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#D85A30" }} />
           </div>
         ) : tickets.length === 0 ? (
           <div className="text-center py-16 text-sm text-gray-400">
@@ -216,13 +216,13 @@ export default function TicketsPage() {
                 <tr key={t._id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-5 py-3.5">
                     <Link href={`/tickets/${t.ticket_code}`}
-                      className="font-mono text-xs font-semibold hover:underline" style={{ color: "#E8470A" }}>
+                      className="font-mono text-xs font-semibold hover:underline" style={{ color: "#D85A30" }}>
                       {t.ticket_code}
                     </Link>
                   </td>
                   <td className="px-5 py-3.5">
                     <Link href={`/tickets/${t.ticket_code}`}
-                      className="font-medium text-gray-900 hover:text-[#E8470A] truncate max-w-[220px] block transition-colors">
+                      className="font-medium text-gray-900 hover:text-[#D85A30] truncate max-w-[220px] block transition-colors">
                       {t.ticket_title}
                     </Link>
                   </td>
@@ -270,13 +270,13 @@ export default function TicketsPage() {
             <div className="space-y-1">
               <Label>Title</Label>
               <Input {...register("ticket_title")} placeholder="Describe the issue briefly"
-                className="focus-visible:ring-[#E8470A]" />
+                className="focus-visible:ring-[#D85A30]" />
               {errors.ticket_title && <p className="text-xs text-red-500">{errors.ticket_title.message}</p>}
             </div>
             <div className="space-y-1">
               <Label>Description</Label>
               <Textarea {...register("ticket_description")} placeholder="Provide as much detail as possible…"
-                className="min-h-[100px] focus-visible:ring-[#E8470A]" />
+                className="min-h-[100px] focus-visible:ring-[#D85A30]" />
               {errors.ticket_description && <p className="text-xs text-red-500">{errors.ticket_description.message}</p>}
             </div>
 
@@ -288,7 +288,7 @@ export default function TicketsPage() {
                   onValueChange={(v: string | null) => {
                     if (v) reset((prev) => ({ ...prev, priority: v as CreateForm["priority"] }));
                   }}>
-                  <SelectTrigger className="focus:ring-[#E8470A]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="focus:ring-[#D85A30]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(PRIORITY_LABELS).map(([v, l]) => (
                       <SelectItem key={v} value={v}>{l}</SelectItem>
@@ -302,7 +302,7 @@ export default function TicketsPage() {
                 <div className="space-y-1">
                   <Label>Department</Label>
                   <Select value={createDept} onValueChange={(v: string | null) => setCreateDept(v ?? "none")}>
-                    <SelectTrigger className="focus:ring-[#E8470A]"><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectTrigger className="focus:ring-[#D85A30]"><SelectValue placeholder="None" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
                       {departments.map((d) => (
@@ -318,7 +318,7 @@ export default function TicketsPage() {
                 <div className="space-y-1">
                   <Label>Team</Label>
                   <Select value={createTeam} onValueChange={(v: string | null) => setCreateTeam(v ?? "none")}>
-                    <SelectTrigger className="focus:ring-[#E8470A]"><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectTrigger className="focus:ring-[#D85A30]"><SelectValue placeholder="None" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
                       {teams.map((t) => (
@@ -332,7 +332,7 @@ export default function TicketsPage() {
 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={creating} style={{ background: "#E8470A" }}>
+              <Button type="submit" disabled={creating}>
                 {creating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 Create ticket
               </Button>

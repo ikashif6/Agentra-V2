@@ -64,7 +64,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     } finally { setRemoving(null); }
   };
 
-  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" style={{ color: "#E8470A" }} /></div>;
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" style={{ color: "#D85A30" }} /></div>;
   if (!team) return null;
 
   const memberIds = team.members.map((m) => m.user._id);
@@ -87,22 +87,22 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
             )}
           </div>
           {canManage && (
-            <Button onClick={() => setPickerOpen(true)} style={{ background: "#E8470A" }} size="sm">
+            <Button onClick={() => setPickerOpen(true)} size="sm">
               <UserPlus className="h-4 w-4 mr-2" /> Add member
             </Button>
           )}
         </div>
 
         {/* Team lead card */}
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-orange-50 border border-orange-100">
-          <Crown className="h-4 w-4 shrink-0" style={{ color: "#E8470A" }} />
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-brand-muted border border-brand-muted">
+          <Crown className="h-4 w-4 shrink-0" style={{ color: "#D85A30" }} />
           <Avatar className="h-9 w-9">
-            <AvatarFallback className="text-xs font-bold" style={{ background: "#E8470A", color: "white" }}>
+            <AvatarFallback className="text-xs font-bold bg-primary text-primary-foreground">
               {initials(team.teamLead)}
             </AvatarFallback>
           </Avatar>
           <div>
-            <p className="text-sm font-semibold" style={{ color: "#E8470A" }}>
+            <p className="text-sm font-semibold" style={{ color: "#D85A30" }}>
               {team.teamLead.firstName} {team.teamLead.lastName}
             </p>
             <p className="text-xs text-orange-400">Team Lead</p>
@@ -131,7 +131,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                   <div className="flex items-center gap-3">
                     <Avatar className="h-9 w-9">
                       <AvatarFallback className="text-xs font-semibold"
-                        style={{ background: "#FFF0EB", color: "#E8470A" }}>
+                        style={{ background: "#FDEBE4", color: "#D85A30" }}>
                         {initials(m.user)}
                       </AvatarFallback>
                     </Avatar>
@@ -145,7 +145,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                   <div className="flex items-center gap-2">
                     {isTeamLead && (
-                      <Badge className="text-xs bg-orange-50 text-[#E8470A] border-orange-100">Lead</Badge>
+                      <Badge className="text-xs bg-brand-muted text-[#D85A30] border-brand-muted">Lead</Badge>
                     )}
                     <Badge variant="secondary" className="text-xs capitalize">{m.user.role}</Badge>
                     {canManage && !isTeamLead && (

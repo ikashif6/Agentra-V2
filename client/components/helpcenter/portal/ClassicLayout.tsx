@@ -42,12 +42,12 @@ export function ClassicLayout({ hc, subdomain }: PortalProps) {
               className={cn(
                 "text-left p-5 rounded-2xl border-2 transition-all",
                 active === id
-                  ? "bg-orange-50"
+                  ? "bg-brand-muted"
                   : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
               )}
               style={active === id ? { borderColor: hc.primaryColor } : undefined}>
               <Icon className="h-6 w-6 mb-3" style={{ color: hc.primaryColor }} />
-              <h3 className={cn("font-semibold", active === id ? "text-[#E8470A]" : "text-gray-900")}>{label}</h3>
+              <h3 className={cn("font-semibold", active === id ? "text-[#D85A30]" : "text-gray-900")}>{label}</h3>
               <p className="text-sm text-gray-500 mt-1">{desc}</p>
               <ArrowRight className="h-4 w-4 mt-3 text-gray-400" />
             </button>
@@ -80,7 +80,7 @@ export function ClassicLayout({ hc, subdomain }: PortalProps) {
       </div>
 
       <footer className="text-center py-6 text-xs text-gray-400">
-        Powered by <span className="font-semibold text-[#E8470A]">Agentraa</span>
+        Powered by <span className="font-semibold text-[#D85A30]">Agentraa</span>
       </footer>
     </div>
   );

@@ -118,7 +118,7 @@ export function ContactForm({ subdomain, primaryColor, isTicket = false }: Props
           placeholder="Describe your issue or question in detail..."
           rows={5}
           required
-          className="resize-none focus-visible:ring-[#E8470A]"
+          className="resize-none focus-visible:ring-[#D85A30]"
         />
       </div>
       <Button type="submit" disabled={submitting} className="w-full text-white"

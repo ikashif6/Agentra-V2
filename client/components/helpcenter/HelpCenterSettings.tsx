@@ -24,7 +24,7 @@ const LAYOUTS: { id: HelpCenterLayout; label: string; description: string; previ
     label: "Classic",
     description: "Clean centered layout with a hero search bar and category cards below.",
     preview: (
-      <div className="w-full h-20 rounded-lg bg-gradient-to-b from-orange-50 to-white border border-gray-200 flex flex-col items-center justify-center gap-1 p-2">
+      <div className="w-full h-20 rounded-lg bg-gradient-to-b from-brand-muted to-white border border-gray-200 flex flex-col items-center justify-center gap-1 p-2">
         <div className="w-3/4 h-2 rounded-full bg-orange-200" />
         <div className="w-1/2 h-1.5 rounded-full bg-gray-200" />
         <div className="flex gap-1 mt-1">
@@ -41,7 +41,7 @@ const LAYOUTS: { id: HelpCenterLayout; label: string; description: string; previ
     description: "Two-column layout with a category navigation on the left and content on the right.",
     preview: (
       <div className="w-full h-20 rounded-lg border border-gray-200 flex overflow-hidden">
-        <div className="w-1/3 bg-orange-50 flex flex-col gap-1 p-2">
+        <div className="w-1/3 bg-brand-muted flex flex-col gap-1 p-2">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-1.5 rounded-full bg-orange-200" />
           ))}
@@ -88,8 +88,8 @@ function FeatureRow({
   return (
     <div className="flex items-center justify-between py-3">
       <div className="flex items-start gap-3">
-        <div className={cn("p-2 rounded-lg", enabled ? "bg-orange-100" : "bg-gray-100")}>
-          <Icon className={cn("h-4 w-4", enabled ? "text-[#E8470A]" : "text-gray-400")} />
+        <div className={cn("p-2 rounded-lg", enabled ? "bg-[#F0997B]/25" : "bg-gray-100")}>
+          <Icon className={cn("h-4 w-4", enabled ? "text-[#D85A30]" : "text-gray-400")} />
         </div>
         <div>
           <p className="text-sm font-medium text-gray-900">{label}</p>
@@ -100,7 +100,7 @@ function FeatureRow({
         onClick={onToggle}
         className={cn(
           "transition-colors shrink-0",
-          enabled ? "text-[#E8470A]" : "text-gray-300 hover:text-gray-400"
+          enabled ? "text-[#D85A30]" : "text-gray-300 hover:text-gray-400"
         )}
         aria-label={enabled ? `Disable ${label}` : `Enable ${label}`}
       >
@@ -236,7 +236,7 @@ export default function HelpCenterSettings() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-[#E8470A]" />
+        <Loader2 className="h-6 w-6 animate-spin text-[#D85A30]" />
       </div>
     );
   }
@@ -300,7 +300,7 @@ export default function HelpCenterSettings() {
       {/* ── Layout picker ─────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
-          <LayoutTemplate className="h-4 w-4 text-[#E8470A]" />
+          <LayoutTemplate className="h-4 w-4 text-[#D85A30]" />
           <h3 className="font-semibold text-gray-900">Layout</h3>
         </div>
         <div className="p-6">
@@ -313,17 +313,17 @@ export default function HelpCenterSettings() {
                 className={cn(
                   "text-left p-3 rounded-xl border-2 transition-all",
                   layout === opt.id
-                    ? "border-[#E8470A] bg-orange-50"
+                    ? "border-[#D85A30] bg-brand-muted"
                     : "border-gray-200 hover:border-gray-300 bg-white"
                 )}
               >
                 {opt.preview}
-                <p className={cn("text-sm font-semibold mt-2", layout === opt.id ? "text-[#E8470A]" : "text-gray-700")}>
+                <p className={cn("text-sm font-semibold mt-2", layout === opt.id ? "text-[#D85A30]" : "text-gray-700")}>
                   {opt.label}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{opt.description}</p>
                 {layout === opt.id && (
-                  <Badge className="mt-2 text-[10px] bg-[#E8470A] text-white border-0">Selected</Badge>
+                  <Badge className="mt-2 text-[10px] bg-[#D85A30] text-white border-0">Selected</Badge>
                 )}
               </button>
             ))}
@@ -345,7 +345,7 @@ export default function HelpCenterSettings() {
               onChange={(e) => setTitle(e.target.value)}
               maxLength={100}
               placeholder="Help Center"
-              className="focus-visible:ring-[#E8470A]"
+              className="focus-visible:ring-[#D85A30]"
             />
           </div>
           <div className="space-y-1.5">
@@ -355,7 +355,7 @@ export default function HelpCenterSettings() {
               onChange={(e) => setSubtitle(e.target.value)}
               maxLength={300}
               placeholder="How can we help you?"
-              className="focus-visible:ring-[#E8470A]"
+              className="focus-visible:ring-[#D85A30]"
             />
           </div>
         </div>
@@ -401,7 +401,7 @@ export default function HelpCenterSettings() {
 
       {/* ── Save button ──────────────────────────────────────────────────────── */}
       <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving} style={{ background: "#E8470A" }}>
+        <Button onClick={handleSave} disabled={saving}>
           {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
           Save settings
         </Button>
@@ -412,7 +412,7 @@ export default function HelpCenterSettings() {
       {/* ── Custom domain ─────────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
-          <Globe className="h-4 w-4 text-[#E8470A]" />
+          <Globe className="h-4 w-4 text-[#D85A30]" />
           <h3 className="font-semibold text-gray-900">Custom domain</h3>
         </div>
         <div className="p-6 space-y-5">
@@ -499,7 +499,7 @@ export default function HelpCenterSettings() {
             /* Connect new domain */
             <div className="space-y-3">
               <p className="text-sm text-gray-600">
-                Connect your own domain (e.g. <span className="font-mono text-[#E8470A]">help.yourcompany.com</span>).
+                Connect your own domain (e.g. <span className="font-mono text-[#D85A30]">help.yourcompany.com</span>).
                 Your help center will be accessible at that address.
               </p>
               <div className="flex gap-2">
@@ -507,12 +507,11 @@ export default function HelpCenterSettings() {
                   value={domainInput}
                   onChange={(e) => setDomainInput(e.target.value.toLowerCase())}
                   placeholder="help.yourcompany.com"
-                  className="font-mono focus-visible:ring-[#E8470A]"
+                  className="font-mono focus-visible:ring-[#D85A30]"
                 />
                 <Button
                   onClick={handleConnectDomain}
                   disabled={connectingDomain || !domainInput.trim()}
-                  style={{ background: "#E8470A" }}
                 >
                   {connectingDomain
                     ? <Loader2 className="h-4 w-4 animate-spin" />

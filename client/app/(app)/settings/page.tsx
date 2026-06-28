@@ -117,12 +117,11 @@ export default function SettingsPage() {
       <div className="flex items-center gap-5 pb-6">
         <div className="relative">
           <Avatar className="h-16 w-16">
-            <AvatarFallback className="text-xl font-bold" style={{ background: "#E8470A", color: "white" }}>
+            <AvatarFallback className="text-xl font-bold bg-primary text-primary-foreground">
               {initials(user?.fullName ?? user?.firstName ?? "?")}
             </AvatarFallback>
           </Avatar>
-          <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center"
-            style={{ background: "#E8470A" }}>
+          <div className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full border-2 border-white bg-primary">
             <span className="text-white text-[8px] font-bold">{(user?.firstName ?? "")[0]}</span>
           </div>
         </div>
@@ -142,11 +141,11 @@ export default function SettingsPage() {
               className={cn(
                 "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left",
                 activeTab === id
-                  ? "bg-orange-50 text-[#E8470A]"
+                  ? "bg-brand-muted text-[#D85A30]"
                   : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
               )}
             >
-              <Icon className={cn("h-4 w-4 shrink-0", activeTab === id ? "text-[#E8470A]" : "text-gray-400")} />
+              <Icon className={cn("h-4 w-4 shrink-0", activeTab === id ? "text-[#D85A30]" : "text-gray-400")} />
               {label}
             </button>
           ))}
@@ -166,14 +165,14 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-gray-600">First name</Label>
-                    <Input {...profileForm.register("firstName")} className="focus-visible:ring-[#E8470A]" />
+                    <Input {...profileForm.register("firstName")} className="focus-visible:ring-[#D85A30]" />
                     {profileForm.formState.errors.firstName && (
                       <p className="text-xs text-red-500">{profileForm.formState.errors.firstName.message}</p>
                     )}
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-gray-600">Last name</Label>
-                    <Input {...profileForm.register("lastName")} className="focus-visible:ring-[#E8470A]" />
+                    <Input {...profileForm.register("lastName")} className="focus-visible:ring-[#D85A30]" />
                   </div>
                 </div>
 
@@ -186,18 +185,18 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-gray-600">Phone <span className="text-gray-300">(optional)</span></Label>
-                    <Input {...profileForm.register("phone")} placeholder="+1 555 000 0000" className="focus-visible:ring-[#E8470A]" />
+                    <Input {...profileForm.register("phone")} placeholder="+1 555 000 0000" className="focus-visible:ring-[#D85A30]" />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-gray-600">Job title <span className="text-gray-300">(optional)</span></Label>
-                    <Input {...profileForm.register("jobTitle")} placeholder="Support Engineer" className="focus-visible:ring-[#E8470A]" />
+                    <Input {...profileForm.register("jobTitle")} placeholder="Support Engineer" className="focus-visible:ring-[#D85A30]" />
                   </div>
                 </div>
 
                 <Separator />
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-gray-400">Changes saved to your account immediately</p>
-                  <Button type="submit" disabled={savingProfile} style={{ background: "#E8470A" }}>
+                  <Button type="submit" disabled={savingProfile}>
                     {savingProfile
                       ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       : profileSaved
@@ -222,7 +221,7 @@ export default function SettingsPage() {
                   <Label className="text-xs font-medium text-gray-600">Current password</Label>
                   <div className="relative">
                     <Input type={showCurrent ? "text" : "password"} {...passwordForm.register("currentPassword")}
-                      className="pr-10 focus-visible:ring-[#E8470A]" />
+                      className="pr-10 focus-visible:ring-[#D85A30]" />
                     <button type="button" onClick={() => setShowCurrent(!showCurrent)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                       {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -237,7 +236,7 @@ export default function SettingsPage() {
                   <Label className="text-xs font-medium text-gray-600">New password</Label>
                   <div className="relative">
                     <Input type={showNew ? "text" : "password"} {...passwordForm.register("newPassword")}
-                      className="pr-10 focus-visible:ring-[#E8470A]" />
+                      className="pr-10 focus-visible:ring-[#D85A30]" />
                     <button type="button" onClick={() => setShowNew(!showNew)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                       {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -251,7 +250,7 @@ export default function SettingsPage() {
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-gray-600">Confirm new password</Label>
                   <Input type="password" {...passwordForm.register("confirmPassword")}
-                    className="focus-visible:ring-[#E8470A]" />
+                    className="focus-visible:ring-[#D85A30]" />
                   {passwordForm.formState.errors.confirmPassword && (
                     <p className="text-xs text-red-500">{passwordForm.formState.errors.confirmPassword.message}</p>
                   )}
@@ -274,7 +273,7 @@ export default function SettingsPage() {
 
                 <Separator />
                 <div className="flex justify-end">
-                  <Button type="submit" disabled={savingPassword} style={{ background: "#E8470A" }}>
+                  <Button type="submit" disabled={savingPassword}>
                     {savingPassword && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                     Update password
                   </Button>
@@ -302,7 +301,7 @@ export default function SettingsPage() {
                       <p className="text-sm font-medium text-gray-900">{pref.label}</p>
                       <p className="text-xs text-gray-400">{pref.desc}</p>
                     </div>
-                    <Switch defaultChecked className="data-[state=checked]:bg-[#E8470A]" />
+                    <Switch defaultChecked className="data-[state=checked]:bg-primary" />
                   </div>
                 ))}
               </div>
@@ -318,10 +317,10 @@ export default function SettingsPage() {
               </div>
               <div className="p-6 space-y-5">
                 {/* Plan card */}
-                <div className="rounded-xl p-4 border border-orange-100 bg-orange-50">
+                <div className="rounded-xl p-4 border border-brand-muted bg-brand-muted">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-orange-500 font-medium uppercase tracking-wider">Current plan</p>
+                      <p className="text-xs text-primary font-medium uppercase tracking-wider">Current plan</p>
                       <p className="text-xl font-bold text-gray-900 capitalize mt-0.5">{company?.plan?.name}</p>
                     </div>
                     <span className={cn(
@@ -355,7 +354,7 @@ export default function SettingsPage() {
                 <Separator />
                 <p className="text-xs text-gray-400 text-center">
                   To upgrade your plan or manage billing, contact{" "}
-                  <a href="mailto:support@agentraa.com" className="text-[#E8470A] hover:underline">
+                  <a href="mailto:support@agentraa.com" className="text-[#D85A30] hover:underline">
                     support@agentraa.com
                   </a>
                 </p>

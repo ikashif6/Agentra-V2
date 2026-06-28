@@ -58,7 +58,7 @@ export default function DashboardPage() {
 
   const STAT_CARDS = [
     { label: "Total",       value: total,  icon: <Ticket className="h-5 w-5" />,       color: "text-blue-600",   bg: "bg-blue-50" },
-    { label: "Open",        value: open,   icon: <AlertCircle className="h-5 w-5" />,   color: "text-orange-600", bg: "bg-orange-50" },
+    { label: "Open",        value: open,   icon: <AlertCircle className="h-5 w-5" />,   color: "text-primary", bg: "bg-brand-muted" },
     { label: "In Progress", value: inProg, icon: <Clock className="h-5 w-5" />,         color: "text-yellow-600", bg: "bg-yellow-50" },
     { label: "Resolved",    value: solved, icon: <CheckCircle className="h-5 w-5" />,   color: "text-green-600",  bg: "bg-green-50" },
   ];
@@ -105,10 +105,10 @@ export default function DashboardPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Building2 className="h-4 w-4" style={{ color: "#E8470A" }} />
+                  <Building2 className="h-4 w-4" style={{ color: "#D85A30" }} />
                   Tickets by Department
                 </CardTitle>
-                <Link href="/departments" className="text-xs hover:underline" style={{ color: "#E8470A" }}>
+                <Link href="/departments" className="text-xs hover:underline" style={{ color: "#D85A30" }}>
                   Manage <ArrowRight className="inline h-3 w-3" />
                 </Link>
               </div>
@@ -124,7 +124,7 @@ export default function DashboardPage() {
                       href={`/tickets?department=${d._id}`}
                       className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors group"
                     >
-                      <span className="text-sm text-gray-700 group-hover:text-[#E8470A] transition-colors truncate">
+                      <span className="text-sm text-gray-700 group-hover:text-[#D85A30] transition-colors truncate">
                         {d.name}
                       </span>
                       <Badge variant="secondary" className="text-xs ml-3 shrink-0">{d.count}</Badge>
@@ -140,10 +140,10 @@ export default function DashboardPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Users className="h-4 w-4" style={{ color: "#E8470A" }} />
+                  <Users className="h-4 w-4" style={{ color: "#D85A30" }} />
                   Tickets by Team
                 </CardTitle>
-                <Link href="/teams" className="text-xs hover:underline" style={{ color: "#E8470A" }}>
+                <Link href="/teams" className="text-xs hover:underline" style={{ color: "#D85A30" }}>
                   Manage <ArrowRight className="inline h-3 w-3" />
                 </Link>
               </div>
@@ -159,7 +159,7 @@ export default function DashboardPage() {
                       href={`/tickets?team=${t._id}`}
                       className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors group"
                     >
-                      <span className="text-sm text-gray-700 group-hover:text-[#E8470A] transition-colors truncate">
+                      <span className="text-sm text-gray-700 group-hover:text-[#D85A30] transition-colors truncate">
                         {t.name}
                       </span>
                       <Badge variant="secondary" className="text-xs ml-3 shrink-0">{t.count}</Badge>
@@ -178,7 +178,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-semibold">Recent Tickets</CardTitle>
             <Link href="/tickets" className="text-sm font-medium hover:underline flex items-center gap-1"
-              style={{ color: "#E8470A" }}>
+              style={{ color: "#D85A30" }}>
               View all <TrendingUp className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -194,10 +194,10 @@ export default function DashboardPage() {
                 <Link key={t._id} href={`/tickets/${t.ticket_code}`}
                   className="flex items-center justify-between px-6 py-3.5 hover:bg-gray-50 transition-colors group">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="font-mono text-xs font-semibold shrink-0" style={{ color: "#E8470A" }}>
+                    <span className="font-mono text-xs font-semibold shrink-0" style={{ color: "#D85A30" }}>
                       {t.ticket_code}
                     </span>
-                    <span className="text-sm font-medium text-gray-900 truncate group-hover:text-[#E8470A] transition-colors">
+                    <span className="text-sm font-medium text-gray-900 truncate group-hover:text-[#D85A30] transition-colors">
                       {t.ticket_title}
                     </span>
                   </div>

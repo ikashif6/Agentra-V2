@@ -60,7 +60,7 @@ export default function Sidebar() {
         "hidden md:flex flex-col h-screen sticky top-0 shrink-0 transition-all duration-200 overflow-hidden",
         collapsed ? "w-[68px]" : "w-[240px]"
       )}
-      style={{ background: "linear-gradient(160deg, #1a0a04 0%, #2d1208 40%, #E8470A 100%)" }}
+      style={{ background: "linear-gradient(160deg, #1a0a04 0%, #2d1208 40%, #D85A30 100%)" }}
     >
       {/* ── Branding ─────────────────────────────────────────── */}
       <div className={cn(
@@ -146,12 +146,12 @@ export default function Sidebar() {
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all",
                 active
-                  ? "bg-white text-[#E8470A] shadow-sm"
+                  ? "bg-white text-[#D85A30] shadow-sm"
                   : "text-white/70 hover:bg-white/10 hover:text-white",
                 collapsed && "justify-center"
               )}
             >
-              <span className={cn("shrink-0", active ? "text-[#E8470A]" : "text-white/60")}>
+              <span className={cn("shrink-0", active ? "text-[#D85A30]" : "text-white/60")}>
                 {item.icon}
               </span>
               {!collapsed && <span>{label}</span>}
@@ -170,7 +170,7 @@ export default function Sidebar() {
             {/* Avatar + name */}
             <div className="flex items-center gap-2.5">
               <Avatar className="h-9 w-9 shrink-0">
-                <AvatarFallback className="text-sm font-bold" style={{ background: "#E8470A", color: "white" }}>
+                <AvatarFallback className="text-sm font-bold bg-primary text-primary-foreground">
                   {initials(user?.fullName ?? user?.firstName ?? "?")}
                 </AvatarFallback>
               </Avatar>
@@ -206,7 +206,7 @@ export default function Sidebar() {
         ) : (
           <>
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="text-xs font-bold" style={{ background: "#E8470A", color: "white" }}>
+              <AvatarFallback className="text-xs font-bold bg-primary text-primary-foreground">
                 {initials(user?.fullName ?? user?.firstName ?? "?")}
               </AvatarFallback>
             </Avatar>

@@ -8,37 +8,39 @@
   --background: 0 0% 100%;
   --foreground: 0 0% 8%;
 
-  /* 30% Brand: warm orange-red #E8470A */
-  --brand: 18 90% 48%;
+  /* Brand: Coral #D85A30, hover Coral Light #F0997B */
+  --brand: 16 69% 52%;
   --brand-foreground: 0 0% 100%;
-  --brand-muted: 18 90% 95%;
-  --brand-muted-foreground: 18 90% 38%;
+  --brand-hover: 16 81% 72%;
+  --brand-muted: 16 81% 94%;
+  --brand-muted-foreground: 16 55% 40%;
 
   /* 10% Black accents */
   --card: 0 0% 100%;
   --card-foreground: 0 0% 8%;
   --popover: 0 0% 100%;
   --popover-foreground: 0 0% 8%;
-  --primary: 18 90% 48%;
+  --primary: 16 69% 52%;
   --primary-foreground: 0 0% 100%;
+  --primary-hover: 16 81% 72%;
   --secondary: 0 0% 96%;
   --secondary-foreground: 0 0% 8%;
   --muted: 0 0% 96%;
   --muted-foreground: 0 0% 45%;
-  --accent: 18 90% 95%;
-  --accent-foreground: 18 90% 32%;
+  --accent: 16 81% 94%;
+  --accent-foreground: 16 55% 40%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
   --border: 0 0% 90%;
   --input: 0 0% 90%;
-  --ring: 18 90% 48%;
+  --ring: 16 69% 52%;
   --radius: 0.625rem;
 
   --sidebar: 0 0% 98%;
   --sidebar-foreground: 0 0% 8%;
   --sidebar-border: 0 0% 90%;
-  --sidebar-accent: 18 90% 95%;
-  --sidebar-accent-foreground: 18 90% 32%;
+  --sidebar-accent: 16 81% 94%;
+  --sidebar-accent-foreground: 16 55% 40%;
 }
 
 @theme inline {
@@ -46,13 +48,16 @@
   --color-foreground: hsl(var(--foreground));
   --color-brand: hsl(var(--brand));
   --color-brand-foreground: hsl(var(--brand-foreground));
+  --color-brand-hover: hsl(var(--brand-hover));
   --color-brand-muted: hsl(var(--brand-muted));
+  --color-brand-muted-foreground: hsl(var(--brand-muted-foreground));
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
   --color-popover: hsl(var(--popover));
   --color-popover-foreground: hsl(var(--popover-foreground));
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-hover: hsl(var(--primary-hover));
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
   --color-muted: hsl(var(--muted));
@@ -84,8 +89,154 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
+a[href],
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+label[for],
+summary,
+select:not(:disabled),
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+input[type="checkbox"],
+input[type="radio"] {
+  cursor: pointer;
+}
+
+button:disabled,
+[disabled]:not(input):not(select):not(textarea),
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+
+/* Login visual panel — atmospheric background */
+.login-visual-panel {
+  --auth-brand: #d85a30;
+  --auth-brand-mid: #b84a28;
+  --auth-brand-light: #f0997b;
+  --auth-panel-dark: #120604;
+  --auth-panel-deep: #0a0302;
+}
+
+.login-visual-base {
+  background:
+    linear-gradient(155deg, #e8734a 0%, var(--auth-brand) 18%, var(--auth-brand-mid) 42%, #5c2414 72%, var(--auth-panel-dark) 100%);
+}
+
+.login-visual-mesh {
+  background:
+    radial-gradient(ellipse 90% 70% at 12% 8%, rgba(240, 153, 123, 0.55), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 88% 18%, rgba(216, 90, 48, 0.4), transparent 52%),
+    radial-gradient(ellipse 70% 55% at 55% 55%, rgba(240, 153, 123, 0.12), transparent 60%),
+    radial-gradient(ellipse 100% 80% at 50% 100%, rgba(0, 0, 0, 0.55), transparent 68%);
+  animation: auth-mesh-breathe 20s ease-in-out infinite;
+}
+
+.login-visual-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 85% 75% at 50% 38%, black 15%, transparent 72%);
+  -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 38%, black 15%, transparent 72%);
+}
+
+.login-visual-glow {
+  background:
+    radial-gradient(circle at 62% 32%, rgba(240, 153, 123, 0.22), transparent 42%),
+    radial-gradient(circle at 28% 72%, rgba(216, 90, 48, 0.14), transparent 38%);
+}
+
+.login-visual-blob {
+  border-radius: 9999px;
+  filter: blur(80px);
+  animation: auth-blob-drift 28s ease-in-out infinite;
+}
+
+.login-visual-blob-a {
+  top: -12%;
+  left: -8%;
+  width: 48%;
+  height: 40%;
+  background: rgba(240, 153, 123, 0.28);
+  opacity: 0.7;
+}
+
+.login-visual-blob-b {
+  right: -10%;
+  top: 22%;
+  width: 42%;
+  height: 36%;
+  background: rgba(216, 90, 48, 0.32);
+  opacity: 0.55;
+  animation-delay: -10s;
+}
+
+.login-visual-blob-c {
+  left: 20%;
+  bottom: -8%;
+  width: 55%;
+  height: 38%;
+  background: rgba(90, 30, 12, 0.65);
+  opacity: 0.8;
+  animation-delay: -16s;
+}
+
+.login-visual-arcs {
+  opacity: 0.9;
+  mix-blend-mode: screen;
+}
+
+.login-visual-watermark {
+  right: -4%;
+  top: 8%;
+  width: min(52vw, 340px);
+  height: auto;
+  color: rgba(255, 255, 255, 0.055);
+  transform: rotate(-8deg);
+}
+
+.login-visual-noise {
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.login-visual-vignette {
+  background:
+    linear-gradient(to top, rgba(10, 3, 2, 0.82) 0%, rgba(10, 3, 2, 0.25) 28%, transparent 55%),
+    linear-gradient(to bottom, rgba(216, 90, 48, 0.08) 0%, transparent 22%);
+}
+
+.login-visual-workspace-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.login-visual-workspace-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes auth-mesh-breathe {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+  50% { transform: translate3d(0.8%, -0.6%, 0) scale(1.015); opacity: 0.94; }
+}
+
+@keyframes auth-blob-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33% { transform: translate3d(1.5%, -1%, 0) scale(1.03); }
+  66% { transform: translate3d(-1%, 1.2%, 0) scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-visual-mesh,
+  .login-visual-blob {
+    animation: none;
+  }
+}

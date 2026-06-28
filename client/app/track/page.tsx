@@ -78,8 +78,7 @@ export default function TrackTicketPage() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex w-14 h-14 rounded-2xl items-center justify-center mb-4"
-            style={{ background: "#E8470A" }}>
+          <div className="inline-flex w-14 h-14 rounded-2xl items-center justify-center mb-4">
             {step === 1 ? <Search className="h-7 w-7 text-white" /> : <KeyRound className="h-7 w-7 text-white" />}
           </div>
           <h1 className="text-2xl font-bold text-gray-900">
@@ -97,7 +96,7 @@ export default function TrackTicketPage() {
             <form onSubmit={form1.handleSubmit(onStep1)} className="space-y-4">
               <div className="space-y-1">
                 <Label>Workspace</Label>
-                <div className="flex items-center rounded-lg border border-gray-200 focus-within:border-[#E8470A] focus-within:ring-1 focus-within:ring-[#E8470A] overflow-hidden transition-all">
+                <div className="flex items-center rounded-lg border border-gray-200 focus-within:border-[#D85A30] focus-within:ring-1 focus-within:ring-[#D85A30] overflow-hidden transition-all">
                   <Input {...form1.register("subdomain")} placeholder="yourcompany"
                     className="border-0 focus-visible:ring-0 rounded-none flex-1" />
                   <span className="px-3 text-sm text-gray-400 bg-gray-50 border-l border-gray-200 py-2 shrink-0">
@@ -112,7 +111,7 @@ export default function TrackTicketPage() {
               <div className="space-y-1">
                 <Label>Ticket code</Label>
                 <Input {...form1.register("ticket_code")} placeholder="TKT-00001"
-                  className="uppercase focus-visible:ring-[#E8470A]" />
+                  className="uppercase focus-visible:ring-[#D85A30]" />
                 {form1.formState.errors.ticket_code && (
                   <p className="text-xs text-red-500">{form1.formState.errors.ticket_code.message}</p>
                 )}
@@ -121,14 +120,13 @@ export default function TrackTicketPage() {
               <div className="space-y-1">
                 <Label>Your email</Label>
                 <Input type="email" {...form1.register("email")} placeholder="you@email.com"
-                  className="focus-visible:ring-[#E8470A]" />
+                  className="focus-visible:ring-[#D85A30]" />
                 {form1.formState.errors.email && (
                   <p className="text-xs text-red-500">{form1.formState.errors.email.message}</p>
                 )}
               </div>
 
-              <Button type="submit" className="w-full font-semibold" disabled={loading}
-                style={{ background: "#E8470A" }}>
+              <Button type="submit" className="w-full font-semibold" disabled={loading}>
                 {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 Send OTP
               </Button>
@@ -138,14 +136,13 @@ export default function TrackTicketPage() {
               <div className="space-y-1">
                 <Label>6-digit OTP</Label>
                 <Input {...form2.register("otp")} placeholder="••••••" maxLength={6}
-                  className="text-center text-2xl tracking-[0.5em] font-mono focus-visible:ring-[#E8470A]" />
+                  className="text-center text-2xl tracking-[0.5em] font-mono focus-visible:ring-[#D85A30]" />
                 {form2.formState.errors.otp && (
                   <p className="text-xs text-red-500">{form2.formState.errors.otp.message}</p>
                 )}
               </div>
 
-              <Button type="submit" className="w-full font-semibold" disabled={loading}
-                style={{ background: "#E8470A" }}>
+              <Button type="submit" className="w-full font-semibold" disabled={loading}>
                 {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 View Ticket
               </Button>
@@ -160,7 +157,7 @@ export default function TrackTicketPage() {
 
         <p className="text-center mt-6 text-xs text-gray-400">
           Your support team uses Agentraa •{" "}
-          <a href="/auth/login" className="text-[#E8470A] hover:underline">Sign in</a>
+          <a href="/auth/login" className="text-[#D85A30] hover:underline">Sign in</a>
         </p>
       </div>
     </div>

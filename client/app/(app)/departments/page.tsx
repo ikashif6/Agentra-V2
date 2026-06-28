@@ -77,11 +77,11 @@ export default function DepartmentsPage() {
       <div className="flex items-center gap-3 justify-between flex-wrap">
         <div className="relative w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input placeholder="Search departments…" className="pl-9 focus-visible:ring-[#E8470A]"
+          <Input placeholder="Search departments…" className="pl-9 focus-visible:ring-[#D85A30]"
             value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         {isOwnerAdmin && (
-          <Button onClick={() => setCreateOpen(true)} style={{ background: "#E8470A" }}>
+          <Button onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4 mr-2" /> New department
           </Button>
         )}
@@ -99,14 +99,14 @@ export default function DepartmentsPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#E8470A" }} />
+            <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#D85A30" }} />
           </div>
         ) : departments.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-sm text-gray-400 gap-2">
             <Building2 className="h-8 w-8 text-gray-200" />
             {search ? "No departments match your search." : "No departments yet."}
             {isOwnerAdmin && !search && (
-              <Button onClick={() => setCreateOpen(true)} className="mt-2" style={{ background: "#E8470A" }}>
+              <Button onClick={() => setCreateOpen(true)} className="mt-2">
                 Create first department
               </Button>
             )}
@@ -118,7 +118,7 @@ export default function DepartmentsPage() {
                 className="grid grid-cols-[2fr_3fr_1fr_40px] gap-4 items-center px-5 py-4 hover:bg-gray-50 transition-colors group">
                 {/* Name */}
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 group-hover:text-[#E8470A] transition-colors truncate">
+                  <p className="text-sm font-semibold text-gray-900 group-hover:text-[#D85A30] transition-colors truncate">
                     {dept.name}
                   </p>
                   {dept.description && (
@@ -132,13 +132,13 @@ export default function DepartmentsPage() {
                     <span className="text-xs text-gray-400">No heads assigned</span>
                   ) : (
                     dept.heads.slice(0, 3).map((h) => (
-                      <div key={h._id} className="flex items-center gap-1.5 bg-orange-50 px-2 py-1 rounded-full">
+                      <div key={h._id} className="flex items-center gap-1.5 bg-brand-muted px-2 py-1 rounded-full">
                         <Avatar className="h-4 w-4">
-                          <AvatarFallback className="text-[9px] font-bold" style={{ background: "#E8470A", color: "white" }}>
+                          <AvatarFallback className="text-[9px] font-bold bg-primary text-primary-foreground">
                             {initials(h)}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="text-xs text-[#E8470A] font-medium whitespace-nowrap">
+                        <span className="text-xs text-[#D85A30] font-medium whitespace-nowrap">
                           {h.firstName} {h.lastName}
                         </span>
                         <Crown className="h-2.5 w-2.5 text-orange-300" />
@@ -164,7 +164,7 @@ export default function DepartmentsPage() {
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-[#E8470A] transition-colors" />
+                  <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-[#D85A30] transition-colors" />
                 </div>
               </Link>
             ))}
@@ -193,16 +193,16 @@ export default function DepartmentsPage() {
             <div className="space-y-1">
               <Label>Name</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. Technical Support" className="focus-visible:ring-[#E8470A]" autoFocus />
+                placeholder="e.g. Technical Support" className="focus-visible:ring-[#D85A30]" autoFocus />
             </div>
             <div className="space-y-1">
               <Label>Description <span className="text-gray-400 text-xs">(optional)</span></Label>
               <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="What does this department handle?" className="focus-visible:ring-[#E8470A]" />
+                placeholder="What does this department handle?" className="focus-visible:ring-[#D85A30]" />
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreate} disabled={creating} style={{ background: "#E8470A" }}>
+              <Button onClick={handleCreate} disabled={creating}>
                 {creating && <Loader2 className="h-4 w-4 animate-spin mr-2" />} Create
               </Button>
             </div>

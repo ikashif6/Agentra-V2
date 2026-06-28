@@ -70,13 +70,13 @@ function AcceptInviteForm() {
           <div className="space-y-1">
             <Label htmlFor="firstName">First name</Label>
             <Input id="firstName" {...register("firstName")} placeholder="Jane"
-              className="focus-visible:ring-[#E8470A]" />
+              className="focus-visible:ring-[#D85A30]" />
             {errors.firstName && <p className="text-xs text-red-500">{errors.firstName.message}</p>}
           </div>
           <div className="space-y-1">
             <Label htmlFor="lastName">Last name</Label>
             <Input id="lastName" {...register("lastName")} placeholder="Doe"
-              className="focus-visible:ring-[#E8470A]" />
+              className="focus-visible:ring-[#D85A30]" />
             {errors.lastName && <p className="text-xs text-red-500">{errors.lastName.message}</p>}
           </div>
         </div>
@@ -85,7 +85,7 @@ function AcceptInviteForm() {
           <Label htmlFor="password">Password</Label>
           <div className="relative">
             <Input id="password" type={showPwd ? "text" : "password"} {...register("password")}
-              placeholder="••••••••" className="pr-10 focus-visible:ring-[#E8470A]" />
+              placeholder="••••••••" className="pr-10 focus-visible:ring-[#D85A30]" />
             <button type="button" onClick={() => setShowPwd(!showPwd)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
               {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -97,12 +97,11 @@ function AcceptInviteForm() {
         <div className="space-y-1">
           <Label htmlFor="confirmPassword">Confirm password</Label>
           <Input id="confirmPassword" type="password" {...register("confirmPassword")}
-            placeholder="••••••••" className="focus-visible:ring-[#E8470A]" />
+            placeholder="••••••••" className="focus-visible:ring-[#D85A30]" />
           {errors.confirmPassword && <p className="text-xs text-red-500">{errors.confirmPassword.message}</p>}
         </div>
 
-        <Button type="submit" className="w-full font-semibold" disabled={loading}
-          style={{ background: "#E8470A" }}>
+        <Button type="submit" className="w-full font-semibold" disabled={loading}>
           {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
           Complete Signup
         </Button>

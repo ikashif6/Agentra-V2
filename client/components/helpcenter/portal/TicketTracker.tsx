@@ -197,7 +197,7 @@ export function TicketTracker({ subdomain, primaryColor }: Props) {
           {ticket.messages.filter((m) => !m.isInternal).map((msg) => (
             <div key={msg._id} className="flex gap-3">
               <Avatar className="h-7 w-7 shrink-0">
-                <AvatarFallback className="text-[10px]" style={{ background: "#FFF0EB", color: "#E8470A" }}>
+                <AvatarFallback className="text-[10px]" style={{ background: "#FDEBE4", color: "#D85A30" }}>
                   {initials(msg.sender?.fullName ?? msg.senderEmail ?? "?")}
                 </AvatarFallback>
               </Avatar>
@@ -213,7 +213,7 @@ export function TicketTracker({ subdomain, primaryColor }: Props) {
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
                     {msg.attachments.map((a, i) => (
                       <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-[#E8470A] hover:underline flex items-center gap-1">
+                        className="text-xs text-[#D85A30] hover:underline flex items-center gap-1">
                         <Paperclip className="h-3 w-3" />{a.filename}
                       </a>
                     ))}
@@ -228,7 +228,7 @@ export function TicketTracker({ subdomain, primaryColor }: Props) {
         <div className="border-t border-gray-100 pt-4 space-y-3">
           <Textarea value={msgBody} onChange={(e) => setMsgBody(e.target.value)}
             placeholder="Write a reply..." rows={3}
-            className="resize-none focus-visible:ring-[#E8470A]" />
+            className="resize-none focus-visible:ring-[#D85A30]" />
           <div className="flex items-center justify-between">
             <button onClick={closeTicket} disabled={closing}
               className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">

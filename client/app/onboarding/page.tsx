@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { onboardingApi } from "@/lib/api";
 import { Plan } from "@/lib/types";
 import { setTokens, setSubdomain, setUser } from "@/lib/auth";
+import { buildWorkspaceLoginUrl } from "@/lib/workspace-host";
 import { cn } from "@/lib/utils";
 
 // ─── Step 1 Schema ────────────────────────────────────────────────────────────
@@ -102,7 +103,7 @@ export default function OnboardingPage() {
         setUser(data.data.user);
         router.push("/dashboard");
       } else {
-        router.push(`/auth/login?onboarded=1&subdomain=${step1Data.subdomain}`);
+        window.location.assign(buildWorkspaceLoginUrl(step1Data.subdomain));
       }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Something went wrong";
@@ -116,7 +117,7 @@ export default function OnboardingPage() {
     <div className="min-h-screen flex">
       {/* Left branding */}
       <div className="hidden lg:flex lg:w-[45%] flex-col justify-between p-12 relative overflow-hidden"
-        style={{ background: "linear-gradient(135deg, #E8470A 0%, #C73A08 60%, #1a0a04 100%)" }}>
+        style={{ background: "linear-gradient(135deg, #D85A30 0%, #B84A28 60%, #1a0a04 100%)" }}>
         <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full opacity-10 bg-white" />
         <div className="absolute -bottom-32 -right-16 w-80 h-80 rounded-full opacity-10 bg-white" />
 
@@ -135,7 +136,7 @@ export default function OnboardingPage() {
                 <div key={s} className="flex items-center gap-2">
                   <div className={cn(
                     "w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all",
-                    step >= s ? "bg-white text-[#E8470A]" : "bg-white/20 text-white/60"
+                    step >= s ? "bg-white text-[#D85A30]" : "bg-white/20 text-white/60"
                   )}>
                     {step > s ? <Check className="h-4 w-4" /> : s}
                   </div>
@@ -169,7 +170,7 @@ export default function OnboardingPage() {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#E8470A" }}>
+            <div className="flex size-8 items-center justify-center rounded-lg bg-primary">
               <span className="text-white font-bold text-sm">A</span>
             </div>
             <span className="font-bold text-xl">Agentraa</span>
@@ -186,13 +187,13 @@ export default function OnboardingPage() {
                 <div className="space-y-1">
                   <Label>Company name</Label>
                   <Input {...register("companyName")} placeholder="Acme Corp"
-                    className="focus-visible:ring-[#E8470A]" />
+                    className="focus-visible:ring-[#D85A30]" />
                   {errors.companyName && <p className="text-xs text-red-500">{errors.companyName.message}</p>}
                 </div>
 
                 <div className="space-y-1">
                   <Label>Workspace URL</Label>
-                  <div className="flex items-center rounded-lg border border-gray-200 focus-within:border-[#E8470A] focus-within:ring-1 focus-within:ring-[#E8470A] overflow-hidden transition-all">
+                  <div className="flex items-center rounded-lg border border-gray-200 focus-within:border-[#D85A30] focus-within:ring-1 focus-within:ring-[#D85A30] overflow-hidden transition-all">
                     <Input {...register("subdomain")} placeholder="acme"
                       className="border-0 focus-visible:ring-0 rounded-none flex-1 lowercase" />
                     <span className="px-3 text-sm text-gray-400 bg-gray-50 border-l border-gray-200 py-2 shrink-0">
@@ -209,13 +210,13 @@ export default function OnboardingPage() {
                   <div className="space-y-1">
                     <Label>First name</Label>
                     <Input {...register("firstName")} placeholder="Jane"
-                      className="focus-visible:ring-[#E8470A]" />
+                      className="focus-visible:ring-[#D85A30]" />
                     {errors.firstName && <p className="text-xs text-red-500">{errors.firstName.message}</p>}
                   </div>
                   <div className="space-y-1">
                     <Label>Last name</Label>
                     <Input {...register("lastName")} placeholder="Doe"
-                      className="focus-visible:ring-[#E8470A]" />
+                      className="focus-visible:ring-[#D85A30]" />
                     {errors.lastName && <p className="text-xs text-red-500">{errors.lastName.message}</p>}
                   </div>
                 </div>
@@ -223,7 +224,7 @@ export default function OnboardingPage() {
                 <div className="space-y-1">
                   <Label>Email</Label>
                   <Input type="email" {...register("email")} placeholder="jane@acme.com"
-                    className="focus-visible:ring-[#E8470A]" />
+                    className="focus-visible:ring-[#D85A30]" />
                   {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
                 </div>
 
@@ -231,7 +232,7 @@ export default function OnboardingPage() {
                   <Label>Password</Label>
                   <div className="relative">
                     <Input type={showPwd ? "text" : "password"} {...register("password")}
-                      placeholder="••••••••" className="pr-10 focus-visible:ring-[#E8470A]" />
+                      placeholder="••••••••" className="pr-10 focus-visible:ring-[#D85A30]" />
                     <button type="button" onClick={() => setShowPwd(!showPwd)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                       {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -240,14 +241,14 @@ export default function OnboardingPage() {
                   {errors.password && <p className="text-xs text-red-500">{errors.password.message}</p>}
                 </div>
 
-                <Button type="submit" className="w-full font-semibold mt-2" style={{ background: "#E8470A" }}>
+                <Button type="submit" className="w-full font-semibold mt-2">
                   Next: Choose your plan <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
               </form>
 
               <p className="text-center text-sm text-gray-500">
                 Already have a workspace?{" "}
-                <a href="/auth/login" className="text-[#E8470A] font-medium hover:underline">Sign in</a>
+                <a href="/auth/login" className="text-[#D85A30] font-medium hover:underline">Sign in</a>
               </p>
             </div>
           ) : (
@@ -277,14 +278,14 @@ export default function OnboardingPage() {
                     className={cn(
                       "w-full text-left p-4 rounded-xl border-2 transition-all",
                       selectedPlan === plan.plan_id
-                        ? "border-[#E8470A] bg-orange-50"
+                        ? "border-[#D85A30] bg-brand-muted"
                         : "border-gray-200 hover:border-gray-300"
                     )}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className={cn(
                           "w-9 h-9 rounded-lg flex items-center justify-center",
-                          selectedPlan === plan.plan_id ? "bg-[#E8470A] text-white" : "bg-gray-100 text-gray-500"
+                          selectedPlan === plan.plan_id ? "bg-[#D85A30] text-white" : "bg-gray-100 text-gray-500"
                         )}>
                           {PLAN_ICONS[plan.plan_id]}
                         </div>
@@ -298,8 +299,7 @@ export default function OnboardingPage() {
                       <div className="text-right">
                         <div className="font-bold text-gray-900">{PLAN_PRICES[plan.plan_id]}</div>
                         {selectedPlan === plan.plan_id && (
-                          <div className="w-5 h-5 rounded-full flex items-center justify-center ml-auto mt-1"
-                            style={{ background: "#E8470A" }}>
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center ml-auto mt-1">
                             <Check className="h-3 w-3 text-white" />
                           </div>
                         )}
@@ -325,7 +325,7 @@ export default function OnboardingPage() {
                   Back
                 </Button>
                 <Button onClick={handleFinish} disabled={submitting}
-                  className="flex-1 font-semibold" style={{ background: "#E8470A" }}>
+                  className="flex-1 font-semibold">
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   Create workspace
                 </Button>

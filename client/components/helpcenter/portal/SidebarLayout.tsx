@@ -69,7 +69,7 @@ export function SidebarLayout({ hc, subdomain }: PortalProps) {
       </div>
 
       <footer className="text-center py-6 text-xs text-gray-400">
-        Powered by <span className="font-semibold text-[#E8470A]">Agentraa</span>
+        Powered by <span className="font-semibold text-[#D85A30]">Agentraa</span>
       </footer>
     </div>
   );
