@@ -5,7 +5,6 @@ const SCOPES = [
   'pages_show_list',
   'pages_messaging',
   'pages_manage_metadata',
-  'pages_read_engagement',
 ].join(',');
 
 function isFacebookConfigured() {
@@ -31,9 +30,32 @@ function getFrontendOrigin(subdomain) {
   return `http://${subdomain}.localhost:${port}`;
 }
 
-function buildSettingsRedirect(subdomain, params = {}) {
+function normalizeReturnOrigin(origin) {
+  if (!origin || typeof origin !== 'string') return null;
+
+  try {
+    const url = new URL(origin);
+    const baseDomain = process.env.APP_BASE_DOMAIN || 'agentraa.com';
+    const host = url.hostname.toLowerCase();
+
+    if (host === 'localhost' || host.endsWith('.localhost')) {
+      return url.origin;
+    }
+
+    if (host === baseDomain || host.endsWith(`.${baseDomain}`)) {
+      return url.origin;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function buildSettingsRedirect(subdomain, params = {}, returnOrigin = null) {
   const query = new URLSearchParams({ item: 'facebook', ...params });
-  return `${getFrontendOrigin(subdomain)}/settings?${query.toString()}`;
+  const origin = normalizeReturnOrigin(returnOrigin) || getFrontendOrigin(subdomain);
+  return `${origin}/settings?${query.toString()}`;
 }
 
 async function readJsonResponse(res) {
@@ -66,7 +88,7 @@ async function graphGet(path, accessToken, params = {}) {
   return body;
 }
 
-function buildFacebookOAuthUrl({ companyId, subdomain, userId }) {
+function buildFacebookOAuthUrl({ companyId, subdomain, userId, returnOrigin }) {
   if (!isFacebookConfigured()) {
     throw new Error('Facebook integration is not configured on the server');
   }
@@ -76,6 +98,7 @@ function buildFacebookOAuthUrl({ companyId, subdomain, userId }) {
     companyId: companyId.toString(),
     subdomain,
     userId: userId.toString(),
+    returnOrigin: normalizeReturnOrigin(returnOrigin) || undefined,
   });
 
   const url = new URL(`https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`);
@@ -313,4 +336,5 @@ module.exports = {
   connectPendingPage,
   disconnectFacebook,
   verifyWebhookRequest,
+  normalizeReturnOrigin,
 };

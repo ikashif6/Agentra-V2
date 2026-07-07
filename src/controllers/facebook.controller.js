@@ -42,10 +42,13 @@ exports.getOAuthUrl = async (req, res, next) => {
       );
     }
 
+    const returnOrigin = req.query.returnOrigin || req.headers.origin;
+
     const url = buildFacebookOAuthUrl({
       companyId: req.company._id,
       subdomain: req.company.subdomain,
       userId: req.user._id,
+      returnOrigin,
     });
 
     return response.success(res, { url });
@@ -70,13 +73,14 @@ exports.oauthCallback = async (req, res, next) => {
     }
 
     const subdomain = payload.subdomain;
+    const returnOrigin = payload.returnOrigin;
 
     if (error) {
       return res.redirect(
         buildSettingsRedirect(subdomain, {
           facebook: 'error',
           message: errorDescription || error,
-        }),
+        }, returnOrigin),
       );
     }
 
@@ -85,7 +89,7 @@ exports.oauthCallback = async (req, res, next) => {
         buildSettingsRedirect(subdomain, {
           facebook: 'error',
           message: 'Facebook did not return an authorization code',
-        }),
+        }, returnOrigin),
       );
     }
 
@@ -95,7 +99,7 @@ exports.oauthCallback = async (req, res, next) => {
         buildSettingsRedirect(subdomain, {
           facebook: 'error',
           message: 'Workspace not found',
-        }),
+        }, returnOrigin),
       );
     }
 
@@ -106,7 +110,7 @@ exports.oauthCallback = async (req, res, next) => {
         buildSettingsRedirect(subdomain, {
           facebook: 'connected',
           page: result.pageName || '',
-        }),
+        }, returnOrigin),
       );
     }
 
@@ -114,7 +118,7 @@ exports.oauthCallback = async (req, res, next) => {
       return res.redirect(
         buildSettingsRedirect(subdomain, {
           facebook: 'select_page',
-        }),
+        }, returnOrigin),
       );
     }
 
@@ -122,7 +126,7 @@ exports.oauthCallback = async (req, res, next) => {
       buildSettingsRedirect(subdomain, {
         facebook: 'error',
         message: result.message || 'Could not connect Facebook',
-      }),
+      }, returnOrigin),
     );
   } catch (err) {
     next(err);

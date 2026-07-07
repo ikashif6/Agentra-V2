@@ -1,5 +1,6 @@
 import axios, { AxiosError } from "axios";
 import Cookies from "js-cookie";
+import type { StoreProvider, StoreSyncSettings } from "./types";
 import { API_BASE } from "./constants";
 
 export const api = axios.create({
@@ -19,6 +20,22 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Auth routes that return 401 for invalid credentials — never trigger token refresh.
+const AUTH_NO_REFRESH_PATHS = [
+  "/auth/login",
+  "/auth/magic-link/verify",
+  "/auth/otp/verify",
+  "/auth/verify-email",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/auth/accept-invite",
+];
+
+function shouldSkipTokenRefresh(url?: string) {
+  if (!url) return false;
+  return AUTH_NO_REFRESH_PATHS.some((path) => url.includes(path));
+}
+
 // ── Response interceptor: auto-refresh on 401 ────────────────────────────────
 let refreshing = false;
 let refreshQueue: Array<(token: string) => void> = [];
@@ -27,8 +44,18 @@ api.interceptors.response.use(
   (res) => res,
   async (error: AxiosError) => {
     const original = error.config as (typeof error.config) & { _retry?: boolean };
+
     if (error.response?.status === 401 && !original._retry) {
+      if (shouldSkipTokenRefresh(original.url)) {
+        return Promise.reject(error);
+      }
+
       original._retry = true;
+
+      const refreshToken = Cookies.get("refreshToken");
+      if (!refreshToken) {
+        return Promise.reject(error);
+      }
 
       if (refreshing) {
         return new Promise((resolve) => {
@@ -41,9 +68,6 @@ api.interceptors.response.use(
 
       refreshing = true;
       try {
-        const refreshToken = Cookies.get("refreshToken");
-        if (!refreshToken) throw new Error("No refresh token");
-
         const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken });
         const newAccess = data.data.accessToken;
         const newRefresh = data.data.refreshToken;
@@ -74,7 +98,9 @@ api.interceptors.response.use(
 
 export const authApi = {
   login: (data: { email: string; password: string; workspace?: string }) =>
-    api.post("/auth/login", data),
+    api.post("/auth/login", data, {
+      headers: data.workspace ? { "x-tenant": data.workspace } : undefined,
+    }),
   requestMagicLink: (data: { email: string }) =>
     api.post("/auth/magic-link/request", data),
   verifyMagicLink: (data: { token: string }) =>
@@ -90,12 +116,14 @@ export const authApi = {
   resetPassword: (data: { token: string; password: string }) =>
     api.post("/auth/reset-password", data),
   me: () => api.get("/auth/me"),
+  verifyEmail: (data: { token: string }) => api.post("/auth/verify-email", data),
   logout: (refreshToken: string) => api.post("/auth/logout", { refreshToken }),
 };
 
 export const onboardingApi = {
   getPlans: () => api.get("/onboarding/plans"),
   onboard: (data: Record<string, unknown>) => api.post("/onboarding", data),
+  completeSetup: (data: Record<string, unknown>) => api.post("/onboarding/setup", data),
   checkSubdomain: (subdomain: string) =>
     api.get(`/auth/check-subdomain/${subdomain}`),
 };
@@ -119,6 +147,9 @@ export const ticketApi = {
   trackVerify: (data: Record<string, unknown>) =>
     api.post("/tickets/track/verify", data),
   dashboardStats: () => api.get("/tickets/stats/dashboard"),
+  inboxCounts: (scope?: "inbox" | "live_chat" | "ai_agents") =>
+    api.get("/tickets/inbox/counts", { params: scope ? { scope } : {} }),
+  createDemo: () => api.post("/tickets/demo"),
 };
 
 export const uploadApi = {
@@ -160,12 +191,108 @@ export const teamApi = {
 };
 
 export const usersApi = {
+  listWorkspace: (search = "", page = 1, limit = 20) =>
+    api.get("/users/workspace", { params: { search, page, limit } }),
   searchStaff: (search = "", page = 1, limit = 20) =>
     api.get("/users/staff", { params: { search, page, limit } }),
   searchMembers: (search = "", role?: string, page = 1, limit = 30) =>
     api.get("/users/members", { params: { search, role, page, limit } }),
   invite: (data: { email: string; role: string; firstName: string; lastName: string }) =>
     api.post("/users/invite", data),
+  update: (
+    id: string,
+    data: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      role?: "agent" | "admin";
+      jobTitle?: string;
+    },
+  ) => api.patch(`/users/${id}`, data),
+  remove: (id: string) => api.delete(`/users/${id}`),
+};
+
+export const billingApi = {
+  getOverview: () => api.get("/billing"),
+  cancelPlan: () => api.post("/billing/cancel"),
+  reactivatePlan: () => api.post("/billing/reactivate"),
+};
+
+export const activityLogApi = {
+  list: (params: {
+    actorId?: string;
+    event?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get("/activity-logs", { params }),
+};
+
+export const workspaceApi = {
+  getBranding: () => api.get("/workspace/branding"),
+  updateBranding: (data: {
+    primaryColor?: string;
+    theme?: "light" | "dark" | "system";
+    logo?: string | null;
+  }) => api.patch("/workspace/branding", data),
+};
+
+export const notificationsApi = {
+  getSettings: () => api.get("/notifications"),
+  updateSettings: (data: {
+    volume?: number;
+    rules?: Record<string, { sound?: string; browser?: boolean }>;
+  }) => api.patch("/notifications", data),
+};
+
+export const businessHoursApi = {
+  get: () => api.get("/business-hours"),
+  updateDefault: (data: {
+    enabled?: boolean;
+    timezone?: string;
+    schedule?: Record<string, unknown>;
+  }) => api.put("/business-hours/default", data),
+  createCustom: (data: {
+    name: string;
+    targets?: string[];
+    timezone: string;
+    schedule: Record<string, unknown>;
+  }) => api.post("/business-hours/custom", data),
+  updateCustom: (
+    id: string,
+    data: {
+      name?: string;
+      targets?: string[];
+      timezone?: string;
+      schedule?: Record<string, unknown>;
+    },
+  ) => api.patch(`/business-hours/custom/${id}`, data),
+  deleteCustom: (id: string) => api.delete(`/business-hours/custom/${id}`),
+};
+
+export const facebookChannelApi = {
+  getStatus: () => api.get("/channels/facebook"),
+  getOAuthUrl: (returnOrigin?: string) =>
+    api.get("/channels/facebook/oauth/url", {
+      params: returnOrigin ? { returnOrigin } : undefined,
+    }),
+  connectPage: (pageId: string) => api.post("/channels/facebook/connect", { pageId }),
+  disconnect: () => api.delete("/channels/facebook"),
+};
+
+export const storeApi = {
+  getStatus: () => api.get("/store"),
+  connect: (data: {
+    provider: StoreProvider;
+    credentials: Record<string, string | undefined>;
+    syncSettings?: Partial<StoreSyncSettings>;
+  }) => api.post("/store/connect", data),
+  updateSettings: (data: { syncSettings: StoreSyncSettings }) =>
+    api.patch("/store/settings", data),
+  testConnection: () => api.post("/store/test"),
+  syncNow: () => api.post("/store/sync"),
+  disconnect: () => api.delete("/store"),
 };
 
 export const helpCenterApi = {
