@@ -1,7 +1,7 @@
 import axios, { AxiosError } from "axios";
 import Cookies from "js-cookie";
 import type { StoreProvider, StoreSyncSettings } from "./types";
-import { API_BASE } from "./constants";
+import { API_BASE, FACEBOOK_API_BASE } from "./constants";
 
 export const api = axios.create({
   baseURL: API_BASE,
@@ -272,13 +272,15 @@ export const businessHoursApi = {
 };
 
 export const facebookChannelApi = {
-  getStatus: () => api.get("/channels/facebook"),
+  getStatus: () => api.get("/channels/facebook", { baseURL: FACEBOOK_API_BASE }),
   getOAuthUrl: (returnOrigin?: string) =>
     api.get("/channels/facebook/oauth/url", {
+      baseURL: FACEBOOK_API_BASE,
       params: returnOrigin ? { returnOrigin } : undefined,
     }),
-  connectPage: (pageId: string) => api.post("/channels/facebook/connect", { pageId }),
-  disconnect: () => api.delete("/channels/facebook"),
+  connectPage: (pageId: string) =>
+    api.post("/channels/facebook/connect", { pageId }, { baseURL: FACEBOOK_API_BASE }),
+  disconnect: () => api.delete("/channels/facebook", { baseURL: FACEBOOK_API_BASE }),
 };
 
 export const storeApi = {

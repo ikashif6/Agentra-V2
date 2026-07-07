@@ -45,6 +45,8 @@ app.use(
         new RegExp(`^https?://([a-z0-9-]+\\.)?${BASE_DOMAIN.replace('.', '\\.')}(:\\d+)?$`),
         /^http:\/\/localhost(:\d+)?$/,
         /^http:\/\/127\.0\.0\.1(:\d+)?$/,
+        /^http:\/\/([a-z0-9-]+\.)?localhost(:\d+)?$/,
+        /^http:\/\/([a-z0-9-]+\.)?localhost(:\d+)?$/,
       ];
 
       if (allowed.some((pattern) => pattern.test(origin))) {
@@ -79,13 +81,16 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 // ─── Global rate limiter ──────────────────────────────────────────────────────
+const isProduction = process.env.NODE_ENV === "production";
+
 app.use(
   rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-    max: parseInt(process.env.RATE_LIMIT_MAX) || 100,
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
+    max: parseInt(process.env.RATE_LIMIT_MAX, 10) || (isProduction ? 100 : 2000),
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Too many requests, please slow down.' },
+    skip: (req) => !isProduction && req.method === 'OPTIONS',
   })
 );
 

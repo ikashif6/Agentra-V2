@@ -1,5 +1,8 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api/v1";
-export const APP_NAME = "Agentraa";
+/** Production API for Meta OAuth when local API cannot sign the callback state. */
+export const FACEBOOK_API_BASE =
+  process.env.NEXT_PUBLIC_FACEBOOK_API_URL ?? API_BASE;
+export const APP_NAME = "Agentra";
 
 export const PLAN_LABELS: Record<string, string> = {
   starter: "Starter",
@@ -18,9 +21,9 @@ export const STATUS_LABELS: Record<string, string> = {
 
 export const PRIORITY_LABELS: Record<string, string> = {
   low: "Low",
-  medium: "Medium",
+  medium: "Normal",
   high: "High",
-  urgent: "Urgent",
+  urgent: "Critical",
 };
 
 export const STATUS_COLORS: Record<string, string> = {
