@@ -1,0 +1,176 @@
+const Company = require('../models/Company');
+const response = require('../utils/apiResponse');
+const { verifyOAuthState } = require('../utils/token');
+const {
+  isFacebookConfigured,
+  buildFacebookOAuthUrl,
+  buildSettingsRedirect,
+  getOAuthRedirectUri,
+  getFacebookIntegration,
+  sanitizeFacebookIntegration,
+  handleOAuthCallback,
+  connectPendingPage,
+  disconnectFacebook,
+  verifyWebhookRequest,
+} = require('../services/facebook.service');
+
+async function loadCompanyWithSecrets(companyId) {
+  return Company.findById(companyId).select(
+    '+channelIntegrations.facebook.pageAccessToken +channelIntegrations.facebook.userAccessToken',
+  );
+}
+
+exports.getStatus = async (req, res, next) => {
+  try {
+    const integration = getFacebookIntegration(req.company);
+    return response.success(res, {
+      facebook: sanitizeFacebookIntegration(integration),
+      configured: isFacebookConfigured(),
+      oauthRedirectUri: getOAuthRedirectUri(),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getOAuthUrl = async (req, res, next) => {
+  try {
+    if (!isFacebookConfigured()) {
+      return response.badRequest(
+        res,
+        'Facebook is not configured yet. Add META_APP_ID and META_APP_SECRET to the server environment.',
+      );
+    }
+
+    const url = buildFacebookOAuthUrl({
+      companyId: req.company._id,
+      subdomain: req.company.subdomain,
+      userId: req.user._id,
+    });
+
+    return response.success(res, { url });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.oauthCallback = async (req, res, next) => {
+  try {
+    const { code, state, error, error_description: errorDescription } = req.query;
+
+    if (!state) {
+      return res.status(400).send('Missing OAuth state');
+    }
+
+    let payload;
+    try {
+      payload = verifyOAuthState(String(state));
+    } catch {
+      return res.status(400).send('OAuth session expired');
+    }
+
+    const subdomain = payload.subdomain;
+
+    if (error) {
+      return res.redirect(
+        buildSettingsRedirect(subdomain, {
+          facebook: 'error',
+          message: errorDescription || error,
+        }),
+      );
+    }
+
+    if (!code) {
+      return res.redirect(
+        buildSettingsRedirect(subdomain, {
+          facebook: 'error',
+          message: 'Facebook did not return an authorization code',
+        }),
+      );
+    }
+
+    const company = await loadCompanyWithSecrets(payload.companyId);
+    if (!company) {
+      return res.redirect(
+        buildSettingsRedirect(subdomain, {
+          facebook: 'error',
+          message: 'Workspace not found',
+        }),
+      );
+    }
+
+    const result = await handleOAuthCallback(String(code), company);
+
+    if (result.kind === 'connected') {
+      return res.redirect(
+        buildSettingsRedirect(subdomain, {
+          facebook: 'connected',
+          page: result.pageName || '',
+        }),
+      );
+    }
+
+    if (result.kind === 'select_page') {
+      return res.redirect(
+        buildSettingsRedirect(subdomain, {
+          facebook: 'select_page',
+        }),
+      );
+    }
+
+    return res.redirect(
+      buildSettingsRedirect(subdomain, {
+        facebook: 'error',
+        message: result.message || 'Could not connect Facebook',
+      }),
+    );
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.connectPage = async (req, res, next) => {
+  try {
+    const { pageId } = req.body;
+    if (!pageId) {
+      return response.badRequest(res, 'pageId is required');
+    }
+
+    const company = await loadCompanyWithSecrets(req.company._id);
+    const facebook = await connectPendingPage(company, String(pageId));
+
+    return response.success(res, { facebook }, 'Facebook Page connected');
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.disconnect = async (req, res, next) => {
+  try {
+    const company = await loadCompanyWithSecrets(req.company._id);
+    const facebook = await disconnectFacebook(company);
+    return response.success(res, { facebook }, 'Facebook disconnected');
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.verifyWebhook = (req, res) => {
+  const challenge = verifyWebhookRequest(
+    req.query['hub.mode'],
+    req.query['hub.verify_token'],
+    req.query['hub.challenge'],
+  );
+
+  if (challenge) {
+    return res.status(200).send(challenge);
+  }
+
+  return res.sendStatus(403);
+};
+
+exports.handleWebhook = async (req, res) => {
+  // Inbound Messenger events land here — ticket creation can be wired next.
+  console.log('[facebook webhook]', JSON.stringify(req.body));
+  return res.sendStatus(200);
+};

@@ -38,6 +38,8 @@ const planSchema = new mongoose.Schema(
       default: 'trialing',
     },
     trialEndsAt: { type: Date },
+    cancelAtPeriodEnd: { type: Boolean, default: false },
+    canceledAt: { type: Date },
   },
   { _id: false }
 );
@@ -109,6 +111,14 @@ const companySchema = new mongoose.Schema(
 
     // Basic profile
     logo: { type: String },
+    branding: {
+      primaryColor: { type: String, default: '#D85A30' },
+      theme: {
+        type: String,
+        enum: ['light', 'dark', 'system'],
+        default: 'light',
+      },
+    },
     industry: { type: String },
     size: {
       type: String,
@@ -131,6 +141,32 @@ const companySchema = new mongoose.Schema(
     // Plan & billing
     plan: { type: planSchema, default: () => ({}) },
 
+    billing: {
+      paymentMethod: {
+        type: { type: String, enum: ['card', 'invoice'] },
+        brand: String,
+        last4: String,
+        expMonth: Number,
+        expYear: Number,
+        name: String,
+      },
+      invoices: [
+        {
+          number: { type: String, required: true },
+          issuedAt: { type: Date, required: true },
+          amount: { type: Number, required: true },
+          currency: { type: String, default: 'USD' },
+          status: {
+            type: String,
+            enum: ['paid', 'open', 'void', 'draft'],
+            default: 'paid',
+          },
+          description: String,
+          pdfUrl: String,
+        },
+      ],
+    },
+
     // Usage counters (updated incrementally, not on every request)
     usage: { type: usageSchema, default: () => ({}) },
 
@@ -150,6 +186,14 @@ const companySchema = new mongoose.Schema(
         timezone: String,
         schedule: mongoose.Schema.Types.Mixed,
       },
+      customBusinessHours: [
+        {
+          name: { type: String, required: true, trim: true },
+          targets: [{ type: String }],
+          timezone: { type: String, required: true },
+          schedule: { type: mongoose.Schema.Types.Mixed, required: true },
+        },
+      ],
       notificationEmail: { type: String },
       supportEmail: { type: String },
     },
@@ -163,6 +207,80 @@ const companySchema = new mongoose.Schema(
     // Metadata
     registeredAt: { type: Date, default: Date.now },
     lastActivityAt: { type: Date, default: Date.now },
+
+    // Post-signup questionnaire (wizard answers)
+    onboardingSetup: {
+      teamGoal: { type: String },
+      channels: [{ type: String }],
+      ticketVolume: { type: String },
+      ecommercePlatform: { type: String },
+      aiInterest: { type: String },
+      completedAt: { type: Date },
+    },
+
+    // E-commerce store connection (Shopify, WooCommerce, custom)
+    storeIntegration: {
+      provider: {
+        type: String,
+        enum: ['shopify', 'woocommerce', 'custom'],
+      },
+      status: {
+        type: String,
+        enum: ['disconnected', 'pending', 'connected', 'error'],
+        default: 'disconnected',
+      },
+      connectedAt: { type: Date },
+      lastSyncAt: { type: Date },
+      lastError: { type: String },
+      shopify: {
+        shopDomain: { type: String },
+        accessToken: { type: String, select: false },
+        shopName: { type: String },
+      },
+      woocommerce: {
+        storeUrl: { type: String },
+        consumerKey: { type: String, select: false },
+        consumerSecret: { type: String, select: false },
+        storeName: { type: String },
+      },
+      custom: {
+        storeUrl: { type: String },
+        apiKey: { type: String, select: false },
+        webhookSecret: { type: String, select: false },
+        storeName: { type: String },
+      },
+      syncSettings: {
+        syncOrders: { type: Boolean, default: true },
+        syncCustomers: { type: Boolean, default: true },
+        syncProducts: { type: Boolean, default: false },
+      },
+    },
+
+    // Messaging channel connections (Facebook Messenger, etc.)
+    channelIntegrations: {
+      facebook: {
+        status: {
+          type: String,
+          enum: ['disconnected', 'pending', 'connected', 'error'],
+          default: 'disconnected',
+        },
+        connectedAt: { type: Date },
+        lastError: { type: String },
+        pageId: { type: String },
+        pageName: { type: String },
+        pagePictureUrl: { type: String },
+        pageAccessToken: { type: String, select: false },
+        userAccessToken: { type: String, select: false },
+        pendingPages: [
+          {
+            id: { type: String },
+            name: { type: String },
+            category: { type: String },
+            pictureUrl: { type: String },
+          },
+        ],
+      },
+    },
   },
   {
     timestamps: true,

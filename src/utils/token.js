@@ -104,6 +104,21 @@ function verifyTrackToken(token) {
   });
 }
 
+function signOAuthState(payload) {
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: '15m',
+    issuer: 'agentraa',
+    audience: 'agentraa-oauth',
+  });
+}
+
+function verifyOAuthState(token) {
+  return jwt.verify(token, process.env.JWT_SECRET, {
+    issuer: 'agentraa',
+    audience: 'agentraa-oauth',
+  });
+}
+
 module.exports = {
   generateSecureToken,
   hashToken,
@@ -115,4 +130,6 @@ module.exports = {
   buildTokenPayload,
   signTrackToken,
   verifyTrackToken,
+  signOAuthState,
+  verifyOAuthState,
 };
