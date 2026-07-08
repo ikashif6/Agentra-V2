@@ -198,6 +198,30 @@ async function getMessengerUserProfile(pageAccessToken, psid) {
   });
 }
 
+/**
+ * Convert the rich-text (HTML) reply body from the inbox composer into the
+ * plain text Messenger expects. Messenger's message.text has no markup, so
+ * unstripped tags like <div><br></div> would show up literally to the user.
+ */
+function htmlToPlainText(html) {
+  if (!html) return '';
+  return String(html)
+    .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+    .replace(/<\/\s*(p|div|li|h[1-6]|tr)\s*>/gi, '\n')
+    .replace(/<\s*li[^>]*>/gi, '• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#3?9;|&apos;/gi, "'")
+    .replace(/\r/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 async function sendMessengerMessage(pageAccessToken, psid, text) {
   const url = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/me/messages`);
   url.searchParams.set('access_token', pageAccessToken);
@@ -228,7 +252,9 @@ async function sendReplyForTicket(companyId, ticket, text) {
   if (!psid) {
     throw new Error('This ticket has no Messenger recipient');
   }
-  if (!text || !text.trim()) return null;
+
+  const plainText = htmlToPlainText(text);
+  if (!plainText) return null;
 
   // Required lazily to avoid a require cycle (Company model does not need this service).
   const Company = require('../models/Company');
@@ -241,7 +267,7 @@ async function sendReplyForTicket(companyId, ticket, text) {
     throw new Error('Facebook is not connected for this workspace');
   }
 
-  return sendMessengerMessage(token, psid, text.trim());
+  return sendMessengerMessage(token, psid, plainText);
 }
 
 function getFacebookIntegration(company) {
