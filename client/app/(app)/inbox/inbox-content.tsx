@@ -78,6 +78,16 @@ function formatRelative(str: string) {
   return new Date(str).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function formatMessageTime(str?: string) {
+  if (!str) return "";
+  const date = new Date(str);
+  if (Number.isNaN(date.getTime())) return "";
+  const time = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const sameDay = date.toDateString() === new Date().toDateString();
+  if (sameDay) return time;
+  return `${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${time}`;
+}
+
 function customerLabel(ticket: Ticket) {
   const customer = ticket.peoples?.find((p) => p.role === "customer")?.user;
   if (customer && typeof customer === "object") {
@@ -684,7 +694,19 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                           isMe ? "border-primary/20 bg-primary/8" : "border-border/60 bg-muted/30",
                         )}
                       >
-                        <p className="mb-1 text-xs font-medium text-muted-foreground">{sender}</p>
+                        <div
+                          className={cn(
+                            "mb-1 flex items-baseline gap-2",
+                            isMe && "flex-row-reverse",
+                          )}
+                        >
+                          <p className="text-xs font-medium text-muted-foreground">{sender}</p>
+                          {msg.sentAt ? (
+                            <span className="text-[10px] text-muted-foreground/70">
+                              {formatMessageTime(msg.sentAt)}
+                            </span>
+                          ) : null}
+                        </div>
                         <FormattedMessageBody body={msg.body} attachments={msg.attachments} />
                       </div>
                     </div>
