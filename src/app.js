@@ -72,7 +72,17 @@ app.use(
 );
 
 // ─── Body parsing ─────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '10mb' }));
+// Keep the raw body so we can verify Meta webhook signatures (X-Hub-Signature-256).
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req, _res, buf) => {
+      if (req.originalUrl.startsWith('/api/v1/webhooks/')) {
+        req.rawBody = buf;
+      }
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
@@ -90,7 +100,10 @@ app.use(
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Too many requests, please slow down.' },
-    skip: (req) => !isProduction && req.method === 'OPTIONS',
+    // Never throttle inbound provider webhooks (Meta can send bursts).
+    skip: (req) =>
+      req.path.startsWith('/api/v1/webhooks/') ||
+      (!isProduction && req.method === 'OPTIONS'),
   })
 );
 

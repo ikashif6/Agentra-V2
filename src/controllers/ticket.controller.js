@@ -4,13 +4,88 @@ const Company = require('../models/Company');
 const Counter = require('../models/Counter');
 const User = require('../models/User');
 const emailService = require('../services/email.service');
+const facebookService = require('../services/facebook.service');
 const tokenUtil = require('../utils/token');
 const response = require('../utils/apiResponse');
+const { buildInboxDemoConfigs, buildLiveChatDemoConfigs } = require('../data/demo-ticket-configs');
 
 const TRACK_OTP_TTL_MS = (parseInt(process.env.TRACK_OTP_EXPIRES_MINUTES) || 10) * 60 * 1000;
 const TRACK_OTP_MAX_ATTEMPTS = 5;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+const ACTIVE_STATUSES = ['open', 'in_progress', 'on_hold'];
+const CLOSED_STATUSES = ['closed', 'self_closed', 'resolved'];
+const INBOX_VIEWS = ['assigned', 'all', 'snoozed', 'closed', 'trash', 'spam'];
+const LIVE_CHAT_SOURCES = ['chatbot', 'chat'];
+const LIVE_CHAT_VIEWS = ['queue', 'assigned', 'closed', 'trash'];
+
+function isLiveChatScope(scope) {
+  return scope === 'live_chat' || scope === 'ai_agents';
+}
+const DEMO_STATS_MATCH = (companyId) => ({
+  company: companyId,
+  inboxFolder: { $nin: ['trash', 'spam'] },
+});
+
+const REMOVED_TICKET_SOURCES = ['phone', 'api'];
+const ANALYTICS_SOURCE_LABELS = {
+  email: 'Email',
+  portal: 'Help center',
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  whatsapp: 'WhatsApp',
+  live_chat: 'Live chat',
+  ai_agent: 'Live chat',
+};
+
+async function migrateRemovedTicketSources(companyId) {
+  await Ticket.updateMany(
+    { company: companyId, source: { $in: REMOVED_TICKET_SOURCES } },
+    { $set: { source: 'email' } },
+  );
+}
+
+function normalizeAnalyticsSource(source) {
+  if (!source || REMOVED_TICKET_SOURCES.includes(source)) return null;
+  if (source === 'chat' || source === 'chatbot') return 'live_chat';
+  return source;
+}
+
+function buildAnalyticsBySource(rows) {
+  const merged = new Map();
+
+  for (const row of rows) {
+    const key = normalizeAnalyticsSource(row._id);
+    if (!key) continue;
+
+    const existing = merged.get(key);
+    if (existing) {
+      existing.count += row.count;
+    } else {
+      merged.set(key, {
+        _id: key,
+        name: ANALYTICS_SOURCE_LABELS[key] || key,
+        count: row.count,
+      });
+    }
+  }
+
+  return Array.from(merged.values()).sort((a, b) => b.count - a.count);
+}
+
+async function countTicketsByStatus(companyId) {
+  const statuses = ['open', 'in_progress', 'on_hold', 'resolved', 'closed', 'self_closed'];
+  const entries = await Promise.all(
+    statuses.map(async (status) => {
+      const count = await Ticket.countDocuments({
+        ...DEMO_STATS_MATCH(companyId),
+        status,
+      });
+      return [status, count];
+    }),
+  );
+
+  return Object.fromEntries(entries.filter(([, count]) => count > 0));
+}
 
 /**
  * Decide whether the current requester can see / act on a ticket.
@@ -70,6 +145,103 @@ function buildListQuery(req) {
   return { ...base, 'peoples.user': user._id };
 }
 
+async function releaseExpiredSnoozes(companyId) {
+  await Ticket.updateMany(
+    { company: companyId, inboxFolder: { $exists: false } },
+    { $set: { inboxFolder: 'inbox' } },
+  );
+
+  await Ticket.updateMany(
+    {
+      company: companyId,
+      inboxFolder: 'snoozed',
+      snoozedUntil: { $lte: new Date() },
+    },
+    { $set: { inboxFolder: 'inbox', snoozedUntil: null } },
+  );
+}
+
+function applyInboxView(query, view, user) {
+  if (!view || !INBOX_VIEWS.includes(view)) return query;
+
+  switch (view) {
+    case 'assigned':
+      query.assigned_agent = user._id;
+      query.inboxFolder = 'inbox';
+      query.status = { $in: ACTIVE_STATUSES };
+      break;
+    case 'all':
+      query.inboxFolder = 'inbox';
+      query.status = { $in: ACTIVE_STATUSES };
+      break;
+    case 'snoozed':
+      query.inboxFolder = 'snoozed';
+      break;
+    case 'closed':
+      query.inboxFolder = 'inbox';
+      query.status = { $in: CLOSED_STATUSES };
+      break;
+    case 'trash':
+      query.inboxFolder = 'trash';
+      break;
+    case 'spam':
+      query.inboxFolder = 'spam';
+      break;
+    default:
+      break;
+  }
+
+  return query;
+}
+
+function excludeLiveChatSources(query) {
+  if (query.source && typeof query.source === 'object' && query.source.$in) {
+    query.source.$in = query.source.$in.filter((s) => !LIVE_CHAT_SOURCES.includes(s));
+    return query;
+  }
+
+  query.source = { $nin: LIVE_CHAT_SOURCES };
+  return query;
+}
+
+function applyLiveChatView(query, view, user) {
+  query.source = { $in: LIVE_CHAT_SOURCES };
+
+  switch (view) {
+    case 'assigned':
+      query.assigned_agent = user._id;
+      query.inboxFolder = 'inbox';
+      query.status = { $in: ACTIVE_STATUSES };
+      break;
+    case 'queue':
+      query.inboxFolder = 'inbox';
+      query.status = { $in: ACTIVE_STATUSES };
+      break;
+    case 'closed':
+      query.inboxFolder = 'inbox';
+      query.status = { $in: CLOSED_STATUSES };
+      break;
+    case 'trash':
+      query.inboxFolder = 'trash';
+      break;
+    default:
+      query.inboxFolder = 'inbox';
+      query.status = { $in: ACTIVE_STATUSES };
+      break;
+  }
+
+  return query;
+}
+
+function inboxCountQuery(base, view, user) {
+  const query = applyInboxView({ ...base }, view, user);
+  return excludeLiveChatSources(query);
+}
+
+function liveChatCountQuery(base, view, user) {
+  return applyLiveChatView({ ...base }, view, user);
+}
+
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -82,7 +254,6 @@ exports.createTicket = async (req, res, next) => {
     const company = req.company;
     const user = req.user;
 
-    // Owner is not allowed to create tickets
     if (user.role === 'owner') {
       return response.forbidden(res, 'Owners cannot create tickets');
     }
@@ -119,6 +290,196 @@ exports.createTicket = async (req, res, next) => {
   }
 };
 
+async function findOrCreateDemoCustomer(company, profile) {
+  const email = profile.email ?? `demo.customer@${company.subdomain}.agentraa.local`;
+
+  let customer = await User.findOne({ email, company: company._id });
+  if (customer) return customer;
+
+  customer = await User.create({
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    email,
+    company: company._id,
+    role: 'customer',
+    isEmailVerified: true,
+    isActive: true,
+    onboardingCompleted: true,
+  });
+
+  return customer;
+}
+
+async function resolveDemoAssignee(company, user) {
+  if (user.role === 'agent') return user._id;
+  const agent = await User.findOne({ company: company._id, role: 'agent', isActive: true }).select('_id');
+  return agent?._id || user._id;
+}
+
+async function stripLegacyDemoTitles(companyId) {
+  const tickets = await Ticket.find({
+    company: companyId,
+    ticket_title: { $regex: /^Demo \(.+\): / },
+  });
+
+  for (const ticket of tickets) {
+    ticket.ticket_title = ticket.ticket_title.replace(/^Demo \(.+\): /, '');
+    await ticket.save();
+  }
+}
+
+async function ensureDemoTicket(company, user, config) {
+  const seedTag = config.seedKey ? `seed:${config.seedKey}` : null;
+  const legacyTitles = [
+    ...(config.legacyTitles ?? []),
+    ...(config.title !== config.legacyTitle && config.legacyTitle ? [config.legacyTitle] : []),
+  ].filter(Boolean);
+
+  let ticket = null;
+
+  if (seedTag) {
+    ticket = await Ticket.findOne({ company: company._id, tags: seedTag });
+  }
+
+  if (!ticket && config.legacySeedKeys?.length) {
+    for (const legacyKey of config.legacySeedKeys) {
+      ticket = await Ticket.findOne({ company: company._id, tags: `seed:${legacyKey}` });
+      if (ticket) break;
+    }
+  }
+
+  if (!ticket && legacyTitles.length) {
+    ticket = await Ticket.findOne({
+      company: company._id,
+      ticket_title: { $in: legacyTitles },
+    });
+  }
+
+  if (!ticket) {
+    ticket = await Ticket.findOne({
+      company: company._id,
+      ticket_title: config.title,
+      source: config.source,
+    });
+  }
+
+  if (ticket) {
+    let changed = false;
+
+    if (ticket.ticket_title !== config.title) {
+      ticket.ticket_title = config.title;
+      changed = true;
+    }
+    if (ticket.source !== config.source) {
+      ticket.source = config.source;
+      changed = true;
+    }
+    if (config.openingMessage && ticket.ticket_description !== config.openingMessage) {
+      ticket.ticket_description = config.openingMessage;
+      changed = true;
+    }
+    if (config.openingMessage && ticket.messages?.length) {
+      const firstMessage = ticket.messages[0];
+      if (firstMessage?.body !== config.openingMessage) {
+        firstMessage.body = config.openingMessage;
+        ticket.markModified('messages');
+        changed = true;
+      }
+    }
+    if (config.status && ticket.status !== config.status) {
+      ticket.status = config.status;
+      changed = true;
+    }
+    if (seedTag && !(ticket.tags ?? []).includes(seedTag)) {
+      ticket.tags = [...(ticket.tags ?? []), seedTag];
+      changed = true;
+    }
+    if (changed) await ticket.save();
+    return { ticket, created: false };
+  }
+
+  const customer = await findOrCreateDemoCustomer(company, config.customer);
+  const assignee = await resolveDemoAssignee(company, user);
+  const now = Date.now();
+  const prefix = company.settings?.ticketPrefix || 'TKT';
+  const ticket_code = await Ticket.generateCode(company._id, prefix);
+  const tags = [...(config.tags ?? []), ...(seedTag ? [seedTag] : [])];
+
+  ticket = await Ticket.create({
+    ticket_code,
+    company_subdomain: company.subdomain,
+    company: company._id,
+    ticket_title: config.title,
+    ticket_description: config.openingMessage,
+    priority: config.priority,
+    status: config.status || 'open',
+    inboxFolder: 'inbox',
+    source: config.source,
+    tags,
+    details: config.details,
+    assigned_agent: assignee,
+    createdBy: customer._id,
+    peoples: [
+      { user: customer._id, role: 'customer' },
+      { user: assignee, role: 'agent', addedBy: user._id },
+    ],
+    messages: config.messages(customer._id, assignee, now),
+    lastActivity: new Date(now - (config.lastActivityMinutesAgo ?? 12) * 60 * 1000),
+  });
+
+  await Counter.increment(`company:${company._id}`, 'totalTickets');
+  return { ticket, created: true };
+}
+
+/**
+ * POST /tickets/demo
+ * Creates sample inbox + live chat conversations for previewing the workspace UI.
+ */
+exports.createDemoTicket = async (req, res, next) => {
+  try {
+    const company = req.company;
+    const user = req.user;
+
+    await stripLegacyDemoTitles(company._id);
+    await migrateRemovedTicketSources(company._id);
+
+    const configs = [
+      ...buildInboxDemoConfigs(),
+      ...buildLiveChatDemoConfigs(company.subdomain),
+    ];
+
+    const results = [];
+    for (const config of configs) {
+      results.push(await ensureDemoTicket(company, user, config));
+    }
+
+    const created = results.filter((result) => result.created).length;
+    const tickets = results.map((result) => result.ticket);
+
+    const populated = await Ticket.find({ _id: { $in: tickets.map((t) => t._id) } })
+      .populate('createdBy', 'firstName lastName email avatar')
+      .populate('assigned_agent', 'firstName lastName email avatar')
+      .populate('peoples.user', 'firstName lastName email avatar role')
+      .populate('messages.sender', 'firstName lastName email avatar role')
+      .sort({ lastActivity: -1 });
+
+    return response.success(
+      res,
+      {
+        tickets: populated,
+        ticket: populated[0],
+        created,
+        inboxCount: buildInboxDemoConfigs().length,
+        liveChatCount: buildLiveChatDemoConfigs(company.subdomain).length,
+        aiAgentCount: buildLiveChatDemoConfigs(company.subdomain).length,
+      },
+      `Demo data ready (${created} new, ${populated.length} total)`,
+    );
+  } catch (err) {
+    next(err);
+  }
+};
+
 /**
  * GET /tickets
  * Scoped list based on role.
@@ -128,21 +489,46 @@ exports.listTickets = async (req, res, next) => {
   try {
     const {
       status, priority, page = 1, limit = 15,
-      search, department, team,
+      search, department, team, view, scope,
     } = req.query;
+
+    await releaseExpiredSnoozes(req.company._id);
 
     const query = buildListQuery(req);
 
-    if (status)     query.status   = status;
-    if (priority)   query.priority = priority;
+    if (isLiveChatScope(scope)) {
+      const liveChatView = LIVE_CHAT_VIEWS.includes(view) ? view : 'queue';
+      applyLiveChatView(query, liveChatView, req.user);
+    } else if (scope === 'dashboard') {
+      query.inboxFolder = { $nin: ['trash', 'spam'] };
+      excludeLiveChatSources(query);
+    } else if (scope === 'inbox' || view) {
+      applyInboxView(query, view, req.user);
+      excludeLiveChatSources(query);
+    } else if (status) {
+      query.status = status;
+      excludeLiveChatSources(query);
+    } else if (['owner', 'admin', 'agent'].includes(req.user.role)) {
+      applyInboxView(query, req.user.role === 'agent' ? 'assigned' : 'all', req.user);
+      excludeLiveChatSources(query);
+    }
+
+    if (priority) query.priority = priority;
     if (department) query.department = department;
     if (team)       query.teams = team; // teams is an array field — $in is not needed for equality on arrays in Mongoose
 
     if (search) {
-      query.$or = [
-        { ticket_title: { $regex: search, $options: 'i' } },
-        { ticket_code:  { $regex: search, $options: 'i' } },
-      ];
+      const searchFilter = {
+        $or: [
+          { ticket_title: { $regex: search, $options: 'i' } },
+          { ticket_code: { $regex: search, $options: 'i' } },
+        ],
+      };
+      if (query.$and) {
+        query.$and.push(searchFilter);
+      } else {
+        query.$and = [searchFilter];
+      }
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -219,6 +605,49 @@ exports.getTicket = async (req, res, next) => {
 };
 
 /**
+ * GET /tickets/inbox/counts
+ * Counts for each inbox sidebar view.
+ */
+exports.getInboxCounts = async (req, res, next) => {
+  try {
+    await releaseExpiredSnoozes(req.company._id);
+
+    const base = buildListQuery(req);
+    const scope = isLiveChatScope(req.query.scope) ? 'live_chat' : 'inbox';
+
+    if (scope === 'live_chat') {
+      const views = LIVE_CHAT_VIEWS.filter(
+        (view) => view !== 'assigned' || req.user.role === 'agent',
+      );
+
+      const entries = await Promise.all(
+        views.map(async (view) => {
+          const count = await Ticket.countDocuments(liveChatCountQuery(base, view, req.user));
+          return [view, count];
+        }),
+      );
+
+      return response.success(res, { counts: Object.fromEntries(entries) });
+    }
+
+    const views = INBOX_VIEWS.filter(
+      (view) => view !== 'assigned' || req.user.role === 'agent',
+    );
+
+    const entries = await Promise.all(
+      views.map(async (view) => {
+        const count = await Ticket.countDocuments(inboxCountQuery(base, view, req.user));
+        return [view, count];
+      }),
+    );
+
+    return response.success(res, { counts: Object.fromEntries(entries) });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * PATCH /tickets/:code
  * Update metadata: title, description, priority, status, department, teams, assigned_agent
  * Roles: admin, agent, owner can update anything
@@ -253,11 +682,50 @@ exports.updateTicket = async (req, res, next) => {
     }
 
     // Staff / owner update
-    const allowedFields = ['ticket_title', 'ticket_description', 'priority', 'status', 'department', 'teams', 'assigned_agent', 'attachments'];
+    const allowedFields = [
+      'ticket_title',
+      'ticket_description',
+      'priority',
+      'status',
+      'department',
+      'teams',
+      'assigned_agent',
+      'attachments',
+      'inboxFolder',
+      'snoozedUntil',
+      'tags',
+      'source',
+      'isUnread',
+    ];
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
         ticket[field] = req.body[field];
       }
+    }
+
+    if (req.body.details && typeof req.body.details === 'object') {
+      const detailFields = [
+        'contactReason',
+        'product',
+        'resolution',
+        'customerType',
+        'customerNote',
+        'customerPhone',
+      ];
+      ticket.details = ticket.details || {};
+      for (const field of detailFields) {
+        if (req.body.details[field] !== undefined) {
+          ticket.details[field] = req.body.details[field];
+        }
+      }
+      ticket.markModified('details');
+    }
+
+    if (req.body.inboxFolder === 'snoozed' && !req.body.snoozedUntil) {
+      ticket.snoozedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    }
+    if (req.body.inboxFolder === 'inbox') {
+      ticket.snoozedUntil = null;
     }
 
     // Track close metadata
@@ -503,6 +971,15 @@ exports.addMessage = async (req, res, next) => {
     ticket.lastActivity = new Date();
     await ticket.save();
 
+    // Push agent replies back out to Messenger for Facebook-sourced tickets.
+    if (!internal && ticket.source === 'facebook' && isStaff(req)) {
+      try {
+        await facebookService.sendReplyForTicket(company._id, ticket, msgBody);
+      } catch (fbErr) {
+        console.error('[facebook reply]', fbErr.message);
+      }
+    }
+
     const newMsg = ticket.messages[ticket.messages.length - 1];
     return response.created(res, { message: newMsg }, 'Message added');
   } catch (err) {
@@ -678,41 +1155,56 @@ exports.trackVerify = async (req, res, next) => {
 exports.getDashboardStats = async (req, res, next) => {
   try {
     const companyId = req.company._id;
+    await migrateRemovedTicketSources(companyId);
+    const baseMatch = DEMO_STATS_MATCH(companyId);
 
-    // Overall counts by status
-    const byStatus = await Ticket.aggregate([
-      { $match: { company: companyId } },
-      { $group: { _id: '$status', count: { $sum: 1 } } },
+    const byStatus = await countTicketsByStatus(companyId);
+
+    const bySource = await Ticket.aggregate([
+      { $match: baseMatch },
+      { $group: { _id: '$source', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
     ]);
 
-    // Counts by department (only tickets that have a department)
     const byDepartment = await Ticket.aggregate([
-      { $match: { company: companyId, department: { $exists: true, $ne: null } } },
+      { $match: { ...baseMatch, department: { $exists: true, $ne: null } } },
       { $group: { _id: '$department', count: { $sum: 1 } } },
       { $lookup: { from: 'departments', localField: '_id', foreignField: '_id', as: 'dept' } },
-      { $unwind: { path: '$dept', preserveNullAndEmpty: false } },
-      { $project: { _id: 1, count: 1, name: '$dept.name' } },
+      { $unwind: { path: '$dept', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 1,
+          count: 1,
+          name: { $ifNull: ['$dept.name', 'Unassigned department'] },
+        },
+      },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
-    // Counts by team (tickets that have at least one team)
     const byTeam = await Ticket.aggregate([
-      { $match: { company: companyId, teams: { $exists: true, $not: { $size: 0 } } } },
+      { $match: { ...baseMatch, teams: { $exists: true, $not: { $size: 0 } } } },
       { $unwind: '$teams' },
       { $group: { _id: '$teams', count: { $sum: 1 } } },
       { $lookup: { from: 'teams', localField: '_id', foreignField: '_id', as: 'team' } },
-      { $unwind: { path: '$team', preserveNullAndEmpty: false } },
-      { $project: { _id: 1, count: 1, name: '$team.name' } },
+      { $unwind: { path: '$team', preserveNullAndEmptyArrays: true } },
+      {
+        $project: {
+          _id: 1,
+          count: 1,
+          name: { $ifNull: ['$team.name', 'Unknown team'] },
+        },
+      },
       { $sort: { count: -1 } },
       { $limit: 10 },
     ]);
 
-    // Normalise byStatus into a map
-    const statusMap = {};
-    for (const s of byStatus) statusMap[s._id] = s.count;
-
-    return response.success(res, { byStatus: statusMap, byDepartment, byTeam });
+    return response.success(res, {
+      byStatus,
+      byDepartment,
+      byTeam,
+      bySource: buildAnalyticsBySource(bySource),
+    });
   } catch (err) {
     next(err);
   }

@@ -3,6 +3,7 @@ const Department = require('../models/Department');
 const User       = require('../models/User');
 const response   = require('../utils/apiResponse');
 const emailService = require('../services/email.service');
+const { logTeamCreated } = require('../services/activity.service');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,8 @@ exports.createTeam = async (req, res, next) => {
       { path: 'teamLead', select: 'firstName lastName email avatar' },
       { path: 'members.user', select: 'firstName lastName email avatar' },
     ]);
+
+    logTeamCreated({ company, actor: req.user, team, req });
 
     return response.created(res, { team }, 'Team created');
   } catch (err) {

@@ -1,6 +1,8 @@
+const crypto = require('crypto');
 const Company = require('../models/Company');
 const response = require('../utils/apiResponse');
 const { verifyOAuthState } = require('../utils/token');
+const { processMessengerWebhook } = require('../services/messenger-inbound.service');
 const {
   isFacebookConfigured,
   buildFacebookOAuthUrl,
@@ -184,8 +186,34 @@ exports.verifyWebhook = (req, res) => {
   return res.sendStatus(403);
 };
 
+function verifyWebhookSignature(req) {
+  const secret = process.env.META_APP_SECRET;
+  const signature = req.get('x-hub-signature-256');
+
+  // If we cannot verify (missing secret / header / raw body), don't block delivery.
+  if (!secret || !signature || !req.rawBody) return true;
+
+  const expected =
+    'sha256=' + crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex');
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
+
 exports.handleWebhook = async (req, res) => {
-  // Inbound Messenger events land here — ticket creation can be wired next.
-  console.log('[facebook webhook]', JSON.stringify(req.body));
-  return res.sendStatus(200);
+  if (!verifyWebhookSignature(req)) {
+    return res.sendStatus(403);
+  }
+
+  // Acknowledge immediately — Meta requires a fast 200 or it retries/disables.
+  res.sendStatus(200);
+
+  try {
+    await processMessengerWebhook(req.body);
+  } catch (err) {
+    console.error('[facebook webhook]', err.message);
+  }
 };

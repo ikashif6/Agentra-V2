@@ -20,12 +20,12 @@ const error = (res, message = 'An error occurred', statusCode = 500, errors = nu
   return res.status(statusCode).json(body);
 };
 
-const unauthorized = (res, message = 'Unauthorized') => {
-  return error(res, message, 401);
+const unauthorized = (res, message = 'Unauthorized', errors = null) => {
+  return error(res, message, 401, errors);
 };
 
-const forbidden = (res, message = 'Forbidden') => {
-  return error(res, message, 403);
+const forbidden = (res, message = 'Forbidden', errors = null) => {
+  return error(res, message, 403, errors);
 };
 
 const notFound = (res, message = 'Not found') => {

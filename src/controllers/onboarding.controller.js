@@ -5,6 +5,7 @@ const emailService = require('../services/email.service');
 const tokenUtil    = require('../utils/token');
 const response     = require('../utils/apiResponse');
 const { PLANS, ONBOARDING_PLAN_IDS } = require('../config/plans');
+const { logWorkspaceCreated } = require('../services/activity.service');
 
 /**
  * POST /onboarding
@@ -40,6 +41,7 @@ exports.onboard = async (req, res, next) => {
       billingCycle = 'monthly',
       industry,
       timezone,
+      website,
     } = req.body;
 
     // ── 1. Validate plan ──────────────────────────────────────────────────────
@@ -73,6 +75,7 @@ exports.onboard = async (req, res, next) => {
       owner: new mongoose.Types.ObjectId(), // temp — replaced below
       industry: industry || undefined,
       timezone: timezone || 'UTC',
+      website: website || undefined,
       plan: {
         name: plan_id,
         maxUsers: planConfig.maxUsers,
@@ -116,6 +119,8 @@ exports.onboard = async (req, res, next) => {
       console.error('[Onboarding] Failed to send verification email:', emailErr.message);
     }
 
+    logWorkspaceCreated({ company, user, req });
+
     return response.created(
       res,
       {
@@ -152,4 +157,51 @@ exports.getPlans = (req, res) => {
     ...PLANS[id],
   }));
   return response.success(res, { plans });
+};
+
+/**
+ * POST /onboarding/setup
+ * Authenticated — save post-signup questionnaire and mark onboarding complete.
+ */
+exports.completeSetup = async (req, res, next) => {
+  try {
+    const company = req.company;
+    const user = req.user;
+
+    if (!['owner', 'admin'].includes(user.role)) {
+      return response.forbidden(res, 'Only workspace admins can complete setup');
+    }
+
+    const { teamGoal, channels, ticketVolume, ecommercePlatform, aiInterest } = req.body;
+
+    company.onboardingSetup = {
+      teamGoal: teamGoal || undefined,
+      channels: Array.isArray(channels) ? channels : undefined,
+      ticketVolume: ticketVolume || undefined,
+      ecommercePlatform: ecommercePlatform || undefined,
+      aiInterest: aiInterest || undefined,
+      completedAt: new Date(),
+    };
+
+    await company.save();
+
+    user.onboardingCompleted = true;
+    await user.save();
+
+    return response.success(
+      res,
+      {
+        company: {
+          id: company._id,
+          name: company.name,
+          subdomain: company.subdomain,
+          onboardingSetup: company.onboardingSetup,
+        },
+        user: user.toSafeObject(),
+      },
+      'Workspace setup complete'
+    );
+  } catch (err) {
+    next(err);
+  }
 };

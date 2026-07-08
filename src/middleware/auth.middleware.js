@@ -23,7 +23,9 @@ const resolveTenant = async (req, res, next) => {
       const baseDomain = process.env.APP_BASE_DOMAIN || 'agentraa.com';
       const hostWithoutPort = host.split(':')[0];
 
-      if (hostWithoutPort.endsWith(`.${baseDomain}`)) {
+      if (hostWithoutPort.endsWith('.localhost')) {
+        subdomain = hostWithoutPort.slice(0, -'.localhost'.length);
+      } else if (hostWithoutPort.endsWith(`.${baseDomain}`)) {
         subdomain = hostWithoutPort.replace(`.${baseDomain}`, '');
       }
     }

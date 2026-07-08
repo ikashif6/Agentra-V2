@@ -3,6 +3,7 @@ const Company = require('../models/Company');
 const emailService = require('../services/email.service');
 const tokenUtil = require('../utils/token');
 const response = require('../utils/apiResponse');
+const { logUserLogin, logProfileUpdated, logPasswordChanged } = require('../services/activity.service');
 
 const MAGIC_LINK_TTL_MS = (parseInt(process.env.MAGIC_LINK_EXPIRES_MINUTES) || 15) * 60 * 1000;
 const OTP_TTL_MS = (parseInt(process.env.OTP_EXPIRES_MINUTES) || 10) * 60 * 1000;
@@ -36,6 +37,7 @@ async function issueTokenPair(user, company, meta = {}) {
 
   user.lastLoginAt = new Date();
   user.lastLoginIp = meta.ip || '';
+  user.isOnline = true;
   await user.save();
 
   return { accessToken, refreshToken };
@@ -192,16 +194,26 @@ exports.login = async (req, res, next) => {
       return response.unauthorized(res, 'Invalid email or password');
     }
 
+    if (!user.isEmailVerified) {
+      return response.forbidden(
+        res,
+        'Please verify your email before signing in. Check your inbox for the verification link we sent when you signed up.',
+        { code: 'EMAIL_NOT_VERIFIED' },
+      );
+    }
+
     // Reset attempts on success
     await user.resetLoginAttempts();
 
     const { accessToken, refreshToken } = await issueTokenPair(user, company, clientMeta(req));
 
+    logUserLogin({ company, user, req });
+
     return response.success(res, {
       accessToken,
       refreshToken,
       user: user.toSafeObject(),
-      company: { id: company._id, name: company.name, subdomain: company.subdomain },
+      company: { id: company._id, name: company.name, subdomain: company.subdomain, timezone: company.timezone },
     }, 'Login successful');
   } catch (err) {
     next(err);
@@ -283,11 +295,13 @@ exports.verifyMagicLink = async (req, res, next) => {
 
     const { accessToken, refreshToken } = await issueTokenPair(user, company, clientMeta(req));
 
+    logUserLogin({ company, user, req });
+
     return response.success(res, {
       accessToken,
       refreshToken,
       user: user.toSafeObject(),
-      company: { id: company._id, name: company.name, subdomain: company.subdomain },
+      company: { id: company._id, name: company.name, subdomain: company.subdomain, timezone: company.timezone },
     }, 'Magic link verified successfully');
   } catch (err) {
     next(err);
@@ -341,11 +355,13 @@ exports.acceptInvite = async (req, res, next) => {
 
     const { accessToken, refreshToken } = await issueTokenPair(user, company, clientMeta(req));
 
+    logUserLogin({ company, user, req });
+
     return response.success(res, {
       accessToken,
       refreshToken,
       user: user.toSafeObject(),
-      company: { id: company._id, name: company.name, subdomain: company.subdomain },
+      company: { id: company._id, name: company.name, subdomain: company.subdomain, timezone: company.timezone },
     }, `Welcome to ${company.name}! You're now signed in.`);
   } catch (err) {
     next(err);
@@ -441,11 +457,13 @@ exports.verifyOtp = async (req, res, next) => {
 
     const { accessToken, refreshToken } = await issueTokenPair(user, company, clientMeta(req));
 
+    logUserLogin({ company, user, req });
+
     return response.success(res, {
       accessToken,
       refreshToken,
       user: user.toSafeObject(),
-      company: { id: company._id, name: company.name, subdomain: company.subdomain },
+      company: { id: company._id, name: company.name, subdomain: company.subdomain, timezone: company.timezone },
     }, 'OTP verified successfully');
   } catch (err) {
     next(err);
@@ -463,33 +481,57 @@ exports.verifyEmail = async (req, res, next) => {
 
     const hashedToken = tokenUtil.hashToken(token);
 
-    const user = await User.findOneAndUpdate(
-      {
-        emailVerificationToken: hashedToken,
-        emailVerificationExpires: { $gt: new Date() },
-      },
-      {
-        isEmailVerified: true,
-        $unset: { emailVerificationToken: 1, emailVerificationExpires: 1 },
-      },
-      { new: true }
-    );
+    const user = await User.findOne({
+      emailVerificationToken: hashedToken,
+      emailVerificationExpires: { $gt: new Date() },
+    }).select('+emailVerificationToken +emailVerificationExpires +refreshTokens');
 
     if (!user) {
       return response.badRequest(res, 'Invalid or expired verification token');
     }
 
-    // Send welcome email
+    user.isEmailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpires = undefined;
+    await user.save();
+
+    const company = await Company.findById(user.company);
+    if (!company) {
+      return response.badRequest(res, 'Workspace not found for this account');
+    }
+
+    // Send welcome email (non-fatal)
     try {
-      const company = await Company.findById(user.company);
-      if (company) {
-        await emailService.sendWelcomeEmail({ user, company });
-      }
+      await emailService.sendWelcomeEmail({ user, company });
     } catch (emailErr) {
       console.error('Failed to send welcome email:', emailErr.message);
     }
 
-    return response.success(res, { email: user.email }, 'Email verified successfully');
+    const { accessToken, refreshToken } = await issueTokenPair(user, company, clientMeta(req));
+
+    logUserLogin({ company, user, req });
+
+    return response.success(
+      res,
+      {
+        accessToken,
+        refreshToken,
+        user: user.toSafeObject(),
+        company: {
+          _id: company._id,
+          name: company.name,
+          subdomain: company.subdomain,
+          website: company.website,
+          timezone: company.timezone,
+          plan: {
+            name: company.plan?.name || 'pro',
+            status: company.plan?.status || 'trialing',
+            trialEndsAt: company.plan?.trialEndsAt,
+          },
+        },
+      },
+      'Email verified successfully'
+    );
   } catch (err) {
     next(err);
   }
@@ -634,7 +676,7 @@ exports.refreshTokens = async (req, res, next) => {
     }).select('+refreshTokens');
 
     if (!user) {
-      return response.unauthorized(res, 'Refresh token not recognised — possible token reuse');
+      return response.unauthorized(res, 'Refresh token not recognised. Possible token reuse');
     }
 
     // Remove used token (rotation)
@@ -700,7 +742,10 @@ exports.logoutAll = async (req, res, next) => {
  */
 exports.getMe = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user._id).populate('company', 'name subdomain plan.name plan.status logo');
+    const user = await User.findById(req.user._id).populate(
+      'company',
+      'name subdomain logo timezone branding plan.name plan.status',
+    );
 
     return response.success(res, { user: user.toSafeObject() });
   } catch (err) {
@@ -714,7 +759,7 @@ exports.getMe = async (req, res, next) => {
  */
 exports.updateMe = async (req, res, next) => {
   try {
-    const allowed = ['firstName', 'lastName', 'phone', 'jobTitle', 'preferences', 'avatar'];
+    const allowed = ['firstName', 'lastName', 'phone', 'jobTitle', 'bio', 'preferences', 'avatar', 'isOnline'];
     const updates = {};
 
     for (const key of allowed) {
@@ -723,7 +768,17 @@ exports.updateMe = async (req, res, next) => {
       }
     }
 
+    if (updates.preferences) {
+      const existingUser = await User.findById(req.user._id);
+      const existingPrefs = existingUser?.preferences
+        ? { ...(existingUser.preferences.toObject?.() ?? existingUser.preferences) }
+        : {};
+      updates.preferences = { ...existingPrefs, ...updates.preferences };
+    }
+
     const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true, runValidators: true });
+
+    logProfileUpdated({ company: req.company, actor: user, req });
 
     return response.success(res, { user: user.toSafeObject() }, 'Profile updated');
   } catch (err) {
@@ -752,6 +807,8 @@ exports.changePassword = async (req, res, next) => {
     // Revoke all other sessions
     user.refreshTokens = [];
     await user.save();
+
+    logPasswordChanged({ company: req.company, actor: user, req });
 
     return response.success(res, {}, 'Password changed successfully. Please log in again.');
   } catch (err) {

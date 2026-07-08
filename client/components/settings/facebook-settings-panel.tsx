@@ -1,12 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  ArrowRight,
   CheckCircle2,
   ExternalLink,
+  Inbox,
   Loader2,
+  MessagesSquare,
+  Reply,
+  ShieldCheck,
+  Ticket,
   Unplug,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -21,6 +29,41 @@ const DEFAULT_FACEBOOK: FacebookChannelIntegration = {
   status: "disconnected",
   pendingPages: [],
 };
+
+const CAPABILITIES = [
+  {
+    icon: Ticket,
+    title: "Auto-created tickets",
+    description: "Every new Messenger chat opens a ticket in your inbox.",
+  },
+  {
+    icon: Reply,
+    title: "Reply from Agentra",
+    description: "Answer from the shared inbox — it's delivered on Messenger.",
+  },
+  {
+    icon: UserRound,
+    title: "Customer context",
+    description: "The sender's name and photo are pulled in automatically.",
+  },
+] as const;
+
+const HOW_IT_WORKS = [
+  "Sign in with Facebook and approve access",
+  "Pick the Page you use for customer chats",
+  "New messages start landing in your inbox",
+] as const;
+
+function formatConnectedAt(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
 
 export default function FacebookSettingsPanel() {
   const router = useRouter();
@@ -174,35 +217,73 @@ export default function FacebookSettingsPanel() {
   }
 
   if (facebook.status === "connected" && facebook.pageName) {
+    const connectedAt = formatConnectedAt(facebook.connectedAt);
     return (
       <SettingsPanelShell title="Facebook" description="Messenger and page inbox">
-        <div className="mx-auto max-w-xl space-y-6">
-          <div className="flex items-start gap-4 rounded-xl border border-border/70 bg-muted/20 p-5">
-            <div className="flex size-12 items-center justify-center rounded-xl border border-border/70 bg-card">
-              {facebook.pagePictureUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={facebook.pagePictureUrl}
-                  alt=""
-                  className="size-12 rounded-xl object-cover"
-                />
-              ) : (
-                <ChannelBrandIcon channel="facebook" className="size-6" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="size-4 text-emerald-600" />
-                <p className="font-semibold text-foreground">Connected</p>
+        <div className="mx-auto max-w-2xl space-y-6">
+          {/* Connected Page identity */}
+          <div className="overflow-hidden rounded-2xl border border-border/70">
+            <div className="flex items-center gap-4 border-b border-border/60 bg-emerald-500/5 p-5">
+              <div className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-card">
+                {facebook.pagePictureUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={facebook.pagePictureUrl}
+                    alt=""
+                    className="size-14 object-cover"
+                  />
+                ) : (
+                  <ChannelBrandIcon channel="facebook" className="size-7" />
+                )}
+                <span className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-card">
+                  <ChannelBrandIcon channel="facebook" className="size-4" />
+                </span>
               </div>
-              <p className="mt-1 text-sm font-medium text-foreground">{facebook.pageName}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Messenger conversations from this Page will route into Agentra as Facebook tickets.
-              </p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="size-4 text-emerald-600" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    Connected
+                  </span>
+                </div>
+                <p className="mt-0.5 truncate text-base font-semibold text-foreground">
+                  {facebook.pageName}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Facebook Page{connectedAt ? ` · linked ${connectedAt}` : ""}
+                </p>
+              </div>
+              <Link
+                href="/inbox"
+                className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-border/70 bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary sm:inline-flex"
+              >
+                <Inbox className="size-4" />
+                Open inbox
+              </Link>
+            </div>
+
+            {/* What's live now */}
+            <div className="grid gap-px bg-border/60 sm:grid-cols-3">
+              {CAPABILITIES.map((cap) => (
+                <div key={cap.title} className="bg-card p-4">
+                  <cap.icon className="size-5 text-primary" />
+                  <p className="mt-2 text-sm font-medium text-foreground">{cap.title}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                    {cap.description}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <p className="text-xs text-muted-foreground">
+            New Messenger conversations from{" "}
+            <span className="font-medium text-foreground">{facebook.pageName}</span> arrive in your
+            inbox as Facebook tickets. Replies you send there are delivered straight back to the
+            customer on Messenger.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-5">
             <Button type="button" variant="outline" onClick={() => void startConnect()} disabled={connecting}>
               {connecting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
               Switch Page
@@ -229,12 +310,18 @@ export default function FacebookSettingsPanel() {
 
   if (facebook.status === "pending" && (facebook.pendingPages?.length ?? 0) > 0) {
     return (
-      <SettingsPanelShell title="Facebook" description="Choose the Page for Messenger">
-        <div className="mx-auto max-w-xl space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Select which Facebook Page should receive Messenger conversations in Agentra.
-          </p>
-          <div className="space-y-3">
+      <SettingsPanelShell title="Facebook" description="Choose a Page">
+        <div className="mx-auto max-w-xl space-y-5">
+          <div>
+            <h4 className="text-base font-semibold text-foreground">
+              Which Page should Agentra manage?
+            </h4>
+            <p className="mt-1 text-sm text-muted-foreground">
+              We found more than one Page on your account. Pick the one you use to chat with
+              customers — you can switch later.
+            </p>
+          </div>
+          <div className="space-y-2.5">
             {facebook.pendingPages?.map((page) => (
               <button
                 key={page.id}
@@ -243,7 +330,7 @@ export default function FacebookSettingsPanel() {
                 disabled={selectingPageId !== null}
                 className={cn(
                   "flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors",
-                  "hover:border-primary/40 hover:bg-primary/5",
+                  "hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60",
                 )}
               >
                 <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/30">
@@ -255,17 +342,23 @@ export default function FacebookSettingsPanel() {
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-foreground">{page.name}</p>
+                  <p className="truncate font-medium text-foreground">{page.name}</p>
                   {page.category ? (
-                    <p className="text-xs text-muted-foreground">{page.category}</p>
+                    <p className="truncate text-xs text-muted-foreground">{page.category}</p>
                   ) : null}
                 </div>
                 {selectingPageId === page.id ? (
-                  <Loader2 className="size-4 animate-spin text-primary" />
-                ) : null}
+                  <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
+                ) : (
+                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                )}
               </button>
             ))}
           </div>
+          <Button type="button" variant="ghost" size="sm" onClick={() => void startConnect()} disabled={connecting}>
+            {connecting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+            Use a different Facebook account
+          </Button>
         </div>
       </SettingsPanelShell>
     );
@@ -273,24 +366,68 @@ export default function FacebookSettingsPanel() {
 
   return (
     <SettingsPanelShell title="Facebook" description="Messenger and page inbox">
-      <div className="mx-auto flex max-w-xl flex-col items-center py-8 text-center">
-        <div className="mb-5 flex size-16 items-center justify-center rounded-2xl border border-border/70 bg-muted/20">
-          <ChannelBrandIcon channel="facebook" className="size-8" />
-        </div>
-        <h4 className="text-lg font-semibold text-foreground">Connect Facebook Messenger</h4>
-        <p className="mt-2 max-w-md text-sm text-muted-foreground">
-          Sign in with Facebook, pick your Page, and start receiving Messenger conversations in Agentra.
-          Most workspaces finish in under a minute.
-        </p>
-        {facebook.lastError ? (
-          <p className="mt-4 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-            {facebook.lastError}
+      <div className="mx-auto max-w-2xl">
+        {/* Hero */}
+        <div className="flex flex-col items-center rounded-2xl border border-border/70 bg-gradient-to-b from-primary/5 to-transparent px-6 py-10 text-center">
+          <div className="flex size-16 items-center justify-center rounded-2xl border border-border/70 bg-card shadow-sm">
+            <ChannelBrandIcon channel="facebook" className="size-9" />
+          </div>
+          <h4 className="mt-5 text-xl font-semibold text-foreground">
+            Turn Messenger into a support inbox
+          </h4>
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+            Connect your Facebook Page so customer messages become tickets your whole team can
+            answer — right from Agentra.
           </p>
-        ) : null}
-        <Button type="button" className="mt-6" size="lg" onClick={() => void startConnect()} disabled={connecting}>
-          {connecting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-          Continue with Facebook
-        </Button>
+          <Button type="button" className="mt-6" size="lg" onClick={() => void startConnect()} disabled={connecting}>
+            {connecting ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <ChannelBrandIcon channel="facebook" className="mr-2 size-4" />
+            )}
+            Continue with Facebook
+          </Button>
+          <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ShieldCheck className="size-3.5" />
+            Takes about a minute · you choose which Page to share
+          </p>
+          {facebook.lastError ? (
+            <p className="mt-5 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              {facebook.lastError}
+            </p>
+          ) : null}
+        </div>
+
+        {/* What you get */}
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          {CAPABILITIES.map((cap) => (
+            <div key={cap.title} className="rounded-xl border border-border/70 bg-card p-4">
+              <cap.icon className="size-5 text-primary" />
+              <p className="mt-2 text-sm font-medium text-foreground">{cap.title}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                {cap.description}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* How it works */}
+        <div className="mt-6 rounded-xl border border-border/70 bg-muted/20 p-5">
+          <div className="flex items-center gap-2">
+            <MessagesSquare className="size-4 text-muted-foreground" />
+            <p className="text-sm font-medium text-foreground">How it works</p>
+          </div>
+          <ol className="mt-3 space-y-2.5">
+            {HOW_IT_WORKS.map((step, index) => (
+              <li key={step} className="flex items-start gap-3 text-sm text-muted-foreground">
+                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  {index + 1}
+                </span>
+                {step}
+              </li>
+            ))}
+          </ol>
+        </div>
       </div>
     </SettingsPanelShell>
   );

@@ -17,7 +17,7 @@ const start = async () => {
   await connectDB();
 
   const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚀 Agentraa API running on 0.0.0.0:${PORT}`);
+    console.log(`\n🚀 Agentra API running on 0.0.0.0:${PORT}`);
     console.log(`   Environment : ${process.env.NODE_ENV || 'development'}`);
     console.log(`   Base domain : ${process.env.APP_BASE_DOMAIN || 'agentraa.com'}`);
     console.log(`   Health check: http://0.0.0.0:${PORT}/api/v1/health\n`);

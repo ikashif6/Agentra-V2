@@ -192,6 +192,58 @@ async function verifyPageAccess(pageId, pageAccessToken) {
   };
 }
 
+async function getMessengerUserProfile(pageAccessToken, psid) {
+  return graphGet(`/${psid}`, pageAccessToken, {
+    fields: 'first_name,last_name,profile_pic',
+  });
+}
+
+async function sendMessengerMessage(pageAccessToken, psid, text) {
+  const url = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/me/messages`);
+  url.searchParams.set('access_token', pageAccessToken);
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recipient: { id: psid },
+      messaging_type: 'RESPONSE',
+      message: { text },
+    }),
+  });
+
+  const body = await readJsonResponse(res);
+  if (!res.ok) {
+    throw new Error(body?.error?.message || 'Could not send Messenger reply');
+  }
+  return body;
+}
+
+/**
+ * Send an agent reply back to the Messenger user attached to a ticket.
+ * Loads the Page access token lazily to avoid keeping it in memory.
+ */
+async function sendReplyForTicket(companyId, ticket, text) {
+  const psid = ticket.facebook?.psid;
+  if (!psid) {
+    throw new Error('This ticket has no Messenger recipient');
+  }
+  if (!text || !text.trim()) return null;
+
+  // Required lazily to avoid a require cycle (Company model does not need this service).
+  const Company = require('../models/Company');
+  const company = await Company.findById(companyId).select(
+    '+channelIntegrations.facebook.pageAccessToken',
+  );
+
+  const token = company?.channelIntegrations?.facebook?.pageAccessToken;
+  if (!token) {
+    throw new Error('Facebook is not connected for this workspace');
+  }
+
+  return sendMessengerMessage(token, psid, text.trim());
+}
+
 function getFacebookIntegration(company) {
   return company.channelIntegrations?.facebook || {};
 }
@@ -354,4 +406,7 @@ module.exports = {
   disconnectFacebook,
   verifyWebhookRequest,
   normalizeReturnOrigin,
+  getMessengerUserProfile,
+  sendMessengerMessage,
+  sendReplyForTicket,
 };

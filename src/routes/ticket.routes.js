@@ -32,6 +32,19 @@ const updateRules = [
   body('ticket_description').optional().trim().isLength({ max: 50000 }),
   body('priority').optional().isIn(['low', 'medium', 'high', 'urgent']),
   body('status').optional().isIn(['open', 'in_progress', 'on_hold', 'resolved', 'closed', 'self_closed']),
+  body('inboxFolder').optional().isIn(['inbox', 'snoozed', 'trash', 'spam']),
+  body('snoozedUntil').optional().isISO8601().toDate(),
+  body('tags').optional().isArray(),
+  body('tags.*').optional().isString().trim().isLength({ max: 64 }),
+  body('source').optional().isIn(['portal', 'email', 'chat', 'chatbot', 'instagram', 'facebook', 'whatsapp']),
+  body('isUnread').optional().isBoolean(),
+  body('details').optional().isObject(),
+  body('details.contactReason').optional().isString().isLength({ max: 200 }),
+  body('details.product').optional().isString().isLength({ max: 200 }),
+  body('details.resolution').optional().isString().isLength({ max: 200 }),
+  body('details.customerType').optional().isString().isLength({ max: 100 }),
+  body('details.customerNote').optional().isString().isLength({ max: 2000 }),
+  body('details.customerPhone').optional().isString().isLength({ max: 40 }),
   body('attachments').optional().isArray(),
 ];
 
@@ -104,6 +117,16 @@ router.post(
 );
 
 /**
+ * POST /tickets/demo — sample conversation for inbox preview
+ */
+router.post(
+  '/demo',
+  protect,
+  authorize('owner', 'admin', 'agent'),
+  ticketController.createDemoTicket
+);
+
+/**
  * GET /tickets    — list (all authenticated roles)
  */
 router.get(
@@ -113,6 +136,8 @@ router.get(
     query('page').optional().isInt({ min: 1 }),
     query('limit').optional().isInt({ min: 1, max: 100 }),
     query('status').optional().isIn(['open', 'in_progress', 'on_hold', 'resolved', 'closed', 'self_closed']),
+    query('view').optional().isIn(['assigned', 'all', 'snoozed', 'closed', 'trash', 'spam', 'queue']),
+    query('scope').optional().isIn(['inbox', 'live_chat', 'ai_agents', 'dashboard']),
     query('priority').optional().isIn(['low', 'medium', 'high', 'urgent']),
     query('department').optional().isMongoId(),
     query('team').optional().isMongoId(),
@@ -130,6 +155,16 @@ router.get(
   protect,
   authorize('owner', 'admin', 'agent'),
   ticketController.getDashboardStats
+);
+
+/**
+ * GET /tickets/inbox/counts — sidebar counts for inbox views
+ */
+router.get(
+  '/inbox/counts',
+  protect,
+  authorize('owner', 'admin', 'agent'),
+  ticketController.getInboxCounts
 );
 
 // ─── Routes that accept BOTH normal JWT and track-session token ───────────────

@@ -4,6 +4,7 @@ const rateLimit = require('express-rate-limit');
 
 const onboardingController = require('../controllers/onboarding.controller');
 const { validate } = require('../middleware/validate.middleware');
+const { resolveTenant, protect } = require('../middleware/auth.middleware');
 const { ONBOARDING_PLAN_IDS } = require('../config/plans');
 
 const router = express.Router();
@@ -55,6 +56,12 @@ const onboardRules = [
 
   body('industry').optional().trim().isLength({ max: 100 }),
   body('timezone').optional().trim().isLength({ max: 100 }),
+
+  body('website')
+    .optional()
+    .trim()
+    .isLength({ max: 200 })
+    .withMessage('Website URL must be under 200 characters'),
 ];
 
 // ─── Public routes ────────────────────────────────────────────────────────────
@@ -64,5 +71,8 @@ router.get('/plans', onboardingController.getPlans);
 
 // POST /onboarding        — create company + owner
 router.post('/', onboardLimiter, onboardRules, validate, onboardingController.onboard);
+
+// POST /onboarding/setup — post-signup questionnaire (authenticated)
+router.post('/setup', resolveTenant, protect, onboardingController.completeSetup);
 
 module.exports = router;

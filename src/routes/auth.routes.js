@@ -12,7 +12,9 @@ const router = express.Router();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 10,
+  max:
+    parseInt(process.env.AUTH_RATE_LIMIT_MAX, 10) ||
+    (process.env.NODE_ENV === 'production' ? 10 : 100),
   message: { success: false, message: 'Too many auth attempts. Please try again in 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,

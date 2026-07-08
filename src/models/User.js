@@ -55,6 +55,9 @@ const userSchema = new mongoose.Schema(
     // Job title
     jobTitle: { type: String, trim: true },
 
+    // Short profile bio
+    bio: { type: String, trim: true, maxlength: [280, 'Bio cannot exceed 280 characters'] },
+
     // ─── Authentication ────────────────────────────────────────────────────────
 
     // Password-based auth (optional — users may be passwordless-only)
@@ -116,9 +119,13 @@ const userSchema = new mongoose.Schema(
       notifications: {
         email: { type: Boolean, default: true },
         browser: { type: Boolean, default: true },
+        volume: { type: Number, default: 70, min: 0, max: 100 },
+        rules: { type: Object, default: undefined },
       },
       theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
       timezone: { type: String, default: 'UTC' },
+      dateFormat: { type: String, enum: ['DMY', 'MDY'], default: 'MDY' },
+      timeFormat: { type: String, enum: ['12h', '24h'], default: '12h' },
       locale: { type: String, default: 'en' },
     },
   },

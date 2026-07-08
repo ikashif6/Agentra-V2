@@ -133,6 +133,42 @@ const ticketSchema = new Schema(
       default: 'open',
     },
 
+    inboxFolder: {
+      type: String,
+      enum: ['inbox', 'snoozed', 'trash', 'spam'],
+      default: 'inbox',
+    },
+
+    snoozedUntil: { type: Date },
+
+    // ── Channel & classification metadata ─────────────────────────────────────
+    source: {
+      type: String,
+      enum: ['portal', 'email', 'chat', 'chatbot', 'instagram', 'facebook', 'whatsapp'],
+      default: 'portal',
+    },
+
+    tags: [{ type: String, trim: true }],
+
+    isUnread: { type: Boolean, default: false },
+
+    // ── Facebook Messenger linkage (source === 'facebook') ────────────────────
+    // Lets inbound webhooks find the right conversation and lets agent replies
+    // route back to the correct Messenger recipient.
+    facebook: {
+      pageId: { type: String },
+      psid: { type: String }, // Page-scoped ID of the Messenger user
+    },
+
+    details: {
+      contactReason: { type: String, default: '' },
+      product: { type: String, default: '' },
+      resolution: { type: String, default: '' },
+      customerType: { type: String, default: '' },
+      customerNote: { type: String, default: '' },
+      customerPhone: { type: String, default: '' },
+    },
+
     // ── Attachments (top-level; messages can also have attachments) ───────────
     attachments: { type: [attachmentSchema], default: [] },
 
@@ -175,6 +211,8 @@ ticketSchema.index({ ticket_code: 1 }, { unique: true });
 ticketSchema.index({ company_subdomain: 1, ticket_code: 1 });
 ticketSchema.index({ 'peoples.user': 1 });
 ticketSchema.index({ assigned_agent: 1 });
+ticketSchema.index({ company: 1, inboxFolder: 1, status: 1 });
+ticketSchema.index({ company: 1, source: 1, 'facebook.psid': 1 });
 
 // ─── Static: generate the next ticket code for a company ─────────────────────
 ticketSchema.statics.generateCode = async function (companyId, prefix = 'TKT') {

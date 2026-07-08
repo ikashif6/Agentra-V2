@@ -1,6 +1,7 @@
 const path = require('path');
-const fs = require('fs');
 const response = require('../utils/apiResponse');
+
+const UPLOAD_ROOT = path.join(__dirname, '../../uploads');
 
 // Base URL for serving uploaded files
 const BASE_URL = process.env.APP_API_URL || `http://localhost:${process.env.PORT || 5000}`;
@@ -20,12 +21,15 @@ exports.uploadFiles = async (req, res, next) => {
       return response.badRequest(res, 'No files uploaded');
     }
 
-    const results = req.files.map((file) => ({
-      url: `${BASE_URL}/api/uploads/${file.filename}`,
-      filename: file.originalname,
-      mimetype: file.mimetype,
-      size: file.size,
-    }));
+    const results = req.files.map((file) => {
+      const relativePath = path.relative(UPLOAD_ROOT, file.path).replace(/\\/g, '/');
+      return {
+        url: `${BASE_URL}/api/uploads/${relativePath}`,
+        filename: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+      };
+    });
 
     return response.success(res, { attachments: results }, 'Files uploaded successfully');
   } catch (err) {
