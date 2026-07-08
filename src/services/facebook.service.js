@@ -230,9 +230,21 @@ function defaultFacebookIntegration() {
   };
 }
 
+async function labeledStep(step, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    err.message = `[${step}] ${err.message}`;
+    throw err;
+  }
+}
+
 async function finalizePageConnection(company, page, userAccessToken) {
-  await subscribePageToApp(page.id, page.accessToken);
-  const verified = await verifyPageAccess(page.id, page.accessToken);
+  if (!page.accessToken) {
+    throw new Error('[page-token] Facebook did not return a Page access token. Re-connect and make sure the Page is selected with messaging permissions.');
+  }
+  await labeledStep('subscribe', () => subscribePageToApp(page.id, page.accessToken));
+  const verified = await labeledStep('verify-page', () => verifyPageAccess(page.id, page.accessToken));
 
   company.channelIntegrations = company.channelIntegrations || {};
   company.channelIntegrations.facebook = {
@@ -252,9 +264,9 @@ async function finalizePageConnection(company, page, userAccessToken) {
 }
 
 async function handleOAuthCallback(code, company) {
-  const shortToken = await exchangeCodeForUserToken(code);
-  const userAccessToken = await exchangeForLongLivedUserToken(shortToken);
-  const pages = await fetchManagedPages(userAccessToken);
+  const shortToken = await labeledStep('exchange-code', () => exchangeCodeForUserToken(code));
+  const userAccessToken = await labeledStep('long-lived', () => exchangeForLongLivedUserToken(shortToken));
+  const pages = await labeledStep('list-pages', () => fetchManagedPages(userAccessToken));
 
   if (!pages.length) {
     company.channelIntegrations = company.channelIntegrations || {};
