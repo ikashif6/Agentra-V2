@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  ArrowDown,
   Inbox,
   Loader2,
   Mail,
@@ -153,6 +154,29 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
   const [toolbarBusy, setToolbarBusy] = useState(false);
   const [agents, setAgents] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [newCount, setNewCount] = useState(0);
+
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const prevCountRef = useRef(0);
+  const prevTicketRef = useRef<string | null>(null);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const container = messagesRef.current;
+    if (container) container.scrollTo({ top: container.scrollHeight, behavior });
+  }, []);
+
+  const jumpToLatest = useCallback(() => {
+    scrollToBottom("smooth");
+    setNewCount(0);
+  }, [scrollToBottom]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const container = messagesRef.current;
+    if (!container) return;
+    const nearBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+    if (nearBottom) setNewCount(0);
+  }, []);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<CreateForm>({
     resolver: zodResolver(createSchema),
@@ -258,6 +282,36 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
       setActiveTicket(null);
     }
   }, [selectedCode, fetchTicketDetail]);
+
+  // Track message growth: auto-scroll when already at the bottom, otherwise
+  // surface a "N new messages" pill the agent can click to jump down.
+  const messageCount = activeTicket?.messages?.length ?? 0;
+  const activeCode = activeTicket?.ticket_code ?? null;
+  useEffect(() => {
+    if (activeCode !== prevTicketRef.current) {
+      prevTicketRef.current = activeCode;
+      prevCountRef.current = messageCount;
+      setNewCount(0);
+      requestAnimationFrame(() => scrollToBottom("auto"));
+      return;
+    }
+
+    if (messageCount > prevCountRef.current) {
+      const added = messageCount - prevCountRef.current;
+      const container = messagesRef.current;
+      const nearBottom = container
+        ? container.scrollHeight - container.scrollTop - container.clientHeight < 160
+        : true;
+
+      if (nearBottom) {
+        requestAnimationFrame(() => scrollToBottom("smooth"));
+        setNewCount(0);
+      } else {
+        setNewCount((count) => count + added);
+      }
+    }
+    prevCountRef.current = messageCount;
+  }, [messageCount, activeCode, scrollToBottom]);
 
   // Background polling so new inbound messages / tickets appear without a manual reload.
   useEffect(() => {
@@ -694,7 +748,12 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                 )
               ) : null}
 
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 print:px-0">
+              <div className="relative min-h-0 flex-1">
+              <div
+                ref={messagesRef}
+                onScroll={handleMessagesScroll}
+                className="h-full space-y-4 overflow-y-auto px-4 py-4 print:px-0"
+              >
                 {activeTicket.messages?.map((msg: TicketMessage) => {
                   const sender =
                     typeof msg.sender === "object"
@@ -730,6 +789,18 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                     </div>
                   );
                 })}
+              </div>
+
+                {newCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={jumpToLatest}
+                    className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-border/60 bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-lg transition-transform hover:scale-[1.03]"
+                  >
+                    <ArrowDown className="size-3.5" />
+                    {newCount} new message{newCount > 1 ? "s" : ""}
+                  </button>
+                ) : null}
               </div>
 
               <InboxReplyComposer
