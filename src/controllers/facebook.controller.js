@@ -103,7 +103,18 @@ exports.oauthCallback = async (req, res, next) => {
       );
     }
 
-    const result = await handleOAuthCallback(String(code), company);
+    let result;
+    try {
+      result = await handleOAuthCallback(String(code), company);
+    } catch (connectErr) {
+      console.error('[facebook oauth callback]', connectErr);
+      return res.redirect(
+        buildSettingsRedirect(subdomain, {
+          facebook: 'error',
+          message: connectErr.message || 'Could not connect Facebook',
+        }, returnOrigin),
+      );
+    }
 
     if (result.kind === 'connected') {
       return res.redirect(
