@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDown,
@@ -87,6 +87,17 @@ function formatMessageTime(str?: string) {
   const sameDay = date.toDateString() === new Date().toDateString();
   if (sameDay) return time;
   return `${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${time}`;
+}
+
+// Whether to show a centered time divider before a message (start, new day,
+// or a gap of more than ~15 minutes since the previous one).
+function hasTimeGap(prev?: string, current?: string) {
+  if (!prev || !current) return true;
+  const a = new Date(prev);
+  const b = new Date(current);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return false;
+  if (a.toDateString() !== b.toDateString()) return true;
+  return b.getTime() - a.getTime() > 15 * 60 * 1000;
 }
 
 function customerLabel(ticket: Ticket) {
@@ -754,39 +765,43 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                 onScroll={handleMessagesScroll}
                 className="h-full space-y-4 overflow-y-auto px-4 py-4 print:px-0"
               >
-                {activeTicket.messages?.map((msg: TicketMessage) => {
+                {activeTicket.messages?.map((msg: TicketMessage, index) => {
                   const sender =
                     typeof msg.sender === "object"
                       ? msg.sender.fullName || msg.sender.email
                       : "Unknown";
                   const isMe = typeof msg.sender === "object" && msg.sender._id === user?._id;
+                  const prev = activeTicket.messages?.[index - 1];
+                  const showDivider = index === 0 || hasTimeGap(prev?.sentAt, msg.sentAt);
                   return (
-                    <div key={msg._id} className={cn("flex gap-3", isMe && "flex-row-reverse")}>
-                      <Avatar className="size-8 shrink-0">
-                        <AvatarFallback className="bg-muted text-xs">{initials(sender)}</AvatarFallback>
-                      </Avatar>
-                      <div
-                        className={cn(
-                          "max-w-[85%] rounded-[10px] border px-3 py-2.5 text-sm",
-                          isMe ? "border-primary/20 bg-primary/8" : "border-border/60 bg-muted/30",
-                        )}
-                      >
+                    <Fragment key={msg._id}>
+                      {showDivider && msg.sentAt ? (
+                        <div className="flex justify-center py-1">
+                          <span className="text-[11px] font-medium text-muted-foreground/60">
+                            {formatMessageTime(msg.sentAt)}
+                          </span>
+                        </div>
+                      ) : null}
+                      <div className={cn("group flex items-center gap-3", isMe && "flex-row-reverse")}>
+                        <Avatar className="size-8 shrink-0 self-end">
+                          <AvatarFallback className="bg-muted text-xs">{initials(sender)}</AvatarFallback>
+                        </Avatar>
                         <div
                           className={cn(
-                            "mb-1 flex items-baseline gap-2",
-                            isMe && "flex-row-reverse",
+                            "max-w-[85%] rounded-[10px] border px-3 py-2.5 text-sm",
+                            isMe ? "border-primary/20 bg-primary/8" : "border-border/60 bg-muted/30",
                           )}
                         >
-                          <p className="text-xs font-medium text-muted-foreground">{sender}</p>
-                          {msg.sentAt ? (
-                            <span className="text-[10px] text-muted-foreground/70">
-                              {formatMessageTime(msg.sentAt)}
-                            </span>
-                          ) : null}
+                          <p className="mb-1 text-xs font-medium text-muted-foreground">{sender}</p>
+                          <FormattedMessageBody body={msg.body} attachments={msg.attachments} />
                         </div>
-                        <FormattedMessageBody body={msg.body} attachments={msg.attachments} />
+                        {msg.sentAt ? (
+                          <span className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100">
+                            {formatMessageTime(msg.sentAt)}
+                          </span>
+                        ) : null}
                       </div>
-                    </div>
+                    </Fragment>
                   );
                 })}
               </div>
