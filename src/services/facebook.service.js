@@ -244,16 +244,15 @@ async function finalizePageConnection(company, page, userAccessToken) {
     throw new Error('[page-token] Facebook did not return a Page access token. Re-connect and make sure the Page is selected with messaging permissions.');
   }
   await labeledStep('subscribe', () => subscribePageToApp(page.id, page.accessToken));
-  const verified = await labeledStep('verify-page', () => verifyPageAccess(page.id, page.accessToken));
 
   company.channelIntegrations = company.channelIntegrations || {};
   company.channelIntegrations.facebook = {
     status: 'connected',
     connectedAt: new Date(),
     lastError: null,
-    pageId: verified.pageId,
-    pageName: verified.pageName,
-    pagePictureUrl: verified.pagePictureUrl || page.pictureUrl || '',
+    pageId: page.id,
+    pageName: page.name,
+    pagePictureUrl: page.pictureUrl || getPublicPagePictureUrl(page.id),
     pageAccessToken: page.accessToken,
     userAccessToken,
     pendingPages: [],
