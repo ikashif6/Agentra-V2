@@ -711,6 +711,7 @@ exports.updateTicket = async (req, res, next) => {
         'customerType',
         'customerNote',
         'customerPhone',
+        'customerEmail',
       ];
       ticket.details = ticket.details || {};
       for (const field of detailFields) {

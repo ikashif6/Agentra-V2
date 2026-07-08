@@ -1,6 +1,21 @@
 export type Role = "owner" | "admin" | "agent" | "customer";
 export type TicketStatus = "open" | "in_progress" | "on_hold" | "resolved" | "closed" | "self_closed";
 export type TicketPriority = "low" | "medium" | "high" | "urgent";
+export type TicketSource =
+  | "portal"
+  | "email"
+  | "chat"
+  | "chatbot"
+  | "instagram"
+  | "facebook"
+  | "whatsapp";
+export type InboxFolder = "inbox" | "snoozed" | "trash" | "spam";
+export type InboxView = "assigned" | "all" | "snoozed" | "closed" | "trash" | "spam";
+export type LiveChatView = "queue" | "assigned" | "closed" | "trash";
+/** @deprecated Use LiveChatView */
+export type AiAgentView = LiveChatView;
+export type ConversationScope = "inbox" | "live_chat" | "ai_agents";
+export type ConversationView = InboxView | LiveChatView;
 
 export interface User {
   _id: string;
@@ -13,8 +28,79 @@ export interface User {
   company: string | Company;
   isEmailVerified: boolean;
   isActive: boolean;
+  isOnline?: boolean;
+  onboardingCompleted?: boolean;
   jobTitle?: string;
+  bio?: string;
   lastLoginAt?: string;
+  preferences?: {
+    timezone?: string;
+    dateFormat?: "DMY" | "MDY";
+    timeFormat?: "12h" | "24h";
+    locale?: string;
+    theme?: "light" | "dark" | "system";
+    notifications?: {
+      email?: boolean;
+      browser?: boolean;
+      volume?: number;
+      rules?: Record<string, { sound?: string; browser?: boolean }>;
+    };
+  };
+}
+
+export type StoreProvider = "shopify" | "woocommerce" | "custom";
+
+export type StoreIntegrationStatus = "disconnected" | "pending" | "connected" | "error";
+
+export interface StoreSyncSettings {
+  syncOrders: boolean;
+  syncCustomers: boolean;
+  syncProducts: boolean;
+}
+
+export interface FacebookPendingPage {
+  id: string;
+  name: string;
+  category?: string;
+  pictureUrl?: string;
+}
+
+export type ChannelIntegrationStatus = "disconnected" | "pending" | "connected" | "error";
+
+export interface FacebookChannelIntegration {
+  status: ChannelIntegrationStatus;
+  connectedAt?: string | null;
+  lastError?: string | null;
+  pageId?: string | null;
+  pageName?: string | null;
+  pagePictureUrl?: string | null;
+  hasPageAccessToken?: boolean;
+  pendingPages?: FacebookPendingPage[];
+}
+
+export interface StoreIntegration {
+  provider: StoreProvider | null;
+  status: StoreIntegrationStatus;
+  connectedAt?: string | null;
+  lastSyncAt?: string | null;
+  lastError?: string | null;
+  shopify?: {
+    shopDomain?: string;
+    shopName?: string;
+    hasAccessToken?: boolean;
+  };
+  woocommerce?: {
+    storeUrl?: string;
+    storeName?: string;
+    hasCredentials?: boolean;
+  };
+  custom?: {
+    storeUrl?: string;
+    storeName?: string;
+    hasApiKey?: boolean;
+    webhookSecret?: string;
+  };
+  syncSettings: StoreSyncSettings;
 }
 
 export interface Company {
@@ -22,6 +108,11 @@ export interface Company {
   name: string;
   subdomain: string;
   logo?: string;
+  timezone?: string;
+  branding?: {
+    primaryColor?: string;
+    theme?: "light" | "dark" | "system";
+  };
   plan: { name: string; status: string; trialEndsAt?: string };
   settings?: {
     ticketPrefix?: string;
@@ -29,6 +120,7 @@ export interface Company {
   };
   helpCenterDomain?: string;
   helpCenterDomainVerified?: boolean;
+  storeIntegration?: StoreIntegration;
 }
 
 export interface HelpCenterFeatures {
@@ -82,6 +174,16 @@ export interface TicketPerson {
   addedAt: string;
 }
 
+export interface TicketDetails {
+  contactReason?: string;
+  product?: string;
+  resolution?: string;
+  customerType?: string;
+  customerNote?: string;
+  customerPhone?: string;
+  customerEmail?: string;
+}
+
 export interface Ticket {
   _id: string;
   ticket_code: string;
@@ -90,6 +192,12 @@ export interface Ticket {
   ticket_description: string;
   priority: TicketPriority;
   status: TicketStatus;
+  inboxFolder?: InboxFolder;
+  snoozedUntil?: string | null;
+  source?: TicketSource;
+  tags?: string[];
+  isUnread?: boolean;
+  details?: TicketDetails;
   department?: Department | string;
   teams?: Array<Team | string>;
   attachments: Attachment[];

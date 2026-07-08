@@ -167,6 +167,7 @@ const ticketSchema = new Schema(
       customerType: { type: String, default: '' },
       customerNote: { type: String, default: '' },
       customerPhone: { type: String, default: '' },
+      customerEmail: { type: String, default: '' },
     },
 
     // ── Attachments (top-level; messages can also have attachments) ───────────
