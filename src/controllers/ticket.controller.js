@@ -972,17 +972,16 @@ exports.addMessage = async (req, res, next) => {
     ticket.lastActivity = new Date();
     await ticket.save();
 
-    // Push agent replies back out to Messenger for Facebook-sourced tickets.
-    if (!internal && ticket.source === 'facebook' && isStaff(req)) {
-      try {
-        await facebookService.sendReplyForTicket(company._id, ticket, msgBody);
-      } catch (fbErr) {
-        console.error('[facebook reply]', fbErr.message);
-      }
-    }
-
     const newMsg = ticket.messages[ticket.messages.length - 1];
-    return response.created(res, { message: newMsg }, 'Message added');
+    response.created(res, { message: newMsg }, 'Message added');
+
+    // Deliver agent replies to Messenger AFTER responding, so the inbox is not
+    // blocked waiting on the Graph API round-trip.
+    if (!internal && ticket.source === 'facebook' && isStaff(req)) {
+      facebookService
+        .sendReplyForTicket(company._id, ticket, msgBody)
+        .catch((fbErr) => console.error('[facebook reply]', fbErr.message));
+    }
   } catch (err) {
     next(err);
   }
