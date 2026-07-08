@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { buildMainLoginUrl } from "@/lib/workspace-host";
+import { buildMainLoginUrl, MAIN_LOGIN_URL } from "@/lib/workspace-host";
 
 // SSR-safe default (no `window`) so the server and first client render agree.
-const SSR_MAIN_LOGIN_URL = `https://${
-  process.env.NEXT_PUBLIC_APP_BASE_DOMAIN ?? "agentraa.com"
-}/auth/login`;
+const SSR_MAIN_LOGIN_URL = MAIN_LOGIN_URL;
 
 /**
  * Returns the "sign in to a different workspace" URL without causing a

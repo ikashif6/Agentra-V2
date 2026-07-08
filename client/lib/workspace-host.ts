@@ -1,5 +1,13 @@
 const BASE_DOMAIN = process.env.NEXT_PUBLIC_APP_BASE_DOMAIN ?? "agentraa.com";
 
+// The app's public entry point (login / workspace discovery). The apex
+// (agentraa.com) is reserved for the marketing site, so the app lives on
+// `portal.<base>` by default.
+const PORTAL_HOST =
+  process.env.NEXT_PUBLIC_APP_PORTAL_HOST ?? `portal.${BASE_DOMAIN}`;
+
+export const MAIN_LOGIN_URL = `https://${PORTAL_HOST}/auth/login`;
+
 export const RESERVED_SUBDOMAINS = new Set([
   "www",
   "api",
@@ -12,6 +20,7 @@ export const RESERVED_SUBDOMAINS = new Set([
   "status",
   "blog",
   "docs",
+  "portal",
 ]);
 
 export const SUBDOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -85,7 +94,7 @@ export function buildMainLoginUrl(): string {
       return `${protocol}//localhost${port}/auth/login`;
     }
   }
-  return `https://${BASE_DOMAIN}/auth/login`;
+  return MAIN_LOGIN_URL;
 }
 
 export function getWorkspaceDisplayHost(subdomain: string): string {
