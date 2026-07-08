@@ -5,6 +5,14 @@ export function AuthLegalFooter() {
   return (
     <footer className="relative z-10 mt-auto flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 pt-4 text-xs text-muted-foreground">
       <Link
+        href={SITE_LEGAL.helpCenter}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="hover:text-foreground hover:underline"
+      >
+        Help Center
+      </Link>
+      <Link
         href={SITE_LEGAL.privacyPolicy}
         target="_blank"
         rel="noopener noreferrer"

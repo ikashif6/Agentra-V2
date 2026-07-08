@@ -295,6 +295,32 @@ export const instagramChannelApi = {
   disconnect: () => api.delete("/channels/instagram", { baseURL: FACEBOOK_API_BASE }),
 };
 
+export const whatsappChannelApi = {
+  getStatus: () => api.get("/channels/whatsapp", { baseURL: FACEBOOK_API_BASE }),
+  getConfig: () => api.get("/channels/whatsapp/config", { baseURL: FACEBOOK_API_BASE }),
+  connect: (payload: { code: string; wabaId: string; phoneNumberId: string }) =>
+    api.post("/channels/whatsapp/connect", payload, { baseURL: FACEBOOK_API_BASE }),
+  disconnect: () => api.delete("/channels/whatsapp", { baseURL: FACEBOOK_API_BASE }),
+};
+
+export const emailChannelApi = {
+  getStatus: () => api.get("/channels/email"),
+  guess: (email: string) => api.get("/channels/email/guess", { params: { email } }),
+  connect: (payload: {
+    email: string;
+    password: string;
+    displayName?: string;
+    preset?: string;
+    imapHost?: string;
+    imapPort?: number;
+    imapSecure?: boolean;
+    smtpHost?: string;
+    smtpPort?: number;
+    smtpSecure?: boolean;
+  }) => api.post("/channels/email/connect", payload),
+  disconnect: () => api.delete("/channels/email"),
+};
+
 export const storeApi = {
   getStatus: () => api.get("/store"),
   connect: (data: {

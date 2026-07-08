@@ -172,6 +172,13 @@ const ticketSchema = new Schema(
       waId: { type: String }, // customer's WhatsApp id (phone number)
     },
 
+    // ── Email linkage (source === 'email') ────────────────────────────────────
+    email: {
+      fromAddress: { type: String }, // customer's email address
+      lastMessageId: { type: String }, // Message-ID of the latest email in thread
+      references: { type: String }, // accumulated References header for threading
+    },
+
     details: {
       contactReason: { type: String, default: '' },
       product: { type: String, default: '' },
@@ -228,6 +235,7 @@ ticketSchema.index({ company: 1, inboxFolder: 1, status: 1 });
 ticketSchema.index({ company: 1, source: 1, 'facebook.psid': 1 });
 ticketSchema.index({ company: 1, source: 1, 'instagram.igsid': 1 });
 ticketSchema.index({ company: 1, source: 1, 'whatsapp.waId': 1 });
+ticketSchema.index({ company: 1, source: 1, 'email.fromAddress': 1 });
 
 // ─── Static: generate the next ticket code for a company ─────────────────────
 ticketSchema.statics.generateCode = async function (companyId, prefix = 'TKT') {

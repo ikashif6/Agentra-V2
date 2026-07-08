@@ -64,26 +64,26 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     } finally { setRemoving(null); }
   };
 
-  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" style={{ color: "#D85A30" }} /></div>;
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   if (!team) return null;
 
   const memberIds = team.members.map((m) => m.user._id);
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="mx-auto max-w-2xl space-y-6">
       <button onClick={() => router.push("/teams")}
-        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-gray-800 transition-colors">
         <ChevronLeft className="h-4 w-4" /> Back to teams
       </button>
 
       {/* Header card */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
+      <div className="bg-card rounded-xl border border-border/60 shadow-sm p-6 space-y-4">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">{team.name}</h2>
-            {team.description && <p className="text-sm text-gray-500 mt-1">{team.description}</p>}
+            <h2 className="text-xl font-bold text-foreground">{team.name}</h2>
+            {team.description && <p className="text-sm text-muted-foreground mt-1">{team.description}</p>}
             {typeof team.department === "object" && team.department && (
-              <p className="text-xs text-gray-400 mt-1">Dept: <span className="text-gray-600">{team.department.name}</span></p>
+              <p className="text-xs text-muted-foreground mt-1">Dept: <span className="text-gray-600">{team.department.name}</span></p>
             )}
           </div>
           {canManage && (
@@ -95,14 +95,14 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
 
         {/* Team lead card */}
         <div className="flex items-center gap-3 p-3 rounded-xl bg-brand-muted border border-brand-muted">
-          <Crown className="h-4 w-4 shrink-0" style={{ color: "#D85A30" }} />
+          <Crown className="h-4 w-4 shrink-0 text-primary" />
           <Avatar className="h-9 w-9">
             <AvatarFallback className="text-xs font-bold bg-primary text-primary-foreground">
               {initials(team.teamLead)}
             </AvatarFallback>
           </Avatar>
           <div>
-            <p className="text-sm font-semibold" style={{ color: "#D85A30" }}>
+            <p className="text-sm font-semibold text-primary">
               {team.teamLead.firstName} {team.teamLead.lastName}
             </p>
             <p className="text-xs text-orange-400">Team Lead</p>
@@ -111,18 +111,18 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {/* Members */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-700">
+          <h3 className="text-sm font-semibold text-foreground/80">
             Members
             <Badge variant="secondary" className="ml-2">{team.members.length}</Badge>
           </h3>
         </div>
 
         {team.members.length === 0 ? (
-          <div className="p-8 text-center text-sm text-gray-400">No members yet</div>
+          <div className="p-8 text-center text-sm text-muted-foreground">No members yet</div>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-border/40">
             {team.members.map((m, i) => {
               const isTeamLead = m.user._id === team.teamLead._id;
               const isMe = m.user._id === user?._id;
@@ -131,26 +131,26 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                   <div className="flex items-center gap-3">
                     <Avatar className="h-9 w-9">
                       <AvatarFallback className="text-xs font-semibold"
-                        style={{ background: "#FDEBE4", color: "#D85A30" }}>
+                        className="bg-brand-muted text-primary">
                         {initials(m.user)}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-sm font-medium text-foreground">
                         {m.user.firstName} {m.user.lastName}
-                        {isMe && <span className="text-xs text-gray-400 ml-1">(you)</span>}
+                        {isMe && <span className="text-xs text-muted-foreground ml-1">(you)</span>}
                       </p>
-                      <p className="text-xs text-gray-400">{m.user.email}</p>
+                      <p className="text-xs text-muted-foreground">{m.user.email}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {isTeamLead && (
-                      <Badge className="text-xs bg-brand-muted text-[#D85A30] border-brand-muted">Lead</Badge>
+                      <Badge className="text-xs bg-brand-muted text-primary border-brand-muted">Lead</Badge>
                     )}
                     <Badge variant="secondary" className="text-xs capitalize">{m.user.role}</Badge>
                     {canManage && !isTeamLead && (
                       <button onClick={() => handleRemove(m.user._id)} disabled={removing === m.user._id}
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors">
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground/50 hover:text-red-400 transition-colors">
                         {removing === m.user._id
                           ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           : <UserMinus className="h-3.5 w-3.5" />}

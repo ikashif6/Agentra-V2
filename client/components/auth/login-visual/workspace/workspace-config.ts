@@ -3,7 +3,7 @@
 export const EASE = [0.22, 1, 0.36, 1] as const;
 
 export const LOGIN_COPY = {
-  eyebrow: "Agentraa",
+  eyebrow: "Agentra",
   heading: "Welcome back.",
   description: "Your workspace is ready when you are.",
   supporting: "Stay close to every conversation.",
@@ -131,22 +131,23 @@ export const STATIC_ACTIVITY_HISTORY = [
 
 /** Ambient cycle step durations in milliseconds (~18s total). */
 export const WORKSPACE_LOOP = {
-  settle: 2200,
-  highlight: 700,
-  resolve: 1400,
-  removeResolved: 900,
-  activityResolved: 2600,
-  pause: 1600,
-  activityAssign: 2800,
-  activityDraft: 2400,
-  slaComplete: 2200,
-  newTicketNotice: 1200,
-  insertTicket: 1800,
-  settleAfterNew: 1800,
-  activityReply: 2400,
-  rowHighlight: 1600,
-  activitySla: 2400,
-  loopGap: 2000,
+  settle: 1400,
+  highlight: 550,
+  resolve: 1000,
+  removeResolved: 650,
+  activityResolved: 1500,
+  pause: 1000,
+  activityAssign: 1600,
+  activityDraft: 1300,
+  slaComplete: 1200,
+  newTicketNotice: 750,
+  insertTicket: 1100,
+  settleAfterNew: 1100,
+  rowHighlight: 900,
+  activityReply: 1300,
+  activitySla: 1200,
+  loopGap: 1000,
 } as const;
+
 
 export const RESOLVE_TARGET_ID = "t-2841";

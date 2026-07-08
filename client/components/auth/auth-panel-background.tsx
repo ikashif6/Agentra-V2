@@ -6,3 +6,6 @@ export const authPanelClassName =
 
 /** Shared 10px radius for auth inputs, groups, and primary buttons */
 export const authRadiusClass = "rounded-[10px]";
+
+/** Consistent auth field height — matches workspace login inputs */
+export const authInputClassName = `${authRadiusClass} h-10 px-3`;

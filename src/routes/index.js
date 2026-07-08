@@ -13,13 +13,20 @@ const facebookChannelRoutes = require('./facebook-channel.routes');
 const facebookWebhookRoutes = require('./facebook-webhook.routes');
 const instagramChannelRoutes = require('./instagram-channel.routes');
 const whatsappChannelRoutes = require('./whatsapp-channel.routes');
+const emailChannelRoutes = require('./email-channel.routes');
+const billingRoutes      = require('./billing.routes');
+const activityRoutes     = require('./activity.routes');
+const notificationsRoutes = require('./notifications.routes');
+const workspaceRoutes    = require('./workspace.routes');
+const businessHoursRoutes = require('./business-hours.routes');
+const storeRoutes        = require('./store.routes');
 
 // Health check
 router.get('/health', (req, res) => {
   res.json({
     success: true,
     message: 'Agentra API is running',
-    build: 'whatsapp-1',
+    build: 'routes-remount-1',
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || '1.0.0',
     environment: process.env.NODE_ENV || 'development',
@@ -37,6 +44,13 @@ router.use('/helpcenter',  helpCenterRoutes);
 router.use('/channels/facebook', facebookChannelRoutes);
 router.use('/channels/instagram', instagramChannelRoutes);
 router.use('/channels/whatsapp', whatsappChannelRoutes);
+router.use('/channels/email', emailChannelRoutes);
+router.use('/billing',       billingRoutes);
+router.use('/activity-logs', activityRoutes);
+router.use('/notifications', notificationsRoutes);
+router.use('/workspace',     workspaceRoutes);
+router.use('/business-hours', businessHoursRoutes);
+router.use('/store',         storeRoutes);
 router.use('/webhooks/facebook', facebookWebhookRoutes);
 
 module.exports = router;

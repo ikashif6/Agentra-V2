@@ -32,8 +32,28 @@ const start = async () => {
     });
   };
 
+  // ── Inbound email poller (IMAP mailboxes) ──────────────────────────────────
+  const { pollAllMailboxes } = require('./services/email-channel.service');
+  const emailPollMs = parseInt(process.env.EMAIL_POLL_INTERVAL_MS, 10) || 60 * 1000;
+  let emailPolling = false;
+  const runEmailPoll = async () => {
+    if (emailPolling) return; // avoid overlapping runs
+    emailPolling = true;
+    try {
+      await pollAllMailboxes();
+    } catch (err) {
+      console.error('[email poll]', err.message);
+    } finally {
+      emailPolling = false;
+    }
+  };
+  const emailPollTimer = setInterval(runEmailPoll, emailPollMs);
+  // Kick off shortly after boot (let DB settle).
+  setTimeout(runEmailPoll, 10 * 1000);
+
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('exit', () => clearInterval(emailPollTimer));
 
   process.on('unhandledRejection', (err) => {
     console.error('Unhandled Promise Rejection:', err);

@@ -6,29 +6,27 @@ import { EASE } from "./workspace-config";
 import type { TicketStatus } from "./workspace-config";
 import { cn } from "@/lib/utils";
 
-const STATUS_STYLES: Record<
-  TicketStatus,
-  { label: string; className: string }
-> = {
-  open: {
-    label: "Open",
-    className: "bg-white/8 text-white/70 ring-1 ring-white/10",
-  },
-  waiting: {
-    label: "Waiting",
-    className: "bg-amber-500/12 text-amber-100/90 ring-1 ring-amber-400/20",
-  },
+/** Warm Agentra palette — no generic AI blues */
+const STATUS_STYLES: Record<TicketStatus, { label: string; className: string }> = {
   new: {
     label: "New",
-    className: "bg-[#D85A30]/20 text-[#FFD8C8] ring-1 ring-[#F0997B]/25",
+    className: "border-[#D85A30]/35 bg-[#D85A30] text-white",
+  },
+  open: {
+    label: "Open",
+    className: "border-[#C9785A]/40 bg-[#F0997B]/25 text-[#7A3318]",
   },
   assigned: {
     label: "Assigned",
-    className: "bg-sky-500/12 text-sky-100/90 ring-1 ring-sky-400/20",
+    className: "border-[#B84A28]/30 bg-[#D85A30]/15 text-[#8B3D22]",
+  },
+  waiting: {
+    label: "Waiting",
+    className: "border-[#D4C4B8] bg-[#F3EBE4] text-[#5C483C]",
   },
   resolved: {
     label: "Resolved",
-    className: "bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-400/25",
+    className: "border-[#B8C9B0] bg-[#E2EBDE] text-[#3D5238]",
   },
 };
 
@@ -43,7 +41,7 @@ export function StatusBadge({ status, compact }: StatusBadgeProps) {
     <motion.span
       layout
       className={cn(
-        "inline-flex items-center gap-1 rounded-full font-medium",
+        "inline-flex items-center gap-1 rounded-full border font-semibold",
         compact ? "px-2 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]",
         style.className,
       )}

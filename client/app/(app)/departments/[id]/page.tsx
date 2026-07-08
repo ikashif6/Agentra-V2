@@ -91,7 +91,7 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
     } finally { setCreating(false); }
   };
 
-  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" style={{ color: "#D85A30" }} /></div>;
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   if (!department) return null;
 
   const headIds = department.heads.map((h) => h._id);
@@ -99,16 +99,16 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
   return (
     <div className="space-y-6 max-w-4xl">
       <button onClick={() => router.push("/departments")}
-        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-gray-800 transition-colors">
         <ChevronLeft className="h-4 w-4" /> Back to departments
       </button>
 
       {/* Dept header */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
+      <div className="bg-card rounded-xl border border-border/60 shadow-sm p-6 space-y-4">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">{department.name}</h2>
-            {department.description && <p className="text-sm text-gray-500 mt-1">{department.description}</p>}
+            <h2 className="text-xl font-bold text-foreground">{department.name}</h2>
+            {department.description && <p className="text-sm text-muted-foreground mt-1">{department.description}</p>}
           </div>
           {canManage && (
             <Button onClick={() => setCreateTeamOpen(true)} size="sm">
@@ -120,7 +120,7 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
         {/* Heads section */}
         <div className="pt-3 border-t border-gray-100">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-gray-700">Department Heads</p>
+            <p className="text-sm font-semibold text-foreground/80">Department Heads</p>
             {isOwnerAdmin && (
               <Button size="sm" variant="outline" onClick={() => setHeadPickerOpen(true)}
                 className="h-7 text-xs">
@@ -129,7 +129,7 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
             )}
           </div>
           {department.heads.length === 0 ? (
-            <p className="text-xs text-gray-400">No heads assigned yet</p>
+            <p className="text-xs text-muted-foreground">No heads assigned yet</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {department.heads.map((h) => (
@@ -161,11 +161,11 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
 
       {/* Teams */}
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-gray-700">Teams ({teams.length})</h3>
+        <h3 className="text-sm font-semibold text-foreground/80">Teams ({teams.length})</h3>
         {teams.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center">
-            <Users className="h-8 w-8 mx-auto mb-2 text-gray-200" />
-            <p className="text-sm text-gray-400">No teams in this department yet</p>
+          <div className="bg-card rounded-xl border border-border/60 shadow-sm p-8 text-center">
+            <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">No teams in this department yet</p>
             {canManage && (
               <Button onClick={() => setCreateTeamOpen(true)} className="mt-3" size="sm">
                 Create first team
@@ -176,14 +176,14 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
           <div className="grid gap-3 sm:grid-cols-2">
             {teams.map((team) => (
               <Link key={team._id} href={`/teams/${team._id}`}
-                className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-[#D85A30] hover:shadow-md transition-all group">
+                className="bg-card rounded-xl border border-border/60 shadow-sm p-4 hover:border-[#D85A30] hover:shadow-md transition-all group">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold text-gray-900 group-hover:text-[#D85A30] transition-colors">{team.name}</h4>
+                  <h4 className="font-semibold text-foreground group-hover:text-primary transition-colors">{team.name}</h4>
                   <Badge variant="secondary" className="text-xs">{team.members.length} members</Badge>
                 </div>
-                {team.description && <p className="text-xs text-gray-500 mb-3 line-clamp-2">{team.description}</p>}
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 pt-2 border-t border-gray-50">
-                  <Crown className="h-3 w-3" style={{ color: "#D85A30" }} />
+                {team.description && <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{team.description}</p>}
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-2 border-t border-gray-50">
+                  <Crown className="h-3 w-3 text-primary" />
                   <span>{team.teamLead.firstName} {team.teamLead.lastName}</span>
                 </div>
               </Link>
@@ -210,12 +210,12 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
             <div className="space-y-1">
               <Label>Team name</Label>
               <Input value={teamName} onChange={(e) => setTeamName(e.target.value)}
-                placeholder="e.g. Frontend Support" className="focus-visible:ring-[#D85A30]" />
+                placeholder="e.g. Frontend Support" className="focus-visible:ring-primary/30" />
             </div>
             <div className="space-y-1">
-              <Label>Description <span className="text-gray-400 text-xs">(optional)</span></Label>
+              <Label>Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
               <Input value={teamDesc} onChange={(e) => setTeamDesc(e.target.value)}
-                placeholder="What does this team handle?" className="focus-visible:ring-[#D85A30]" />
+                placeholder="What does this team handle?" className="focus-visible:ring-primary/30" />
             </div>
 
             {/* Team lead picker */}
@@ -229,15 +229,15 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{teamLead.firstName} {teamLead.lastName}</p>
-                    <p className="text-xs text-gray-500">{teamLead.email}</p>
+                    <p className="text-sm font-medium text-foreground">{teamLead.firstName} {teamLead.lastName}</p>
+                    <p className="text-xs text-muted-foreground">{teamLead.email}</p>
                   </div>
-                  <button onClick={() => setTeamLead(null)} className="text-gray-400 hover:text-red-500 text-xs">
+                  <button onClick={() => setTeamLead(null)} className="text-muted-foreground hover:text-red-500 text-xs">
                     Change
                   </button>
                 </div>
               ) : (
-                <Button variant="outline" type="button" className="w-full justify-start text-gray-500"
+                <Button variant="outline" type="button" className="w-full justify-start text-muted-foreground"
                   onClick={() => setLeadPickerOpen(true)}>
                   <UserPlus className="h-4 w-4 mr-2" /> Select team lead
                 </Button>

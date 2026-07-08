@@ -17,11 +17,11 @@ export function SLAIndicator({ progress, complete, compact }: SLAIndicatorProps)
       className={cn("flex items-center gap-1.5", compact ? "min-w-[52px]" : "min-w-[58px]")}
       aria-hidden="true"
     >
-      <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
+      <div className="h-1 flex-1 overflow-hidden rounded-full bg-black/[0.08]">
         <motion.div
           className={cn(
             "h-full rounded-full",
-            complete ? "bg-emerald-400/80" : "bg-[#F0997B]/70",
+            complete ? "bg-[#6B8F62]" : "bg-[#D85A30]/70",
           )}
           initial={false}
           animate={{ width: `${complete ? 100 : clamped}%` }}
@@ -29,7 +29,7 @@ export function SLAIndicator({ progress, complete, compact }: SLAIndicatorProps)
         />
       </div>
       {!compact ? (
-        <span className="text-[9px] tabular-nums text-white/40">
+        <span className="text-[9px] tabular-nums text-[#aaa]">
           {complete ? "OK" : `${Math.round(clamped)}%`}
         </span>
       ) : null}

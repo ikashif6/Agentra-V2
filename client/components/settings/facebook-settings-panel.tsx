@@ -383,9 +383,9 @@ export default function FacebookSettingsPanel() {
             {connecting ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
             ) : (
-              <ChannelBrandIcon channel="facebook" className="mr-2 size-4" />
+              <ChannelBrandIcon channel="facebook" className="mr-2 size-4" monochrome />
             )}
-            Continue with Facebook
+            Connect Facebook
           </Button>
           <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
             <ShieldCheck className="size-3.5" />

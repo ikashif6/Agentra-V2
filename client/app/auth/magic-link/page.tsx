@@ -53,7 +53,7 @@ export default function MagicLinkPage() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Check your inbox</h2>
           <p className="mt-2 text-sm text-gray-500">
-            We sent a magic link to your email. Click it to sign in — it expires in 15 minutes.
+            We sent a magic link to your email. Click it to sign in. It expires in 15 minutes.
           </p>
         </div>
         <Button variant="outline" className="w-full" onClick={() => setSent(false)}>
@@ -68,7 +68,7 @@ export default function MagicLinkPage() {
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Sign in with Magic Link</h2>
         <p className="mt-1 text-sm text-gray-500">
-          We&apos;ll email you a secure link — no password needed.
+          We&apos;ll email you a secure link. No password needed.
         </p>
       </div>
 

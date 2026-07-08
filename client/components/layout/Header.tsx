@@ -1,161 +1,324 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Bell, Menu, HelpCircle, Settings, LogOut, ChevronDown, ExternalLink } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Bell, Loader2, Menu, Search, Ticket } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useUserLocalTime } from "@/hooks/use-user-local-time";
+import { ticketApi } from "@/lib/api";
+import { Ticket as TicketType } from "@/lib/types";
+import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 const PAGE_TITLES: Record<string, string> = {
-  "/dashboard":   "Dashboard",
+  "/dashboard": "Home",
+  "/inbox": "Inbox",
+  "/ai-agent": "AI Agent",
+  "/ai-agents": "AI Agent",
+  "/live-chat": "AI Agent",
+  "/analytics": "Analytics",
   "/departments": "Departments",
-  "/teams":       "Teams",
-  "/agents":      "Agents",
-  "/tickets":     "Tickets",
-  "/settings":    "Settings",
+  "/teams": "Teams",
+  "/agents": "Agents",
+  "/tickets": "Tickets",
+  "/settings": "Settings",
+  "/profile": "Profile",
 };
 
-function initials(name: string) {
-  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+function formatRelative(str: string) {
+  const diff = Date.now() - new Date(str).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return new Date(str).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const router = useRouter();
+  const { user } = useAuth();
+  const { time, weekdayDate, zoneLabel } = useUserLocalTime();
 
-  const title = Object.entries(PAGE_TITLES).find(
-    ([key]) => pathname === key || pathname.startsWith(key + "/")
-  )?.[1] ?? "Agentraa";
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<TicketType[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  const [notifications, setNotifications] = useState<TicketType[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  const title =
+    Object.entries(PAGE_TITLES).find(
+      ([key]) => pathname === key || pathname.startsWith(key + "/"),
+    )?.[1] ?? "Agentra";
   const displayTitle = title === "Tickets" && user?.role === "customer" ? "My Tickets" : title;
 
+  const loadNotifications = useCallback(async () => {
+    setNotificationsLoading(true);
+    try {
+      const { data } = await ticketApi.list({ status: "open", limit: 8 });
+      setNotifications(data.data.tickets);
+    } catch {
+      setNotifications([]);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    loadNotifications();
+  }, [notificationsOpen, loadNotifications]);
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest("[data-notifications-root]")) {
+        setNotificationsOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    return () => window.removeEventListener("mousedown", onPointerDown);
+  }, [notificationsOpen]);
+
+  useEffect(() => {
+    if (!searchOpen) {
+      setSearchQuery("");
+      setSearchResults([]);
+      return;
+    }
+
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const { data } = await ticketApi.list({ search: searchQuery.trim(), limit: 8 });
+        setSearchResults(data.data.tickets);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [searchOpen, searchQuery]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const openTicket = (code: string) => {
+    setSearchOpen(false);
+    setNotificationsOpen(false);
+    router.push(`/inbox?ticket=${code}`);
+  };
+
+  const unreadCount = notifications.length;
+
   return (
-    <header className="h-16 border-b border-gray-100 bg-white flex items-center justify-between px-4 md:px-6 sticky top-0 z-10 shrink-0">
-      {/* Left */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onMenuClick}
-          className="md:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors"
-        >
-          <Menu className="h-5 w-5 text-gray-500" />
-        </button>
-        <div>
-          <h1 className="text-lg font-bold text-gray-900 leading-none">{displayTitle}</h1>
-          <p className="text-xs text-gray-400 hidden sm:block mt-0.5">
-            {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+    <>
+      <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-border/70 bg-card/85 px-4 backdrop-blur-md md:px-6">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onMenuClick}
+            className="rounded-[10px] p-2 text-muted-foreground transition-colors hover:bg-muted md:hidden"
+            aria-label="Open menu"
+          >
+            <Menu className="size-5" />
+          </button>
+          <div>
+            <h1 className="text-base font-semibold tracking-tight text-foreground">{displayTitle}</h1>
+          <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
+            {weekdayDate} · {time} ({zoneLabel})
           </p>
+          </div>
         </div>
-      </div>
 
-      {/* Right */}
-      <div className="flex items-center gap-1.5">
-        {/* Notification bell */}
-        <button className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors">
-          <Bell className="h-5 w-5 text-gray-500" />
-          <span className="absolute top-1.5 right-1.5 size-2 rounded-full border-2 border-white bg-primary" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="rounded-[10px] p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Search"
+          >
+            <Search className="size-5" />
+          </button>
 
-        {/* Profile dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger>
-            <button className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl hover:bg-gray-100 transition-colors focus:outline-none">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback
-                  className="text-xs font-bold bg-primary text-primary-foreground"
-                >
-                  {initials(user?.fullName ?? user?.firstName ?? "?")}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden sm:block text-left">
-                <p className="text-sm font-semibold text-gray-900 leading-tight">
-                  {user?.firstName} {user?.lastName}
-                </p>
-                <p className="text-xs text-gray-400 capitalize leading-tight">{user?.role}</p>
-              </div>
-              <ChevronDown className="h-3.5 w-3.5 text-gray-400 hidden sm:block" />
+          <div className="relative" data-notifications-root>
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen((open) => !open)}
+              className="relative rounded-[10px] p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Notifications"
+              aria-expanded={notificationsOpen}
+            >
+              <Bell className="size-5" />
+              {unreadCount > 0 ? (
+                <span className="absolute right-1.5 top-1.5 size-2 rounded-full border-2 border-card bg-primary" />
+              ) : null}
             </button>
-          </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" className="w-64 p-0 overflow-hidden">
-            {/* Profile card inside dropdown */}
-            <DropdownMenuLabel className="p-0">
-              <div className="px-4 py-4 flex items-center gap-3"
-                style={{ background: "linear-gradient(135deg,#D85A30,#B84A28)" }}>
-                <Avatar className="h-11 w-11 shrink-0">
-                  <AvatarFallback className="text-sm font-bold bg-white/20 text-white">
-                    {initials(user?.fullName ?? user?.firstName ?? "?")}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="text-white font-semibold text-sm truncate">
-                    {user?.firstName} {user?.lastName}
+            {notificationsOpen ? (
+              <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-lg border border-border/80 bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/10">
+                <div className="border-b border-border/60 px-4 py-3">
+                  <p className="text-sm font-semibold text-foreground">Notifications</p>
+                  <p className="text-xs text-muted-foreground">
+                    {unreadCount > 0
+                      ? `${unreadCount} open conversation${unreadCount === 1 ? "" : "s"}`
+                      : "No open conversations"}
                   </p>
-                  <p className="text-white/70 text-xs truncate">{user?.email}</p>
-                  <span className="inline-block mt-1 text-xs bg-white/20 text-white px-2 py-0.5 rounded-full capitalize">
-                    {user?.role}
-                  </span>
+                </div>
+
+                <div className="max-h-80 overflow-y-auto p-1">
+                  {notificationsLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="size-5 animate-spin text-primary" />
+                    </div>
+                  ) : notifications.length === 0 ? (
+                    <p className="px-3 py-8 text-center text-sm text-muted-foreground">
+                      You&apos;re all caught up.
+                    </p>
+                  ) : (
+                    notifications.map((ticket) => (
+                      <button
+                        key={ticket._id}
+                        type="button"
+                        onClick={() => openTicket(ticket.ticket_code)}
+                        className="flex w-full cursor-pointer flex-col items-start gap-1 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent"
+                      >
+                        <div className="flex w-full items-start justify-between gap-2">
+                          <p className="line-clamp-1 text-sm font-medium text-foreground">
+                            {ticket.ticket_title}
+                          </p>
+                          <span className="shrink-0 text-[10px] text-muted-foreground">
+                            {formatRelative(ticket.lastActivity || ticket.createdAt)}
+                          </span>
+                        </div>
+                        <p className="font-mono text-[10px] text-primary">{ticket.ticket_code}</p>
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                <div className="border-t border-border/60 p-1">
+                  <Link
+                    href="/inbox"
+                    onClick={() => setNotificationsOpen(false)}
+                    className="flex justify-center rounded-lg py-2.5 text-sm font-medium text-primary transition-colors hover:bg-accent"
+                  >
+                    View all in inbox
+                  </Link>
                 </div>
               </div>
-            </DropdownMenuLabel>
+            ) : null}
+          </div>
+        </div>
+      </header>
 
-            <DropdownMenuSeparator className="my-0" />
-
-            <div className="p-1.5 space-y-0.5">
-              <DropdownMenuItem
-                onClick={() => (window.location.href = "/settings")}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer"
-              >
-                <Settings className="h-4 w-4 text-gray-400" />
-                <span className="text-sm text-gray-700">Settings</span>
-              </DropdownMenuItem>
-
-              {/* Help Center — setup link for owners/admins, public portal otherwise */}
-              {["owner", "admin"].includes(user?.role ?? "") ? (
-                <DropdownMenuItem
-                  onClick={() => (window.location.href = "/settings?tab=helpcenter")}
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer"
-                >
-                  <HelpCircle className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm text-gray-700">Help center setup</span>
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem
-                  onClick={() =>
-                    window.open(
-                      `/helpcenter?workspace=${user?.company && typeof user.company === "object"
-                        ? (user.company as { subdomain?: string }).subdomain ?? ""
-                        : ""}`,
-                      "_blank"
-                    )
-                  }
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer"
-                >
-                  <HelpCircle className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm text-gray-700">Help center</span>
-                  <ExternalLink className="h-3 w-3 text-gray-300 ml-auto" />
-                </DropdownMenuItem>
-              )}
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem
-                onClick={logout}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="text-sm font-medium">Sign out</span>
-              </DropdownMenuItem>
+      <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="border-b border-border/60 px-4 py-3">
+            <DialogTitle className="text-sm font-semibold">Search workspace</DialogTitle>
+          </DialogHeader>
+          <div className="border-b border-border/60 px-4 py-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search conversations, codes, subjects…"
+                className="pl-9"
+              />
             </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </header>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Tip: press <kbd className="rounded border px-1">Ctrl</kbd>+<kbd className="rounded border px-1">K</kbd> anywhere
+            </p>
+          </div>
+          <div className="max-h-80 overflow-y-auto p-2">
+            {searchLoading ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="size-5 animate-spin text-primary" />
+              </div>
+            ) : !searchQuery.trim() ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                Start typing to search conversations.
+              </p>
+            ) : searchResults.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                No results for &ldquo;{searchQuery}&rdquo;
+              </p>
+            ) : (
+              searchResults.map((ticket) => (
+                <button
+                  key={ticket._id}
+                  type="button"
+                  onClick={() => openTicket(ticket.ticket_code)}
+                  className={cn(
+                    "flex w-full items-start gap-3 rounded-[10px] px-3 py-2.5 text-left transition-colors hover:bg-muted/60",
+                  )}
+                >
+                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Ticket className="size-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {ticket.ticket_title}
+                    </span>
+                    <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
+                      {ticket.ticket_code}
+                    </span>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+          {searchResults.length > 0 ? (
+            <div className="border-t border-border/60 p-2">
+              <Button
+                variant="ghost"
+                className="w-full text-primary"
+                onClick={() => {
+                  setSearchOpen(false);
+                  router.push(`/inbox${searchQuery.trim() ? `?q=${encodeURIComponent(searchQuery.trim())}` : ""}`);
+                }}
+              >
+                View all in inbox
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

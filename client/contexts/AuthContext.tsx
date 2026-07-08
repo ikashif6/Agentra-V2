@@ -42,7 +42,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isAuthenticated()) {
         // Try cached user first for instant render
         const cached = getUser();
-        if (cached) setUserState(cached);
+        if (cached) {
+          setUserState(cached);
+          if (cached.company && typeof cached.company === "object") {
+            setCompany(cached.company as Company);
+          }
+        }
         await refreshUser();
       }
       setLoading(false);

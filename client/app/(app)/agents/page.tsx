@@ -83,11 +83,11 @@ export default function AgentsPage() {
   const pages = pagination ? pagination.pages : 1;
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="relative w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input placeholder="Search by name or email…" className="pl-9 focus-visible:ring-[#D85A30]"
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Search by name or email…" className="pl-9 focus-visible:ring-primary/30"
             value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         {isOwner && (
@@ -97,22 +97,22 @@ export default function AgentsPage() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
         {/* Table header */}
-        <div className="grid grid-cols-[2.5fr_2.5fr_1fr_1fr] gap-4 px-5 py-3 border-b border-gray-100 bg-gray-50">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Member</span>
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email</span>
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Role</span>
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Title</span>
+        <div className="grid grid-cols-[2.5fr_2.5fr_1fr_1fr] gap-4 px-5 py-3 border-b border-border/60 bg-muted/30">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Member</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Email</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Role</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Title</span>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#D85A30" }} />
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
           </div>
         ) : users.length === 0 ? (
-          <div className="flex flex-col items-center py-16 gap-2 text-sm text-gray-400">
-            <UserPlus className="h-8 w-8 text-gray-200" />
+          <div className="flex flex-col items-center py-16 gap-2 text-sm text-muted-foreground">
+            <UserPlus className="h-8 w-8 text-muted-foreground/30" />
             {search ? "No staff found." : "No agents or admins yet."}
             {isOwner && !search && (
               <Button onClick={() => setInviteOpen(true)} className="mt-2">
@@ -121,24 +121,24 @@ export default function AgentsPage() {
             )}
           </div>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-border/40">
             {users.map((u) => (
-              <div key={u._id} className="grid grid-cols-[2.5fr_2.5fr_1fr_1fr] gap-4 items-center px-5 py-3.5 hover:bg-gray-50 transition-colors">
+              <div key={u._id} className="grid grid-cols-[2.5fr_2.5fr_1fr_1fr] gap-4 items-center px-5 py-3.5 hover:bg-accent/30 transition-colors">
                 {/* Name + avatar */}
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarFallback className="text-xs font-bold" style={{ background: "#FDEBE4", color: "#D85A30" }}>
+                    <AvatarFallback className="text-xs font-bold bg-brand-muted text-primary">
                       {initials(u)}
                     </AvatarFallback>
                   </Avatar>
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-medium text-foreground truncate">
                     {u.firstName} {u.lastName}
                   </p>
                 </div>
 
                 {/* Email */}
-                <div className="flex items-center gap-1.5 min-w-0 text-xs text-gray-500">
-                  <Mail className="h-3.5 w-3.5 shrink-0 text-gray-300" />
+                <div className="flex items-center gap-1.5 min-w-0 text-xs text-muted-foreground">
+                  <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
                   <span className="truncate">{u.email}</span>
                 </div>
 
@@ -149,16 +149,16 @@ export default function AgentsPage() {
                 </Badge>
 
                 {/* Job title */}
-                <span className="text-xs text-gray-400 truncate">{u.jobTitle || "—"}</span>
+                <span className="text-xs text-muted-foreground truncate">{u.jobTitle || "-"}</span>
               </div>
             ))}
           </div>
         )}
 
         {pagination && pagination.pages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
-            <span className="text-xs text-gray-400">
-              {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, pagination.total)} of {pagination.total}
+          <div className="flex items-center justify-between px-5 py-3 border-t border-border/60 bg-muted/20">
+            <span className="text-xs text-muted-foreground">
+              {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, pagination.total)} of {pagination.total}
             </span>
             <div className="flex gap-1">
               <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Prev</Button>
@@ -176,29 +176,29 @@ export default function AgentsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>First name</Label>
-                <Input {...register("firstName")} placeholder="Jane" className="focus-visible:ring-[#D85A30]" />
+                <Input {...register("firstName")} placeholder="Jane" className="focus-visible:ring-primary/30" />
                 {errors.firstName && <p className="text-xs text-red-500">{errors.firstName.message}</p>}
               </div>
               <div className="space-y-1">
                 <Label>Last name</Label>
-                <Input {...register("lastName")} placeholder="Doe" className="focus-visible:ring-[#D85A30]" />
+                <Input {...register("lastName")} placeholder="Doe" className="focus-visible:ring-primary/30" />
                 {errors.lastName && <p className="text-xs text-red-500">{errors.lastName.message}</p>}
               </div>
             </div>
             <div className="space-y-1">
               <Label>Email</Label>
               <Input type="email" {...register("email")} placeholder="jane@company.com"
-                className="focus-visible:ring-[#D85A30]" />
+                className="focus-visible:ring-primary/30" />
               {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
             </div>
             <div className="space-y-1">
               <Label>Role</Label>
               <Select value={selectedRole}
                 onValueChange={(v: string | null) => { if (v === "agent" || v === "admin") setSelectedRole(v); }}>
-                <SelectTrigger className="focus:ring-[#D85A30]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="focus:ring-primary/30"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="agent">Agent — handles tickets</SelectItem>
-                  <SelectItem value="admin">Admin — full workspace access</SelectItem>
+                  <SelectItem value="agent">Agent: handles tickets</SelectItem>
+                  <SelectItem value="admin">Admin: full workspace access</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -35,49 +35,49 @@ export default function TeamsPage() {
   useEffect(() => { fetch(); }, [fetch]);
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4">
       <div className="relative w-64">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input placeholder="Search teams…" className="pl-9 focus-visible:ring-[#D85A30]"
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input placeholder="Search teams…" className="pl-9 focus-visible:ring-primary/30"
           value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
         {/* Header */}
-        <div className="grid grid-cols-[2fr_2fr_1fr_1fr_32px] gap-4 px-5 py-3 border-b border-gray-100 bg-gray-50">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Team</span>
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Lead</span>
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Department</span>
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Members</span>
+        <div className="grid grid-cols-[2fr_2fr_1fr_1fr_32px] gap-4 px-5 py-3 border-b border-border/60 bg-muted/30">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Team</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Lead</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Department</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Members</span>
           <span />
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#D85A30" }} />
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
           </div>
         ) : teams.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-2 text-sm text-gray-400">
-            <Users className="h-8 w-8 text-gray-200" />
+          <div className="flex flex-col items-center justify-center py-16 gap-2 text-sm text-muted-foreground">
+            <Users className="h-8 w-8 text-muted-foreground/30" />
             {search ? "No teams match your search." : "No teams yet. Create one from a department."}
             {!search && (
-              <Link href="/departments" className="text-sm font-medium hover:underline" style={{ color: "#D85A30" }}>
+              <Link href="/departments" className="text-sm font-medium hover:underline text-primary">
                 Go to Departments →
               </Link>
             )}
           </div>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-border/40">
             {teams.map((team) => (
               <Link key={team._id} href={`/teams/${team._id}`}
-                className="grid grid-cols-[2fr_2fr_1fr_1fr_32px] gap-4 items-center px-5 py-4 hover:bg-gray-50 transition-colors group">
+                className="grid grid-cols-[2fr_2fr_1fr_1fr_32px] gap-4 items-center px-5 py-4 hover:bg-accent/30 transition-colors group">
                 {/* Team name */}
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 group-hover:text-[#D85A30] truncate transition-colors">
+                  <p className="text-sm font-semibold text-foreground group-hover:text-primary truncate transition-colors">
                     {team.name}
                   </p>
                   {team.description && (
-                    <p className="text-xs text-gray-400 truncate mt-0.5">{team.description}</p>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">{team.description}</p>
                   )}
                 </div>
 
@@ -88,15 +88,15 @@ export default function TeamsPage() {
                       {team.teamLead.firstName[0]}{team.teamLead.lastName[0]}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-sm text-gray-700 truncate">
+                  <span className="text-sm text-foreground/80 truncate">
                     {team.teamLead.firstName} {team.teamLead.lastName}
                   </span>
-                  <Crown className="h-3 w-3 shrink-0" style={{ color: "#D85A30" }} />
+                  <Crown className="h-3 w-3 shrink-0 text-primary" />
                 </div>
 
                 {/* Department */}
-                <span className="text-xs text-gray-500 truncate">
-                  {typeof team.department === "object" ? team.department?.name : "—"}
+                <span className="text-xs text-muted-foreground truncate">
+                  {typeof team.department === "object" ? team.department?.name : "-"}
                 </span>
 
                 {/* Members */}
@@ -104,16 +104,16 @@ export default function TeamsPage() {
                   {team.members.length} member{team.members.length !== 1 ? "s" : ""}
                 </Badge>
 
-                <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-[#D85A30] transition-colors" />
+                <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary transition-colors" />
               </Link>
             ))}
           </div>
         )}
 
         {total > PAGE_SIZE && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
-            <span className="text-xs text-gray-400">
-              {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
+          <div className="flex items-center justify-between px-5 py-3 border-t border-border/60 bg-muted/20">
+            <span className="text-xs text-muted-foreground">
+              {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, total)} of {total}
             </span>
             <div className="flex gap-1">
               <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Prev</Button>

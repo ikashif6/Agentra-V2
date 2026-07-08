@@ -156,7 +156,7 @@ export default function TrackTicketPage() {
         </div>
 
         <p className="text-center mt-6 text-xs text-gray-400">
-          Your support team uses Agentraa •{" "}
+          Your support team uses Agentra •{" "}
           <a href="/auth/login" className="text-[#D85A30] hover:underline">Sign in</a>
         </p>
       </div>

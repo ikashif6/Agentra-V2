@@ -80,7 +80,7 @@ export function ClassicLayout({ hc, subdomain }: PortalProps) {
       </div>
 
       <footer className="text-center py-6 text-xs text-gray-400">
-        Powered by <span className="font-semibold text-[#D85A30]">Agentraa</span>
+        Powered by <span className="font-semibold text-[#D85A30]">Agentra</span>
       </footer>
     </div>
   );

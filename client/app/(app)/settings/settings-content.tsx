@@ -14,6 +14,8 @@ import PasswordSecurityPanel from "@/components/settings/password-security-panel
 import StoreSettingsPanel from "@/components/settings/store-settings-panel";
 import FacebookSettingsPanel from "@/components/settings/facebook-settings-panel";
 import InstagramSettingsPanel from "@/components/settings/instagram-settings-panel";
+import WhatsAppSettingsPanel from "@/components/settings/whatsapp-settings-panel";
+import EmailSettingsPanel from "@/components/settings/email-settings-panel";
 import BusinessHoursPanel from "@/components/settings/business-hours-panel";
 import {
   AccountPlaceholderPanel,
@@ -83,12 +85,7 @@ export default function SettingsContent() {
       case "help-center":
         return isStaff ? <HelpCenterSettings /> : null;
       case "email":
-        return isStaff ? (
-          <ChannelPlaceholderPanel
-            title="Email"
-            description="Connect support inboxes and send replies from Agentra"
-          />
-        ) : null;
+        return isStaff ? <EmailSettingsPanel /> : null;
       case "chat":
         return isStaff ? (
           <ChannelPlaceholderPanel
@@ -97,12 +94,7 @@ export default function SettingsContent() {
           />
         ) : null;
       case "whatsapp":
-        return isStaff ? (
-          <ChannelPlaceholderPanel
-            title="WhatsApp"
-            description="Bring WhatsApp Business messages into your shared inbox"
-          />
-        ) : null;
+        return isStaff ? <WhatsAppSettingsPanel /> : null;
       case "tiktok":
         return isStaff ? (
           <ChannelPlaceholderPanel

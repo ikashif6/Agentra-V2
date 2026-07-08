@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const APP_BASE_DOMAIN = process.env.NEXT_PUBLIC_APP_BASE_DOMAIN ?? "agentraa.com";
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   /**
    * Hostname-based rewrites for custom help center domains.
    *

@@ -4,7 +4,9 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDown,
+  Check,
   Inbox,
+  ListFilter,
   Loader2,
   Mail,
   PanelLeftClose,
@@ -29,6 +31,14 @@ import { Label } from "@/components/ui/label";
 import { InboxTicketToolbar } from "@/components/inbox/inbox-ticket-toolbar";
 import { LiveChatTicketToolbar } from "@/components/inbox/ai-agent-ticket-toolbar";
 import { InboxTicketDetailsPanel } from "@/components/inbox/inbox-ticket-details-panel";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ticketApi, teamApi, usersApi } from "@/lib/api";
 import type {
   Attachment,
@@ -64,6 +74,16 @@ const createSchema = z.object({
   ticket_description: z.string().min(1, "Description required"),
 });
 type CreateForm = z.infer<typeof createSchema>;
+
+// Channel filters for the async Inbox (live chat lives in the AI Agent surface).
+const CHANNEL_FILTERS: { id: string; label: string; source?: TicketSource }[] = [
+  { id: "all", label: "All channels" },
+  { id: "email", label: "Email", source: "email" },
+  { id: "facebook", label: "Facebook", source: "facebook" },
+  { id: "instagram", label: "Instagram", source: "instagram" },
+  { id: "whatsapp", label: "WhatsApp", source: "whatsapp" },
+  { id: "portal", label: "Help center", source: "portal" },
+];
 
 function initials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -156,6 +176,7 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
   const [loadingList, setLoadingList] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [search, setSearch] = useState("");
+  const [channelFilter, setChannelFilter] = useState<string>("all");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -210,6 +231,7 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
     try {
       const params: Record<string, unknown> = { limit: 50, view, scope: apiScope };
       if (search) params.search = search;
+      if (!isLiveChat && channelFilter !== "all") params.channel = channelFilter;
 
       const { data } = await ticketApi.list(params);
       setTickets(data.data.tickets);
@@ -218,7 +240,7 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
     } finally {
       if (!silent) setLoadingList(false);
     }
-  }, [search, view, apiScope, isLiveChat]);
+  }, [search, view, apiScope, isLiveChat, channelFilter]);
 
   const fetchTicketDetail = useCallback(async (code: string, silent = false) => {
     if (!silent) setLoadingDetail(true);
@@ -590,9 +612,64 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search conversations…"
-                className="h-9 pl-8"
+                className="h-9 pl-8 pr-9"
               />
+              {!isLiveChat ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="Filter by channel"
+                      className={cn(
+                        "absolute right-1 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md transition-colors hover:bg-muted",
+                        channelFilter !== "all" ? "text-primary" : "text-muted-foreground",
+                      )}
+                    >
+                      <ListFilter className="size-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuLabel>Filter by channel</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {CHANNEL_FILTERS.map((option) => (
+                      <DropdownMenuItem
+                        key={option.id}
+                        onClick={() => setChannelFilter(option.id)}
+                        className="gap-2"
+                      >
+                        {option.source ? (
+                          <TicketSourceIcon source={option.source} />
+                        ) : (
+                          <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-md border border-border/50 bg-muted/40">
+                            <Inbox className="size-3" />
+                          </span>
+                        )}
+                        <span className="flex-1 truncate">{option.label}</span>
+                        {channelFilter === option.id ? (
+                          <Check className="size-4 text-primary" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
             </div>
+            {!isLiveChat && channelFilter !== "all" ? (
+              <Badge
+                variant="secondary"
+                className="hidden h-9 items-center gap-1 whitespace-nowrap px-2.5 sm:inline-flex"
+              >
+                {CHANNEL_FILTERS.find((c) => c.id === channelFilter)?.label}
+                <button
+                  type="button"
+                  aria-label="Clear channel filter"
+                  onClick={() => setChannelFilter("all")}
+                  className="rounded-full p-0.5 hover:bg-background/60"
+                >
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            ) : null}
             <Button variant="outline" size="sm" className="h-9" onClick={() => void refreshInbox()}>
               <RefreshCw className="size-3.5" />
             </Button>

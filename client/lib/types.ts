@@ -99,6 +99,46 @@ export interface InstagramChannelIntegration {
   pendingAccounts?: InstagramPendingAccount[];
 }
 
+export interface WhatsAppChannelIntegration {
+  status: ChannelIntegrationStatus;
+  connectedAt?: string | null;
+  lastError?: string | null;
+  wabaId?: string | null;
+  phoneNumberId?: string | null;
+  displayPhoneNumber?: string | null;
+  verifiedName?: string | null;
+  hasAccessToken?: boolean;
+}
+
+export interface WhatsAppEmbeddedSignupConfig {
+  appId: string;
+  configId: string;
+  graphVersion: string;
+  configured: boolean;
+}
+
+export interface EmailChannelIntegration {
+  status: ChannelIntegrationStatus;
+  provider?: "imap" | "google" | "microsoft" | null;
+  address?: string | null;
+  displayName?: string | null;
+  connectedAt?: string | null;
+  lastSyncAt?: string | null;
+  lastError?: string | null;
+  imap?: {
+    host?: string | null;
+    port?: number | null;
+    smtpHost?: string | null;
+    smtpPort?: number | null;
+  } | null;
+}
+
+export interface EmailProviderSupport {
+  imap: boolean;
+  google: boolean;
+  microsoft: boolean;
+}
+
 export interface StoreIntegration {
   provider: StoreProvider | null;
   status: StoreIntegrationStatus;

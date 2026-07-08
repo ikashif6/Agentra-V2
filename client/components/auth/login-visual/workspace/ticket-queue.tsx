@@ -18,7 +18,7 @@ export function TicketQueue({
   slaCompleteId,
 }: TicketQueueProps) {
   return (
-    <motion.div layout className="space-y-2 overflow-hidden">
+    <motion.div layout className="space-y-1.5 overflow-hidden">
       <AnimatePresence mode="popLayout" initial={false}>
         {tickets.map((ticket) => (
           <motion.div

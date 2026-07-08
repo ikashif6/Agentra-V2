@@ -391,7 +391,7 @@ export default function InstagramSettingsPanel() {
             ) : (
               <InstagramGlyph className="mr-2 size-4" />
             )}
-            Continue with Facebook
+            Connect Instagram
           </Button>
           <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
             <ShieldCheck className="size-3.5" />

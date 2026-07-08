@@ -5,7 +5,6 @@ import { useReducedMotion } from "framer-motion";
 import {
   ACTIVITY_MESSAGES,
   cloneTickets,
-  EASE,
   INITIAL_METRICS,
   INITIAL_TICKETS,
   INCOMING_TICKET,
@@ -228,6 +227,11 @@ export function WorkspaceScene() {
 
         setState((s) => ({ ...s, activity: null }));
         await wait(WORKSPACE_LOOP.loopGap, signal);
+
+        setState({
+          ...buildInitialState(false),
+          entered: true,
+        });
       }
     }
 
@@ -240,7 +244,7 @@ export function WorkspaceScene() {
   }, [reduceMotion]);
 
   return (
-    <div className="relative w-full max-w-[min(100%,720px)]" aria-hidden="true">
+    <div className="login-visual-workspace-scale w-full" aria-hidden="true">
       <WorkspaceOverview
         metrics={state.metrics}
         tickets={state.tickets}

@@ -1,220 +1,489 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard, Ticket, Building2, Users, Settings,
-  LogOut, UserCircle2, ChevronLeft, ChevronRight, UserPlus, HelpCircle,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleHelp, LogOut, Moon, Sun } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Role } from "@/lib/types";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { PRIMARY_NAV, isNavActive, type AppNavItem } from "@/lib/app-navigation";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
+import { api } from "@/lib/api";
+import { WorkspaceLogoImg } from "@/components/app/workspace-logo-img";
+import {
+  applyWorkspaceBranding,
+  effectiveWorkspaceBranding,
+  resolveWorkspaceTheme,
+} from "@/lib/workspace-branding";
+import { SITE_LEGAL } from "@/lib/site";
 
-interface NavItem {
-  label: string;
-  href: string;
-  icon: React.ReactNode;
-  roles: Role[];
-  customerLabel?: string;
-}
-
-const NAV: NavItem[] = [
-  { label: "Dashboard",   href: "/dashboard",   icon: <LayoutDashboard className="h-[18px] w-[18px]" />, roles: ["owner","admin","agent","customer"] },
-  { label: "Departments", href: "/departments", icon: <Building2 className="h-[18px] w-[18px]" />,       roles: ["owner","admin","agent"] },
-  { label: "Teams",       href: "/teams",       icon: <Users className="h-[18px] w-[18px]" />,            roles: ["owner","admin","agent"] },
-  { label: "Agents",      href: "/agents",      icon: <UserPlus className="h-[18px] w-[18px]" />,         roles: ["owner","admin"] },
-  {
-    label: "Tickets", href: "/tickets",
-    icon: <Ticket className="h-[18px] w-[18px]" />,
-    roles: ["owner","admin","agent","customer"],
-    customerLabel: "My Tickets",
-  },
-  { label: "Help Center", href: "/settings?tab=helpcenter", icon: <HelpCircle className="h-[18px] w-[18px]" />, roles: ["owner","admin"] },
-  { label: "Settings",    href: "/settings",    icon: <Settings className="h-[18px] w-[18px]" />,         roles: ["owner","admin","agent","customer"] },
-];
-
-function initials(name: string) {
-  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
-}
-
-const PLAN_BADGE: Record<string, string> = {
-  starter:    "bg-blue-500/20 text-blue-200",
-  pro:        "bg-purple-500/20 text-purple-200",
-  enterprise: "bg-amber-500/20 text-amber-200",
-  free:       "bg-white/10 text-white/50",
+type SidebarProps = {
+  embedded?: boolean;
 };
 
-export default function Sidebar() {
-  const pathname   = usePathname();
-  const { user, company, logout } = useAuth();
+function NavLink({
+  item,
+  role,
+  pathname,
+  collapsed,
+}: {
+  item: AppNavItem;
+  role: Role;
+  pathname: string;
+  collapsed: boolean;
+}) {
+  const active = isNavActive(pathname, item.href);
+  const label = role === "customer" && item.customerLabel ? item.customerLabel : item.label;
+  const Icon = item.icon;
+
+  return (
+    <Link
+      href={item.href}
+      title={collapsed ? label : undefined}
+      className={cn(
+        "group flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-medium transition-colors",
+        active
+          ? "bg-primary/10 text-primary"
+          : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+        collapsed && "justify-center px-2",
+      )}
+    >
+      <Icon
+        className={cn(
+          "size-[18px] shrink-0",
+          active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
+        )}
+        aria-hidden="true"
+      />
+      {!collapsed ? <span className="truncate">{label}</span> : null}
+    </Link>
+  );
+}
+
+function userInitials(firstName?: string, lastName?: string) {
+  const first = firstName?.trim()[0] ?? "";
+  const last = lastName?.trim()[0] ?? "";
+  return `${first}${last}`.toUpperCase() || "?";
+}
+
+function useMenuDismiss(
+  refs: React.RefObject<HTMLElement | null>[],
+  open: boolean,
+  onClose: () => void,
+) {
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+      const inside = refs.some((ref) => ref.current?.contains(target));
+      if (!inside) onClose();
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [refs, open, onClose]);
+}
+
+function ProfileAvatar({
+  user,
+  online,
+  size = "sm",
+}: {
+  user: ReturnType<typeof useAuth>["user"];
+  online: boolean;
+  size?: "sm" | "default";
+}) {
+  return (
+    <div className="relative shrink-0">
+      <Avatar size={size}>
+        {user?.avatar ? <AvatarImage src={user.avatar} alt="" /> : null}
+        <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">
+          {userInitials(user?.firstName, user?.lastName)}
+        </AvatarFallback>
+      </Avatar>
+      <span
+        className={cn(
+          "absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-card",
+          online ? "bg-emerald-500" : "bg-muted-foreground/45",
+        )}
+        aria-hidden
+      />
+    </div>
+  );
+}
+
+function SidebarAccountMenu({
+  role,
+  collapsed = false,
+}: {
+  role: Role;
+  collapsed?: boolean;
+}) {
+  const { user, company, logout, refreshUser } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [online, setOnline] = useState(user?.isOnline ?? true);
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [savingTheme, setSavingTheme] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [mounted, setMounted] = useState(false);
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const isStaff = ["owner", "admin"].includes(role);
+  const helpCenterHref = isStaff ? "/settings?tab=helpcenter" : SITE_LEGAL.helpCenter;
+  const helpCenterExternal = !isStaff;
+
+  const displayName =
+    user?.fullName?.trim() ||
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+    "Account";
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    setOnline(user?.isOnline ?? true);
+  }, [user?.isOnline]);
+
+  useEffect(() => {
+    const branding = effectiveWorkspaceBranding(user, company);
+    if (!branding) return;
+    setTheme(resolveWorkspaceTheme(branding.theme));
+  }, [user?.preferences?.theme, company?.branding?.theme, user, company]);
+
+  useMenuDismiss([anchorRef, panelRef], menuOpen, () => setMenuOpen(false));
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const updatePosition = () => updatePanelPosition();
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [menuOpen]);
+
+  useLayoutEffect(() => {
+    if (menuOpen) updatePanelPosition();
+  }, [menuOpen]);
+
+  async function handleOnlineChange(checked: boolean) {
+    setOnline(checked);
+    setSavingStatus(true);
+    try {
+      await api.patch("/auth/me", { isOnline: checked });
+      await refreshUser();
+    } catch {
+      setOnline(!checked);
+      toast.error("Failed to update availability");
+    } finally {
+      setSavingStatus(false);
+    }
+  }
+
+  async function handleThemeChange(next: "light" | "dark") {
+    if (next === theme || savingTheme) return;
+
+    const previous = theme;
+    setTheme(next);
+    setSavingTheme(true);
+
+    const branding = effectiveWorkspaceBranding(user, company);
+    applyWorkspaceBranding({
+      primaryColor: branding?.primaryColor,
+      theme: next,
+    });
+
+    try {
+      await api.patch("/auth/me", { preferences: { theme: next } });
+      await refreshUser();
+    } catch {
+      setTheme(previous);
+      applyWorkspaceBranding({
+        primaryColor: branding?.primaryColor,
+        theme: previous,
+      });
+      toast.error("Failed to update appearance");
+    } finally {
+      setSavingTheme(false);
+    }
+  }
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    setMenuOpen(false);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
+  function updatePanelPosition() {
+    if (!anchorRef.current) return;
+    const rect = anchorRef.current.getBoundingClientRect();
+    const panelWidth = 224;
+    const gap = 8;
+    const panelHeight = panelRef.current?.offsetHeight ?? 280;
+
+    let left = rect.left;
+    if (left + panelWidth > window.innerWidth - gap) {
+      left = window.innerWidth - panelWidth - gap;
+    }
+    left = Math.max(gap, left);
+
+    let top = rect.top - panelHeight - gap;
+    if (top < gap) {
+      top = rect.bottom + gap;
+    }
+
+    setPanelStyle({
+      position: "fixed",
+      left,
+      top,
+      width: panelWidth,
+      zIndex: 200,
+    });
+  }
+
+  function toggleMenu() {
+    setMenuOpen((open) => {
+      const next = !open;
+      if (next) {
+        requestAnimationFrame(() => updatePanelPosition());
+      }
+      return next;
+    });
+  }
+
+  const menuPanel = (
+    <div
+      ref={panelRef}
+      style={panelStyle}
+      className="overflow-hidden rounded-lg border border-border bg-card shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+    >
+      <div className="flex items-center gap-3 border-b border-border/60 px-3 py-3">
+        <ProfileAvatar user={user} online={online} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground">{user?.email}</p>
+          <p className="text-xs text-muted-foreground">{online ? "Available" : "Offline"}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between px-3 py-2.5">
+        <span className="text-sm text-foreground">Available</span>
+        <Switch
+          checked={online}
+          disabled={savingStatus}
+          onCheckedChange={(checked) => void handleOnlineChange(checked)}
+        />
+      </div>
+
+      <div className="h-px bg-border" />
+
+      <div className="flex items-center justify-between px-3 py-2.5">
+        <span className="text-sm text-foreground">Appearance</span>
+        <div
+          className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/30 p-0.5"
+          role="group"
+          aria-label="Theme"
+        >
+          <button
+            type="button"
+            aria-label="Light mode"
+            aria-pressed={theme === "light"}
+            disabled={savingTheme}
+            onClick={() => void handleThemeChange("light")}
+            className={cn(
+              "flex size-7 items-center justify-center rounded-md transition-colors",
+              theme === "light"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Sun className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            aria-label="Dark mode"
+            aria-pressed={theme === "dark"}
+            disabled={savingTheme}
+            onClick={() => void handleThemeChange("dark")}
+            className={cn(
+              "flex size-7 items-center justify-center rounded-md transition-colors",
+              theme === "dark"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Moon className="size-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="h-px bg-border" />
+
+      {helpCenterExternal ? (
+        <a
+          href={helpCenterHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setMenuOpen(false)}
+          className="flex items-center gap-2 px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-muted"
+        >
+          <CircleHelp className="size-4 shrink-0 text-muted-foreground" />
+          Help Center
+        </a>
+      ) : (
+        <Link
+          href={helpCenterHref}
+          onClick={() => setMenuOpen(false)}
+          className="flex items-center gap-2 px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-muted"
+        >
+          <CircleHelp className="size-4 shrink-0 text-muted-foreground" />
+          Help Center
+        </Link>
+      )}
+
+      <div className="h-px bg-border" />
+
+      <button
+        type="button"
+        disabled={loggingOut}
+        onClick={() => void handleLogout()}
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-destructive transition-colors hover:bg-destructive/5 disabled:opacity-50"
+      >
+        <LogOut className="size-4 shrink-0" />
+        {loggingOut ? "Signing out…" : "Sign out"}
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="relative">
+      <button
+        ref={anchorRef}
+        type="button"
+        aria-label="Open account menu"
+        aria-expanded={menuOpen}
+        onClick={toggleMenu}
+        className={cn(
+          "flex w-full items-center gap-3 rounded-[10px] px-1 py-1 text-left transition-colors hover:bg-muted/70",
+          collapsed && "justify-center px-0 py-1",
+          menuOpen && "bg-muted/50",
+        )}
+      >
+        <ProfileAvatar user={user} online={online} />
+        {!collapsed ? (
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium leading-tight text-foreground">
+              {displayName}
+            </p>
+            <p className="truncate text-xs leading-tight text-muted-foreground">
+              {user?.email}
+            </p>
+          </div>
+        ) : null}
+      </button>
+
+      {menuOpen && mounted ? createPortal(menuPanel, document.body) : null}
+    </div>
+  );
+}
+
+export default function Sidebar({ embedded = false }: SidebarProps) {
+  const pathname = usePathname();
+  const { user, company } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
-  const role       = (user?.role ?? "customer") as Role;
-  const visibleNav = NAV.filter((item) => item.roles.includes(role));
+  const role = (user?.role ?? "customer") as Role;
+  const isCollapsed = embedded ? false : collapsed;
+
+  const primaryNav = PRIMARY_NAV.filter((item) => item.roles.includes(role));
 
   return (
     <aside
       className={cn(
-        "hidden md:flex flex-col h-screen sticky top-0 shrink-0 transition-all duration-200 overflow-hidden",
-        collapsed ? "w-[68px]" : "w-[240px]"
+        "flex h-full min-h-0 flex-col border-r border-border/80 bg-card transition-[width] duration-200",
+        embedded ? "flex w-full" : "hidden md:flex h-screen sticky top-0 shrink-0",
+        !embedded && (isCollapsed ? "w-[68px]" : "w-[220px]"),
       )}
-      style={{ background: "linear-gradient(160deg, #1a0a04 0%, #2d1208 40%, #D85A30 100%)" }}
     >
-      {/* ── Branding ─────────────────────────────────────────── */}
-      <div className={cn(
-        "flex items-center h-16 px-4 shrink-0 border-b border-white/10",
-        collapsed ? "justify-center" : "justify-between"
-      )}>
-        {!collapsed && (
-          <Link href="/dashboard" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center shrink-0">
-              <span className="text-white font-bold text-sm">A</span>
-            </div>
-            <span className="text-white font-bold text-lg tracking-tight">Agentraa</span>
-          </Link>
+      <div
+        className={cn(
+          "flex h-14 shrink-0 items-center border-b border-border/60 px-3",
+          isCollapsed ? "justify-center" : "justify-between",
         )}
-        {collapsed && (
-          <Link href="/dashboard">
-            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">A</span>
-            </div>
-          </Link>
-        )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className={cn(
-            "w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/60 hover:text-white transition-all shrink-0",
-            collapsed && "hidden"
-          )}
+      >
+        <Link
+          href="/dashboard"
+          className={cn("inline-flex min-w-0 items-center", isCollapsed && "justify-center")}
         >
-          <ChevronLeft className="h-3 w-3" />
-        </button>
+          {company?.logo ? (
+            <WorkspaceLogoImg
+              src={company.logo}
+              alt={company.name ?? "Workspace"}
+              fallbackSrc={isCollapsed ? "/icon.svg" : "/agentraa-logo.svg"}
+              className={cn(
+                "object-contain",
+                isCollapsed ? "size-8 rounded-lg" : "h-7 max-w-[148px]",
+              )}
+            />
+          ) : isCollapsed ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/icon.svg" alt="Agentra" width={28} height={28} className="size-7 rounded-lg" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/agentraa-logo.svg" alt="Agentra" width={108} height={26} className="h-6 w-auto" />
+          )}
+        </Link>
+        {!embedded && !isCollapsed ? (
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Collapse sidebar"
+          >
+            <ChevronLeft className="size-3.5" />
+          </button>
+        ) : null}
       </div>
 
-      {/* Expand button when collapsed */}
-      {collapsed && (
+      {!embedded && isCollapsed ? (
         <button
+          type="button"
           onClick={() => setCollapsed(false)}
-          className="mx-auto mt-2 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/60 hover:text-white transition-all"
+          className="mx-auto mt-2 flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          aria-label="Expand sidebar"
         >
-          <ChevronRight className="h-3 w-3" />
+          <ChevronRight className="size-3.5" />
         </button>
-      )}
+      ) : null}
 
-      {/* ── Company card ─────────────────────────────────────── */}
-      {!collapsed && company && (
-        <div className="mx-3 mt-3 p-3 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
-              <Building2 className="h-4 w-4 text-white/80" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-white text-sm font-semibold truncate leading-tight">{company.name}</p>
-              <p className="text-white/50 text-xs truncate">{company.subdomain}.agentraa.com</p>
-            </div>
-          </div>
-          <div className="mt-2 flex items-center gap-1.5">
-            <span className={cn(
-              "text-xs px-2 py-0.5 rounded-full font-medium capitalize",
-              PLAN_BADGE[company.plan?.name ?? "free"]
-            )}>
-              {company.plan?.name ?? "free"}
-            </span>
-            <span className={cn(
-              "text-xs px-2 py-0.5 rounded-full capitalize",
-              company.plan?.status === "trialing" ? "bg-yellow-500/20 text-yellow-200" : "bg-green-500/20 text-green-200"
-            )}>
-              {company.plan?.status}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Navigation ───────────────────────────────────────── */}
-      <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-0.5">
-        {visibleNav.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
-          const label  = role === "customer" && item.customerLabel ? item.customerLabel : item.label;
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={collapsed ? label : undefined}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all",
-                active
-                  ? "bg-white text-[#D85A30] shadow-sm"
-                  : "text-white/70 hover:bg-white/10 hover:text-white",
-                collapsed && "justify-center"
-              )}
-            >
-              <span className={cn("shrink-0", active ? "text-[#D85A30]" : "text-white/60")}>
-                {item.icon}
-              </span>
-              {!collapsed && <span>{label}</span>}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-3">
+        {primaryNav.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            role={role}
+            pathname={pathname}
+            collapsed={isCollapsed}
+          />
+        ))}
       </nav>
 
-      {/* ── Profile card ─────────────────────────────────────── */}
-      <div className={cn(
-        "shrink-0 border-t border-white/10",
-        collapsed ? "p-2 flex flex-col items-center gap-2" : "p-3"
-      )}>
-        {!collapsed ? (
-          <div className="bg-white/10 rounded-xl p-3 space-y-3">
-            {/* Avatar + name */}
-            <div className="flex items-center gap-2.5">
-              <Avatar className="h-9 w-9 shrink-0">
-                <AvatarFallback className="text-sm font-bold bg-primary text-primary-foreground">
-                  {initials(user?.fullName ?? user?.firstName ?? "?")}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="text-white text-sm font-semibold truncate leading-tight">
-                  {user?.firstName} {user?.lastName}
-                </p>
-                <p className="text-white/50 text-xs truncate">{user?.email}</p>
-              </div>
-            </div>
-            {/* Role badge */}
-            <Badge className="bg-white/10 text-white/70 border-white/10 text-xs capitalize w-full justify-center">
-              {user?.role}
-            </Badge>
-            {/* Actions */}
-            <div className="grid grid-cols-2 gap-1.5">
-              <Link
-                href="/settings"
-                className="flex items-center justify-center gap-1.5 text-xs text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg py-2 transition-all"
-              >
-                <UserCircle2 className="h-3.5 w-3.5" />
-                Profile
-              </Link>
-              <button
-                onClick={logout}
-                className="flex items-center justify-center gap-1.5 text-xs text-red-300/70 hover:text-red-200 bg-white/5 hover:bg-red-500/20 rounded-lg py-2 transition-all"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                Sign out
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="text-xs font-bold bg-primary text-primary-foreground">
-                {initials(user?.fullName ?? user?.firstName ?? "?")}
-              </AvatarFallback>
-            </Avatar>
-            <button onClick={logout} className="p-1.5 rounded-lg text-red-300/70 hover:text-red-200 hover:bg-red-500/20 transition-all">
-              <LogOut className="h-4 w-4" />
-            </button>
-          </>
-        )}
+      <div className="shrink-0 border-t border-border/60 p-3">
+        <SidebarAccountMenu role={role} collapsed={isCollapsed} />
       </div>
     </aside>
   );

@@ -13,23 +13,23 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { APP_PANEL } from "@/lib/app-surfaces";
 import { useAuth } from "@/contexts/AuthContext";
 import { helpCenterApi } from "@/lib/api";
 import type { HelpCenter, HelpCenterLayout } from "@/lib/types";
 
-// ── Layout options ─────────────────────────────────────────────────────────────
 const LAYOUTS: { id: HelpCenterLayout; label: string; description: string; preview: React.ReactNode }[] = [
   {
     id: "classic",
     label: "Classic",
     description: "Clean centered layout with a hero search bar and category cards below.",
     preview: (
-      <div className="w-full h-20 rounded-lg bg-gradient-to-b from-brand-muted to-white border border-gray-200 flex flex-col items-center justify-center gap-1 p-2">
-        <div className="w-3/4 h-2 rounded-full bg-orange-200" />
-        <div className="w-1/2 h-1.5 rounded-full bg-gray-200" />
-        <div className="flex gap-1 mt-1">
+      <div className="flex h-20 w-full flex-col items-center justify-center gap-1 rounded-lg border border-border bg-gradient-to-b from-brand-muted/60 to-card p-2">
+        <div className="h-2 w-3/4 rounded-full bg-primary/30" />
+        <div className="h-1.5 w-1/2 rounded-full bg-muted" />
+        <div className="mt-1 flex gap-1">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="w-8 h-5 rounded bg-gray-100 border border-gray-200" />
+            <div key={i} className="h-5 w-8 rounded border border-border bg-muted/60" />
           ))}
         </div>
       </div>
@@ -40,16 +40,16 @@ const LAYOUTS: { id: HelpCenterLayout; label: string; description: string; previ
     label: "Sidebar",
     description: "Two-column layout with a category navigation on the left and content on the right.",
     preview: (
-      <div className="w-full h-20 rounded-lg border border-gray-200 flex overflow-hidden">
-        <div className="w-1/3 bg-brand-muted flex flex-col gap-1 p-2">
+      <div className="flex h-20 w-full overflow-hidden rounded-lg border border-border">
+        <div className="flex w-1/3 flex-col gap-1 bg-brand-muted/40 p-2">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-1.5 rounded-full bg-orange-200" />
+            <div key={i} className="h-1.5 rounded-full bg-primary/25" />
           ))}
         </div>
-        <div className="flex-1 bg-white flex flex-col gap-1 p-2">
-          <div className="h-2 w-3/4 rounded-full bg-gray-200" />
-          <div className="h-1.5 w-full rounded-full bg-gray-100" />
-          <div className="h-1.5 w-2/3 rounded-full bg-gray-100" />
+        <div className="flex flex-1 flex-col gap-1 bg-card p-2">
+          <div className="h-2 w-3/4 rounded-full bg-muted" />
+          <div className="h-1.5 w-full rounded-full bg-muted/70" />
+          <div className="h-1.5 w-2/3 rounded-full bg-muted/70" />
         </div>
       </div>
     ),
@@ -57,13 +57,13 @@ const LAYOUTS: { id: HelpCenterLayout; label: string; description: string; previ
   {
     id: "cards",
     label: "Cards",
-    description: "Bold card grid layout — great for visually organising topic categories.",
+    description: "Bold card grid layout, great for visually organising topic categories.",
     preview: (
-      <div className="w-full h-20 rounded-lg border border-gray-200 bg-gray-50 p-2">
-        <div className="w-1/2 h-2 rounded-full bg-orange-200 mx-auto mb-2" />
+      <div className="h-20 w-full rounded-lg border border-border bg-muted/30 p-2">
+        <div className="mx-auto mb-2 h-2 w-1/2 rounded-full bg-primary/25" />
         <div className="grid grid-cols-3 gap-1">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-5 rounded bg-white border border-gray-200 shadow-sm" />
+            <div key={i} className="h-5 rounded border border-border bg-card shadow-sm" />
           ))}
         </div>
       </div>
@@ -71,7 +71,6 @@ const LAYOUTS: { id: HelpCenterLayout; label: string; description: string; previ
   },
 ];
 
-// ── Feature toggle row ─────────────────────────────────────────────────────────
 function FeatureRow({
   icon: Icon,
   label,
@@ -88,19 +87,19 @@ function FeatureRow({
   return (
     <div className="flex items-center justify-between py-3">
       <div className="flex items-start gap-3">
-        <div className={cn("p-2 rounded-lg", enabled ? "bg-[#F0997B]/25" : "bg-gray-100")}>
-          <Icon className={cn("h-4 w-4", enabled ? "text-[#D85A30]" : "text-gray-400")} />
+        <div className={cn("rounded-lg p-2", enabled ? "bg-primary/10" : "bg-muted")}>
+          <Icon className={cn("h-4 w-4", enabled ? "text-primary" : "text-muted-foreground")} />
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-900">{label}</p>
-          <p className="text-xs text-gray-400">{description}</p>
+          <p className="text-sm font-medium text-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{description}</p>
         </div>
       </div>
       <button
         onClick={onToggle}
         className={cn(
-          "transition-colors shrink-0",
-          enabled ? "text-[#D85A30]" : "text-gray-300 hover:text-gray-400"
+          "shrink-0 transition-colors",
+          enabled ? "text-primary" : "text-muted-foreground hover:text-foreground",
         )}
         aria-label={enabled ? `Disable ${label}` : `Enable ${label}`}
       >
@@ -110,7 +109,33 @@ function FeatureRow({
   );
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
+function SettingsSection({
+  title,
+  description,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  description?: string;
+  icon?: React.ElementType;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn(APP_PANEL)}>
+      <div className="flex items-center gap-2 border-b border-border/60 px-6 py-4">
+        {Icon ? <Icon className="h-4 w-4 text-primary" /> : null}
+        <div>
+          <h3 className="font-semibold text-foreground">{title}</h3>
+          {description ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
+      </div>
+      <div className="p-6">{children}</div>
+    </div>
+  );
+}
+
 export default function HelpCenterSettings() {
   const { company } = useAuth();
 
@@ -118,7 +143,6 @@ export default function HelpCenterSettings() {
   const [saving, setSaving] = useState(false);
   const [helpCenter, setHelpCenter] = useState<HelpCenter | null>(null);
 
-  // Local form state
   const [layout, setLayout] = useState<HelpCenterLayout>("classic");
   const [title, setTitle] = useState("Help Center");
   const [subtitle, setSubtitle] = useState("How can we help you?");
@@ -130,7 +154,6 @@ export default function HelpCenterSettings() {
   });
   const [isPublished, setIsPublished] = useState(false);
 
-  // Domain state
   const [domainInput, setDomainInput] = useState("");
   const [connectingDomain, setConnectingDomain] = useState(false);
   const [verifyingDomain, setVerifyingDomain] = useState(false);
@@ -236,138 +259,103 @@ export default function HelpCenterSettings() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-[#D85A30]" />
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
-
-      {/* ── Published status banner ─────────────────────────────────────────── */}
-      <div
-        className={cn(
-          "rounded-2xl p-4 border flex items-center justify-between",
-          isPublished
-            ? "bg-green-50 border-green-200"
-            : "bg-yellow-50 border-yellow-200"
-        )}
-      >
+      <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
         <div className="flex items-center gap-3">
           {isPublished ? (
-            <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />
           ) : (
-            <AlertCircle className="h-5 w-5 text-yellow-600 shrink-0" />
+            <AlertCircle className="h-5 w-5 shrink-0 text-muted-foreground" />
           )}
           <div>
-            <p className={cn("text-sm font-semibold", isPublished ? "text-green-800" : "text-yellow-800")}>
+            <p className="text-sm font-semibold text-foreground">
               {isPublished ? "Help center is live" : "Help center is not published"}
             </p>
-            {isPublished && (
+            {isPublished ? (
               <a
                 href={publicUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-green-600 hover:underline flex items-center gap-1"
+                className="flex items-center gap-1 text-xs text-primary hover:underline"
               >
                 {publicUrl}
                 <ExternalLink className="h-3 w-3" />
               </a>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Publish when you are ready for visitors to access your help center.
+              </p>
             )}
           </div>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => {
-            setIsPublished(!isPublished);
-          }}
-          className={cn(
-            "text-xs border",
-            isPublished
-              ? "border-green-300 text-green-700 hover:bg-green-100"
-              : "border-yellow-300 text-yellow-700 hover:bg-yellow-100"
-          )}
+          onClick={() => setIsPublished(!isPublished)}
         >
           {isPublished ? (
-            <><EyeOff className="h-3.5 w-3.5 mr-1.5" /> Unpublish</>
+            <>
+              <EyeOff className="mr-1.5 h-3.5 w-3.5" /> Unpublish
+            </>
           ) : (
-            <><Eye className="h-3.5 w-3.5 mr-1.5" /> Publish</>
+            <>
+              <Eye className="mr-1.5 h-3.5 w-3.5" /> Publish
+            </>
           )}
         </Button>
       </div>
 
-      {/* ── Layout picker ─────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
-          <LayoutTemplate className="h-4 w-4 text-[#D85A30]" />
-          <h3 className="font-semibold text-gray-900">Layout</h3>
+      <SettingsSection title="Layout" icon={LayoutTemplate}>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Choose how your help center looks to visitors.
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {LAYOUTS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setLayout(opt.id)}
+              className={cn(
+                "rounded-xl border-2 p-3 text-left transition-all",
+                layout === opt.id
+                  ? "border-primary bg-primary/5"
+                  : "border-border bg-card hover:border-primary/30 hover:bg-muted/30",
+              )}
+            >
+              {opt.preview}
+              <p className={cn("mt-2 text-sm font-semibold", layout === opt.id ? "text-primary" : "text-foreground")}>
+                {opt.label}
+              </p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{opt.description}</p>
+              {layout === opt.id ? (
+                <Badge className="mt-2 border-0 bg-primary text-[10px] text-primary-foreground">Selected</Badge>
+              ) : null}
+            </button>
+          ))}
         </div>
-        <div className="p-6">
-          <p className="text-xs text-gray-400 mb-4">Choose how your help center looks to visitors.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {LAYOUTS.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => setLayout(opt.id)}
-                className={cn(
-                  "text-left p-3 rounded-xl border-2 transition-all",
-                  layout === opt.id
-                    ? "border-[#D85A30] bg-brand-muted"
-                    : "border-gray-200 hover:border-gray-300 bg-white"
-                )}
-              >
-                {opt.preview}
-                <p className={cn("text-sm font-semibold mt-2", layout === opt.id ? "text-[#D85A30]" : "text-gray-700")}>
-                  {opt.label}
-                </p>
-                <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{opt.description}</p>
-                {layout === opt.id && (
-                  <Badge className="mt-2 text-[10px] bg-[#D85A30] text-white border-0">Selected</Badge>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      </SettingsSection>
 
-      {/* ── Branding ─────────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Content</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Customize the title and subtitle shown to your visitors</p>
-        </div>
-        <div className="p-6 space-y-4">
+      <SettingsSection title="Content" description="Customize the title and subtitle shown to your visitors">
+        <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-600">Help center title</Label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={100}
-              placeholder="Help Center"
-              className="focus-visible:ring-[#D85A30]"
-            />
+            <Label className="text-xs font-medium text-muted-foreground">Help center title</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} placeholder="Help Center" />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-600">Subtitle / tagline</Label>
-            <Input
-              value={subtitle}
-              onChange={(e) => setSubtitle(e.target.value)}
-              maxLength={300}
-              placeholder="How can we help you?"
-              className="focus-visible:ring-[#D85A30]"
-            />
+            <Label className="text-xs font-medium text-muted-foreground">Subtitle / tagline</Label>
+            <Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} maxLength={300} placeholder="How can we help you?" />
           </div>
         </div>
-      </div>
+      </SettingsSection>
 
-      {/* ── Features ─────────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Features</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Toggle what's available on your public help center</p>
-        </div>
-        <div className="px-6 divide-y divide-gray-50">
+      <SettingsSection title="Features" description="Toggle what's available on your public help center">
+        <div className="divide-y divide-border/60">
           <FeatureRow
             icon={MessageSquare}
             label="Contact form"
@@ -397,109 +385,84 @@ export default function HelpCenterSettings() {
             onToggle={() => setFeatures((f) => ({ ...f, search: !f.search }))}
           />
         </div>
-      </div>
+      </SettingsSection>
 
-      {/* ── Save button ──────────────────────────────────────────────────────── */}
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving}>
-          {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Save settings
         </Button>
       </div>
 
       <Separator />
 
-      {/* ── Custom domain ─────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
-          <Globe className="h-4 w-4 text-[#D85A30]" />
-          <h3 className="font-semibold text-gray-900">Custom domain</h3>
-        </div>
-        <div className="p-6 space-y-5">
-          {/* Default domain info */}
-          <div className="rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 flex items-center justify-between gap-3">
+      <SettingsSection title="Custom domain" icon={Globe}>
+        <div className="space-y-5">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">Default URL</p>
-              <p className="text-sm font-mono font-medium text-gray-700">
+              <p className="mb-0.5 text-xs text-muted-foreground">Default URL</p>
+              <p className="font-mono text-sm font-medium text-foreground">
                 https://help.{company?.subdomain}.agentraa.com
               </p>
             </div>
             <button
+              type="button"
               onClick={() => {
                 navigator.clipboard.writeText(`https://help.${company?.subdomain}.agentraa.com`);
                 toast.success("Copied!");
               }}
-              className="text-gray-400 hover:text-gray-600 shrink-0"
+              className="shrink-0 text-muted-foreground hover:text-foreground"
               title="Copy default URL"
             >
               <Copy className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Connected domain status */}
           {helpCenter?.customDomain ? (
-            <div
-              className={cn(
-                "rounded-xl border p-4 space-y-3",
-                helpCenter.customDomainVerified
-                  ? "bg-green-50 border-green-200"
-                  : "bg-yellow-50 border-yellow-200"
-              )}
-            >
+            <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {helpCenter.customDomainVerified ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <CheckCircle2 className="h-4 w-4 text-primary" />
                   ) : (
-                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
                   )}
-                  <span className="text-sm font-semibold text-gray-800">
-                    {helpCenter.customDomain}
-                  </span>
-                  <Badge
-                    className={cn(
-                      "text-[10px]",
-                      helpCenter.customDomainVerified
-                        ? "bg-green-100 text-green-700 border-green-200"
-                        : "bg-yellow-100 text-yellow-700 border-yellow-200"
-                    )}
-                    variant="outline"
-                  >
+                  <span className="text-sm font-semibold text-foreground">{helpCenter.customDomain}</span>
+                  <Badge variant="outline" className="text-[10px]">
                     {helpCenter.customDomainVerified ? "Verified" : "Pending verification"}
                   </Badge>
                 </div>
                 <button
+                  type="button"
                   onClick={handleDisconnectDomain}
                   disabled={disconnectingDomain}
-                  className="text-red-400 hover:text-red-600 transition-colors"
+                  className="text-destructive transition-colors hover:text-destructive/80"
                   title="Disconnect domain"
                 >
-                  {disconnectingDomain
-                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : <Trash2 className="h-4 w-4" />}
+                  {disconnectingDomain ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
                 </button>
               </div>
 
-              {!helpCenter.customDomainVerified && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleVerifyDomain}
-                  disabled={verifyingDomain}
-                  className="border-yellow-300 text-yellow-700 hover:bg-yellow-100"
-                >
-                  {verifyingDomain
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                    : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
+              {!helpCenter.customDomainVerified ? (
+                <Button size="sm" variant="outline" onClick={handleVerifyDomain} disabled={verifyingDomain}>
+                  {verifyingDomain ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  )}
                   Verify now
                 </Button>
-              )}
+              ) : null}
             </div>
           ) : (
-            /* Connect new domain */
             <div className="space-y-3">
-              <p className="text-sm text-gray-600">
-                Connect your own domain (e.g. <span className="font-mono text-[#D85A30]">help.yourcompany.com</span>).
+              <p className="text-sm text-muted-foreground">
+                Connect your own domain (e.g.{" "}
+                <span className="font-mono text-primary">help.yourcompany.com</span>).
                 Your help center will be accessible at that address.
               </p>
               <div className="flex gap-2">
@@ -507,73 +470,71 @@ export default function HelpCenterSettings() {
                   value={domainInput}
                   onChange={(e) => setDomainInput(e.target.value.toLowerCase())}
                   placeholder="help.yourcompany.com"
-                  className="font-mono focus-visible:ring-[#D85A30]"
+                  className="font-mono"
                 />
-                <Button
-                  onClick={handleConnectDomain}
-                  disabled={connectingDomain || !domainInput.trim()}
-                >
-                  {connectingDomain
-                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : "Connect"}
+                <Button onClick={handleConnectDomain} disabled={connectingDomain || !domainInput.trim()}>
+                  {connectingDomain ? <Loader2 className="h-4 w-4 animate-spin" /> : "Connect"}
                 </Button>
               </div>
             </div>
           )}
 
-          {/* DNS instructions */}
-          {verificationInstructions && !helpCenter?.customDomainVerified && (
-            <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 space-y-3">
-              <p className="text-sm font-semibold text-blue-800">Add this DNS record to verify ownership</p>
+          {verificationInstructions && !helpCenter?.customDomainVerified ? (
+            <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+              <p className="text-sm font-semibold text-foreground">Add this DNS record to verify ownership</p>
               <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className="bg-white rounded-lg border border-blue-100 p-2">
-                  <p className="text-blue-400 font-medium mb-1">Type</p>
-                  <p className="font-mono font-semibold text-blue-900">{verificationInstructions.type}</p>
+                <div className="rounded-lg border border-border bg-card p-2">
+                  <p className="mb-1 font-medium text-muted-foreground">Type</p>
+                  <p className="font-mono font-semibold text-foreground">{verificationInstructions.type}</p>
                 </div>
-                <div className="bg-white rounded-lg border border-blue-100 p-2 col-span-2">
-                  <p className="text-blue-400 font-medium mb-1">Host / Name</p>
+                <div className="col-span-2 rounded-lg border border-border bg-card p-2">
+                  <p className="mb-1 font-medium text-muted-foreground">Host / Name</p>
                   <div className="flex items-center justify-between gap-1">
-                    <p className="font-mono font-semibold text-blue-900 truncate text-[10px]">
+                    <p className="truncate font-mono text-[10px] font-semibold text-foreground">
                       {verificationInstructions.host}
                     </p>
                     <button
-                      onClick={() => { navigator.clipboard.writeText(verificationInstructions.host); toast.success("Copied!"); }}
-                      className="text-blue-400 hover:text-blue-600 shrink-0"
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(verificationInstructions.host);
+                        toast.success("Copied!");
+                      }}
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
               </div>
-              <div className="bg-white rounded-lg border border-blue-100 p-2">
-                <p className="text-blue-400 font-medium text-xs mb-1">Value</p>
+              <div className="rounded-lg border border-border bg-card p-2">
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Value</p>
                 <div className="flex items-center justify-between gap-2">
-                  <p className="font-mono text-[10px] text-blue-900 break-all">{verificationInstructions.value}</p>
+                  <p className="break-all font-mono text-[10px] text-foreground">{verificationInstructions.value}</p>
                   <button
-                    onClick={() => { navigator.clipboard.writeText(verificationInstructions.value); toast.success("Copied!"); }}
-                    className="text-blue-400 hover:text-blue-600 shrink-0"
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(verificationInstructions.value);
+                      toast.success("Copied!");
+                    }}
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
                   >
                     <Copy className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
-              <p className="text-xs text-blue-600">{verificationInstructions.note}</p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleVerifyDomain}
-                disabled={verifyingDomain}
-                className="border-blue-300 text-blue-700 hover:bg-blue-100"
-              >
-                {verifyingDomain
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                  : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-                I've added the record — verify now
+              <p className="text-xs text-muted-foreground">{verificationInstructions.note}</p>
+              <Button size="sm" variant="outline" onClick={handleVerifyDomain} disabled={verifyingDomain}>
+                {verifyingDomain ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                I&apos;ve added the record. Verify now
               </Button>
             </div>
-          )}
+          ) : null}
         </div>
-      </div>
+      </SettingsSection>
     </div>
   );
 }

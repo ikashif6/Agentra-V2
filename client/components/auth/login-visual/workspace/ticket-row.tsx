@@ -6,6 +6,10 @@ import type { Ticket } from "./workspace-config";
 import { SLAIndicator } from "./sla-indicator";
 import { StatusBadge } from "./status-badge";
 import { TeamAvatarGroup } from "./team-avatar-group";
+import {
+  WORKSPACE_TICKET_ROW,
+  WORKSPACE_TICKET_ROW_ACTIVE,
+} from "./workspace-surfaces";
 import { cn } from "@/lib/utils";
 
 type TicketRowProps = {
@@ -29,20 +33,18 @@ export function TicketRow({ ticket, highlighted, exiting, slaComplete }: TicketR
       }}
       transition={{ duration: 0.5, ease: EASE }}
       className={cn(
-        "relative rounded-[10px] border px-3 py-2 xl:py-2.5 transition-colors",
-        highlighted
-          ? "border-[#F0997B]/35 bg-[#D85A30]/10 ring-1 ring-[#F0997B]/20"
-          : "border-white/8 bg-black/18",
+        "relative border px-2.5 py-1.5 xl:py-2",
+        highlighted ? WORKSPACE_TICKET_ROW_ACTIVE : WORKSPACE_TICKET_ROW,
         exiting && "pointer-events-none",
       )}
     >
       {highlighted ? (
         <motion.div
-          className="pointer-events-none absolute inset-0 overflow-hidden rounded-[10px]"
+          className="pointer-events-none absolute inset-0 overflow-hidden rounded-[14px]"
           aria-hidden="true"
         >
           <motion.div
-            className="absolute -left-1/3 top-0 h-full w-1/3 bg-linear-to-r from-transparent via-white/10 to-transparent"
+            className="absolute -left-1/3 top-0 h-full w-1/3 bg-linear-to-r from-transparent via-[#D85A30]/10 to-transparent"
             initial={{ x: "-100%" }}
             animate={{ x: "320%" }}
             transition={{ duration: 1.1, ease: EASE }}
@@ -54,20 +56,20 @@ export function TicketRow({ ticket, highlighted, exiting, slaComplete }: TicketR
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             {ticket.isNew ? (
-              <span className="size-1.5 shrink-0 rounded-full bg-[#F0997B]" aria-hidden="true" />
+              <span className="size-1.5 shrink-0 rounded-full bg-[#D85A30]" aria-hidden="true" />
             ) : null}
-            <p className="truncate text-[11px] font-medium text-white/92">{ticket.subject}</p>
+            <p className="truncate text-[11px] font-medium text-[#1a1a1a]">{ticket.subject}</p>
           </div>
-          <p className="mt-0.5 truncate text-[10px] text-white/45">{ticket.customer}</p>
+          <p className="mt-0.5 truncate text-[10px] text-[#888]">{ticket.customer}</p>
         </div>
         <StatusBadge status={ticket.status} compact />
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-[9px] text-white/38">{ticket.category}</span>
+          <span className="truncate text-[9px] text-[#aaa]">{ticket.category}</span>
           {ticket.priority === "high" ? (
-            <span className="shrink-0 text-[9px] font-medium text-[#F0997B]/90">High</span>
+            <span className="shrink-0 text-[9px] font-semibold text-[#D85A30]">High</span>
           ) : null}
           {showAssignee ? (
             <TeamAvatarGroup initials={ticket.assigneeInitials!} name={ticket.assignee} />

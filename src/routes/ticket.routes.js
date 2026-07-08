@@ -138,6 +138,7 @@ router.get(
     query('status').optional().isIn(['open', 'in_progress', 'on_hold', 'resolved', 'closed', 'self_closed']),
     query('view').optional().isIn(['assigned', 'all', 'snoozed', 'closed', 'trash', 'spam', 'queue']),
     query('scope').optional().isIn(['inbox', 'live_chat', 'ai_agents', 'dashboard']),
+    query('channel').optional().isIn(['all', 'email', 'facebook', 'instagram', 'whatsapp', 'portal']),
     query('priority').optional().isIn(['low', 'medium', 'high', 'urgent']),
     query('department').optional().isMongoId(),
     query('team').optional().isMongoId(),

@@ -319,6 +319,34 @@ const companySchema = new mongoose.Schema(
         verifiedName: { type: String },
         accessToken: { type: String, select: false },
       },
+      email: {
+        status: {
+          type: String,
+          enum: ['disconnected', 'connected', 'error'],
+          default: 'disconnected',
+        },
+        provider: {
+          type: String,
+          enum: ['imap', 'google', 'microsoft'],
+        },
+        address: { type: String }, // the connected mailbox address
+        displayName: { type: String }, // sender name shown to customers
+        connectedAt: { type: Date },
+        lastSyncAt: { type: Date },
+        lastError: { type: String },
+        lastSeenUid: { type: Number }, // IMAP INBOX sync cursor
+        imap: {
+          host: { type: String },
+          port: { type: Number },
+          secure: { type: Boolean, default: true },
+          user: { type: String },
+          smtpHost: { type: String },
+          smtpPort: { type: Number },
+          smtpSecure: { type: Boolean, default: true },
+        },
+        // Encrypted secret bundle (IMAP/SMTP password, or OAuth tokens later)
+        secret: { type: String, select: false },
+      },
     },
   },
   {

@@ -5,18 +5,20 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authRadiusClass } from "@/components/auth/auth-panel-background";
+import { AuthFormAlert } from "@/components/auth/auth-form-alert";
+import { authInputClassName, authRadiusClass } from "@/components/auth/auth-panel-background";
 import { authApi } from "@/lib/api";
+import { getApiError } from "@/lib/api-error";
 import { setSubdomain } from "@/lib/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { Company, User } from "@/lib/types";
 import { buildMainLoginUrl, getWorkspaceDisplayHost } from "@/lib/workspace-host";
+import { cn } from "@/lib/utils";
 
 const schema = z.object({
   email: z.string().email("Valid email required"),
@@ -31,24 +33,44 @@ type WorkspaceLoginFormProps = {
 
 export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuth();
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<{ message: string; code?: string } | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
 
+  const emailValue = watch("email");
+
   useEffect(() => {
     setSubdomain(workspace);
   }, [workspace]);
 
+  useEffect(() => {
+    if (searchParams.get("created") === "1") {
+      setSuccessMessage("Account created! Check your email to verify, then sign in.");
+      router.replace("/auth/login", { scroll: false });
+    }
+    if (searchParams.get("verified") === "1") {
+      setSuccessMessage("Email verified! You can sign in now.");
+      router.replace("/auth/login", { scroll: false });
+    }
+  }, [searchParams, router]);
+
   const onSubmit = async (values: FormData) => {
     setLoading(true);
+    setFormError(null);
+    setSuccessMessage(null);
+
     try {
       const { data } = await authApi.login({
         email: values.email,
@@ -58,17 +80,22 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
 
       const { accessToken, refreshToken, user, company } = data.data;
       login(accessToken, refreshToken, user as User, company as Company);
-      toast.success("Welcome back!");
       router.push("/dashboard");
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        "Login failed";
-      toast.error(msg);
+      const { message, code } = getApiError(err, "Unable to sign in. Please try again.");
+      setFormError({ message, code });
     } finally {
       setLoading(false);
     }
   };
+
+  const checkEmailHref =
+    emailValue && z.string().email().safeParse(emailValue).success
+      ? `/auth/check-email?${new URLSearchParams({
+          email: emailValue,
+          workspace: getWorkspaceDisplayHost(workspace),
+        }).toString()}`
+      : "/auth/check-email";
 
   return (
     <div className="space-y-5">
@@ -80,6 +107,8 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
         </p>
       </div>
 
+      {successMessage ? <AuthFormAlert message={successMessage} variant="success" /> : null}
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email address</Label>
@@ -89,7 +118,7 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
             autoComplete="email"
             {...register("email")}
             placeholder="you@company.com"
-            className={authRadiusClass}
+            className={authInputClassName}
           />
           {errors.email ? (
             <p className="text-xs text-destructive">{errors.email.message}</p>
@@ -113,7 +142,7 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
               autoComplete="current-password"
               {...register("password")}
               placeholder="••••••••"
-              className={`${authRadiusClass} pr-10`}
+              className={cn(authInputClassName, "pr-10")}
             />
             <button
               type="button"
@@ -128,6 +157,20 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
             <p className="text-xs text-destructive">{errors.password.message}</p>
           ) : null}
         </div>
+
+        {formError ? (
+          <div className="space-y-2">
+            <AuthFormAlert message={formError.message} />
+            {formError.code === "EMAIL_NOT_VERIFIED" ? (
+              <p className="text-xs text-muted-foreground">
+                Didn&apos;t get the email?{" "}
+                <Link href={checkEmailHref} className="font-medium text-primary hover:underline">
+                  Check your inbox or resend the link
+                </Link>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <Button
           type="submit"

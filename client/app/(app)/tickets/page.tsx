@@ -113,21 +113,21 @@ export default function TicketsPage() {
   const pages = pagination?.pages ?? 1;
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 justify-between">
         <div className="flex items-center gap-2 flex-wrap">
           {/* Search */}
           <div className="relative w-56">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input placeholder="Search tickets…" className="pl-9 focus-visible:ring-[#D85A30]"
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Search tickets…" className="pl-9 focus-visible:ring-primary/30"
               value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
 
           {/* Status */}
           <Select value={statusFilter} onValueChange={(v: string | null) => setStatusFilter(v ?? "all")}>
-            <SelectTrigger className="w-36 focus:ring-[#D85A30]">
-              <Filter className="h-3.5 w-3.5 mr-1 text-gray-400" />
+            <SelectTrigger className="w-36 focus:ring-primary/30">
+              <Filter className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -140,7 +140,7 @@ export default function TicketsPage() {
 
           {/* Priority */}
           <Select value={priorityFilter} onValueChange={(v: string | null) => setPriorityFilter(v ?? "all")}>
-            <SelectTrigger className="w-32 focus:ring-[#D85A30]">
+            <SelectTrigger className="w-32 focus:ring-primary/30">
               <SelectValue placeholder="Priority" />
             </SelectTrigger>
             <SelectContent>
@@ -154,7 +154,7 @@ export default function TicketsPage() {
           {/* Department filter — staff only */}
           {isStaff && departments.length > 0 && (
             <Select value={deptFilter} onValueChange={(v: string | null) => setDeptFilter(v ?? "all")}>
-              <SelectTrigger className="w-40 focus:ring-[#D85A30]">
+              <SelectTrigger className="w-40 focus:ring-primary/30">
                 <SelectValue placeholder="Department" />
               </SelectTrigger>
               <SelectContent>
@@ -169,7 +169,7 @@ export default function TicketsPage() {
           {/* Team filter — staff only */}
           {isStaff && teams.length > 0 && (
             <Select value={teamFilter} onValueChange={(v: string | null) => setTeamFilter(v ?? "all")}>
-              <SelectTrigger className="w-36 focus:ring-[#D85A30]">
+              <SelectTrigger className="w-36 focus:ring-primary/30">
                 <SelectValue placeholder="Team" />
               </SelectTrigger>
               <SelectContent>
@@ -190,48 +190,48 @@ export default function TicketsPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#D85A30" }} />
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
         ) : tickets.length === 0 ? (
-          <div className="text-center py-16 text-sm text-gray-400">
+          <div className="text-center py-16 text-sm text-muted-foreground">
             {isCustomer ? "You have no tickets yet." : "No tickets found."}
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Code</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Title</th>
-                {isStaff && <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide hidden lg:table-cell">Department</th>}
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide hidden sm:table-cell">Priority</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Status</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide hidden md:table-cell">Created</th>
+              <tr className="border-b border-border/60 bg-muted/30">
+                <th className="text-left px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Code</th>
+                <th className="text-left px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Title</th>
+                {isStaff && <th className="text-left px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Department</th>}
+                <th className="text-left px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Priority</th>
+                <th className="text-left px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                <th className="text-left px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hidden md:table-cell">Created</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-border/40">
               {tickets.map((t) => (
-                <tr key={t._id} className="hover:bg-gray-50 transition-colors">
+                <tr key={t._id} className="hover:bg-accent/30 transition-colors">
                   <td className="px-5 py-3.5">
                     <Link href={`/tickets/${t.ticket_code}`}
-                      className="font-mono text-xs font-semibold hover:underline" style={{ color: "#D85A30" }}>
+                      className="font-mono text-xs font-semibold hover:underline text-primary">
                       {t.ticket_code}
                     </Link>
                   </td>
                   <td className="px-5 py-3.5">
                     <Link href={`/tickets/${t.ticket_code}`}
-                      className="font-medium text-gray-900 hover:text-[#D85A30] truncate max-w-[220px] block transition-colors">
+                      className="font-medium text-foreground hover:text-primary truncate max-w-[220px] block transition-colors">
                       {t.ticket_title}
                     </Link>
                   </td>
                   {isStaff && (
                     <td className="px-5 py-3.5 hidden lg:table-cell">
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-muted-foreground">
                         {t.department && typeof t.department === "object"
                           ? t.department.name
-                          : "—"}
+                          : "-"}
                       </span>
                     </td>
                   )}
@@ -241,7 +241,7 @@ export default function TicketsPage() {
                   <td className="px-5 py-3.5">
                     <Badge className={STATUS_COLORS[t.status]} variant="secondary">{STATUS_LABELS[t.status]}</Badge>
                   </td>
-                  <td className="px-5 py-3.5 text-xs text-gray-400 hidden md:table-cell">{formatDate(t.createdAt)}</td>
+                  <td className="px-5 py-3.5 text-xs text-muted-foreground hidden md:table-cell">{formatDate(t.createdAt)}</td>
                 </tr>
               ))}
             </tbody>
@@ -250,9 +250,9 @@ export default function TicketsPage() {
 
         {/* Pagination */}
         {pagination && pagination.pages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
-            <span className="text-xs text-gray-400">
-              {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, pagination.total)} of {pagination.total}
+          <div className="flex items-center justify-between px-5 py-3 border-t border-border/60 bg-muted/20">
+            <span className="text-xs text-muted-foreground">
+              {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, pagination.total)} of {pagination.total}
             </span>
             <div className="flex gap-1">
               <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>Prev</Button>
@@ -270,13 +270,13 @@ export default function TicketsPage() {
             <div className="space-y-1">
               <Label>Title</Label>
               <Input {...register("ticket_title")} placeholder="Describe the issue briefly"
-                className="focus-visible:ring-[#D85A30]" />
+                className="focus-visible:ring-primary/30" />
               {errors.ticket_title && <p className="text-xs text-red-500">{errors.ticket_title.message}</p>}
             </div>
             <div className="space-y-1">
               <Label>Description</Label>
               <Textarea {...register("ticket_description")} placeholder="Provide as much detail as possible…"
-                className="min-h-[100px] focus-visible:ring-[#D85A30]" />
+                className="min-h-[100px] focus-visible:ring-primary/30" />
               {errors.ticket_description && <p className="text-xs text-red-500">{errors.ticket_description.message}</p>}
             </div>
 
@@ -288,7 +288,7 @@ export default function TicketsPage() {
                   onValueChange={(v: string | null) => {
                     if (v) reset((prev) => ({ ...prev, priority: v as CreateForm["priority"] }));
                   }}>
-                  <SelectTrigger className="focus:ring-[#D85A30]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="focus:ring-primary/30"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(PRIORITY_LABELS).map(([v, l]) => (
                       <SelectItem key={v} value={v}>{l}</SelectItem>
@@ -302,7 +302,7 @@ export default function TicketsPage() {
                 <div className="space-y-1">
                   <Label>Department</Label>
                   <Select value={createDept} onValueChange={(v: string | null) => setCreateDept(v ?? "none")}>
-                    <SelectTrigger className="focus:ring-[#D85A30]"><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectTrigger className="focus:ring-primary/30"><SelectValue placeholder="None" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
                       {departments.map((d) => (
@@ -318,7 +318,7 @@ export default function TicketsPage() {
                 <div className="space-y-1">
                   <Label>Team</Label>
                   <Select value={createTeam} onValueChange={(v: string | null) => setCreateTeam(v ?? "none")}>
-                    <SelectTrigger className="focus:ring-[#D85A30]"><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectTrigger className="focus:ring-primary/30"><SelectValue placeholder="None" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
                       {teams.map((t) => (

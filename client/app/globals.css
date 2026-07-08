@@ -43,6 +43,35 @@
   --sidebar-accent-foreground: 16 55% 40%;
 }
 
+.dark {
+  --background: 0 0% 7%;
+  --foreground: 0 0% 96%;
+  --card: 0 0% 10%;
+  --card-foreground: 0 0% 96%;
+  --popover: 0 0% 10%;
+  --popover-foreground: 0 0% 96%;
+  --primary: 16 69% 52%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 14%;
+  --secondary-foreground: 0 0% 96%;
+  --muted: 0 0% 14%;
+  --muted-foreground: 0 0% 62%;
+  --accent: 0 0% 14%;
+  --accent-foreground: 0 0% 96%;
+  --brand-muted: 16 35% 16%;
+  --brand-muted-foreground: 16 55% 72%;
+  --destructive: 0 72% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 18%;
+  --input: 0 0% 18%;
+  --ring: 16 69% 52%;
+  --sidebar: 0 0% 9%;
+  --sidebar-foreground: 0 0% 96%;
+  --sidebar-border: 0 0% 18%;
+  --sidebar-accent: 0 0% 14%;
+  --sidebar-accent-foreground: 0 0% 96%;
+}
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -126,7 +155,7 @@ button:disabled,
 
 .login-visual-base {
   background:
-    linear-gradient(155deg, #e8734a 0%, var(--auth-brand) 18%, var(--auth-brand-mid) 42%, #5c2414 72%, var(--auth-panel-dark) 100%);
+    linear-gradient(155deg, #e8734a 0%, var(--auth-brand) 18%, var(--auth-brand-mid) 42%, #8a3d22 78%, #6b2f1a 100%);
 }
 
 .login-visual-mesh {
@@ -134,7 +163,7 @@ button:disabled,
     radial-gradient(ellipse 90% 70% at 12% 8%, rgba(240, 153, 123, 0.55), transparent 58%),
     radial-gradient(ellipse 55% 45% at 88% 18%, rgba(216, 90, 48, 0.4), transparent 52%),
     radial-gradient(ellipse 70% 55% at 55% 55%, rgba(240, 153, 123, 0.12), transparent 60%),
-    radial-gradient(ellipse 100% 80% at 50% 100%, rgba(0, 0, 0, 0.55), transparent 68%);
+    radial-gradient(ellipse 90% 55% at 50% 100%, rgba(107, 47, 26, 0.22), transparent 62%);
   animation: auth-mesh-breathe 20s ease-in-out infinite;
 }
 
@@ -149,6 +178,7 @@ button:disabled,
 
 .login-visual-glow {
   background:
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.08), transparent 48%),
     radial-gradient(circle at 62% 32%, rgba(240, 153, 123, 0.22), transparent 42%),
     radial-gradient(circle at 28% 72%, rgba(216, 90, 48, 0.14), transparent 38%);
 }
@@ -183,8 +213,8 @@ button:disabled,
   bottom: -8%;
   width: 55%;
   height: 38%;
-  background: rgba(90, 30, 12, 0.65);
-  opacity: 0.8;
+  background: rgba(184, 74, 40, 0.45);
+  opacity: 0.65;
   animation-delay: -16s;
 }
 
@@ -209,14 +239,51 @@ button:disabled,
 }
 
 .login-visual-vignette {
+  background: linear-gradient(to bottom, rgba(216, 90, 48, 0.05) 0%, transparent 18%);
+}
+
+.login-visual-card-spotlight {
   background:
-    linear-gradient(to top, rgba(10, 3, 2, 0.82) 0%, rgba(10, 3, 2, 0.25) 28%, transparent 55%),
-    linear-gradient(to bottom, rgba(216, 90, 48, 0.08) 0%, transparent 22%);
+    radial-gradient(ellipse 85% 75% at 50% 44%, rgba(255, 255, 255, 0.28), transparent 68%),
+    radial-gradient(ellipse 55% 45% at 72% 38%, rgba(255, 245, 238, 0.15), transparent 55%);
+}
+
+.login-visual-cursor {
+  animation: login-visual-cursor-blink 1s step-end infinite;
+}
+
+@keyframes login-visual-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.login-visual-demo-card {
+  will-change: transform;
+}
+
+.login-visual-workspace-fit {
+  box-sizing: border-box;
+  max-height: 100%;
+  overflow: visible;
+  padding: 2px 4px;
+}
+
+.login-visual-workspace-scale {
+  width: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+
+.login-visual-workspace-scale *,
+.login-visual-workspace-scale *:hover {
+  pointer-events: none !important;
 }
 
 .login-visual-workspace-scroll {
   scrollbar-width: none;
   -ms-overflow-style: none;
+  overflow: hidden;
+  max-height: 100%;
 }
 
 .login-visual-workspace-scroll::-webkit-scrollbar {
@@ -239,4 +306,98 @@ button:disabled,
   .login-visual-blob {
     animation: none;
   }
+}
+
+/* Onboarding — light warm shell (Shopify-style card on soft background) */
+.onboarding-shell {
+  background:
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(216, 90, 48, 0.08), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 100% 50%, rgba(240, 153, 123, 0.12), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 0% 80%, rgba(216, 90, 48, 0.06), transparent 45%),
+    hsl(var(--background));
+}
+
+.onboarding-shell-grid {
+  background-image:
+    linear-gradient(rgba(216, 90, 48, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(216, 90, 48, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 85% 75% at 50% 40%, black 30%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 40%, black 30%, transparent 78%);
+}
+
+/* App shell — warm canvas matching auth/onboarding */
+.app-shell {
+  background:
+    radial-gradient(ellipse 80% 50% at 100% 0%, hsl(var(--brand) / 0.08), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 0% 100%, hsl(var(--brand) / 0.06), transparent 50%),
+    hsl(var(--background));
+}
+
+.app-shell-grid {
+  background-image:
+    linear-gradient(hsl(var(--brand) / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--brand) / 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 90% 80% at 50% 30%, black 25%, transparent 82%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 30%, black 25%, transparent 82%);
+}
+
+.dark .app-shell {
+  background: hsl(var(--background));
+}
+
+.dark .app-shell-grid {
+  opacity: 0.35;
+}
+
+/* Flat canvas pages — no grid or brand gradient wash */
+.app-shell-flat {
+  background: hsl(var(--background));
+}
+
+/* Sonner toasts — neutral surfaces, no success/warning tint */
+[data-sonner-toast] {
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border-color: hsl(var(--border) / 0.7) !important;
+  border-radius: 10px !important;
+}
+
+[data-sonner-toast] [data-icon] {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: hsl(var(--muted-foreground)) !important;
+  background: hsl(var(--muted) / 0.55) !important;
+  border: 1px solid hsl(var(--border) / 0.65) !important;
+  border-radius: 8px !important;
+  width: 1.75rem !important;
+  height: 1.75rem !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+[data-sonner-toast] [data-icon] svg {
+  display: block !important;
+  width: 0.875rem !important;
+  height: 0.875rem !important;
+  margin: 0 !important;
+}
+
+[data-sonner-toast][data-type="error"] [data-icon] {
+  color: hsl(var(--destructive)) !important;
+  background: hsl(var(--destructive) / 0.08) !important;
+  border-color: hsl(var(--destructive) / 0.2) !important;
+}
+
+[data-sonner-toast] [data-close-button] {
+  color: hsl(var(--muted-foreground)) !important;
+  background: transparent !important;
+  border: none !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  color: hsl(var(--foreground)) !important;
+  background: hsl(var(--muted)) !important;
 }

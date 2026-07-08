@@ -7,6 +7,7 @@ const emailService = require('../services/email.service');
 const facebookService = require('../services/facebook.service');
 const instagramService = require('../services/instagram.service');
 const whatsappService = require('../services/whatsapp.service');
+const emailChannelService = require('../services/email-channel.service');
 const tokenUtil = require('../utils/token');
 const response = require('../utils/apiResponse');
 const { buildInboxDemoConfigs, buildLiveChatDemoConfigs } = require('../data/demo-ticket-configs');
@@ -19,6 +20,9 @@ const CLOSED_STATUSES = ['closed', 'self_closed', 'resolved'];
 const INBOX_VIEWS = ['assigned', 'all', 'snoozed', 'closed', 'trash', 'spam'];
 const LIVE_CHAT_SOURCES = ['chatbot', 'chat'];
 const LIVE_CHAT_VIEWS = ['queue', 'assigned', 'closed', 'trash'];
+// Selectable channels for the inbox channel filter (live chat is excluded — it
+// lives in its own AI Agent surface).
+const INBOX_CHANNELS = ['email', 'facebook', 'instagram', 'whatsapp', 'portal'];
 
 function isLiveChatScope(scope) {
   return scope === 'live_chat' || scope === 'ai_agents';
@@ -491,7 +495,7 @@ exports.listTickets = async (req, res, next) => {
   try {
     const {
       status, priority, page = 1, limit = 15,
-      search, department, team, view, scope,
+      search, department, team, view, scope, channel,
     } = req.query;
 
     await releaseExpiredSnoozes(req.company._id);
@@ -513,6 +517,11 @@ exports.listTickets = async (req, res, next) => {
     } else if (['owner', 'admin', 'agent'].includes(req.user.role)) {
       applyInboxView(query, req.user.role === 'agent' ? 'assigned' : 'all', req.user);
       excludeLiveChatSources(query);
+    }
+
+    // Channel filter (inbox only) — narrows the async inbox to one source.
+    if (!isLiveChatScope(scope) && INBOX_CHANNELS.includes(channel)) {
+      query.source = channel;
     }
 
     if (priority) query.priority = priority;
@@ -992,6 +1001,10 @@ exports.addMessage = async (req, res, next) => {
         whatsappService
           .sendReplyForTicket(company._id, ticket, msgBody)
           .catch((waErr) => console.error('[whatsapp reply]', waErr.message));
+      } else if (ticket.source === 'email') {
+        emailChannelService
+          .sendReplyForTicket(company._id, ticket, msgBody)
+          .catch((emErr) => console.error('[email reply]', emErr.message));
       }
     }
   } catch (err) {

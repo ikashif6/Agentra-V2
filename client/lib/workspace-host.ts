@@ -89,10 +89,6 @@ export function buildMainLoginUrl(): string {
 }
 
 export function getWorkspaceDisplayHost(subdomain: string): string {
-  if (typeof window !== "undefined" && isLocalDevHost(window.location.hostname)) {
-    const port = window.location.port ? `:${window.location.port}` : "";
-    return `${subdomain}.localhost${port}`;
-  }
   return `${subdomain}.${BASE_DOMAIN}`;
 }
 
@@ -102,4 +98,23 @@ export function normalizeSubdomainInput(value: string): string {
 
 export function isValidSubdomainFormat(subdomain: string): boolean {
   return SUBDOMAIN_REGEX.test(subdomain);
+}
+
+export function normalizeWebsiteUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+export function deriveSubdomainFromWebsite(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  try {
+    const hostname = new URL(normalizeWebsiteUrl(trimmed)).hostname.replace(/^www\./i, "");
+    const label = hostname.split(".")[0] ?? "";
+    return label.toLowerCase().replace(/[^a-z0-9-]/g, "");
+  } catch {
+    return normalizeSubdomainInput(trimmed).replace(/[^a-z0-9-]/g, "");
+  }
 }
