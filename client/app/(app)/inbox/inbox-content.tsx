@@ -266,7 +266,7 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
       void fetchTickets(true);
       void fetchCounts();
       if (selectedCode) void fetchTicketDetail(selectedCode, true);
-    }, 7000);
+    }, 4000);
     return () => clearInterval(interval);
   }, [fetchTickets, fetchCounts, fetchTicketDetail, selectedCode]);
 
@@ -347,18 +347,36 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
     const body = payload?.body ?? msgBody;
     const messageAttachments = payload?.attachments ?? [];
     if (!activeTicket || (!messageHtmlToPlain(body) && messageAttachments.length === 0)) return;
+
+    const ticketCode = activeTicket.ticket_code;
     setSending(true);
+
+    // Optimistically show the reply straight away so the thread feels instant.
+    const optimistic: TicketMessage = {
+      _id: `tmp-${Date.now()}`,
+      sender: user as User,
+      senderEmail: user?.email,
+      body,
+      attachments: messageAttachments,
+      isInternal: false,
+      sentAt: new Date().toISOString(),
+    };
+    setActiveTicket((prev) =>
+      prev && prev.ticket_code === ticketCode
+        ? { ...prev, messages: [...(prev.messages ?? []), optimistic], lastActivity: optimistic.sentAt }
+        : prev,
+    );
+    setMsgBody("");
+
     try {
-      await ticketApi.addMessage(activeTicket.ticket_code, {
-        body,
-        attachments: messageAttachments,
-      });
-      setMsgBody("");
-      await fetchTicketDetail(activeTicket.ticket_code);
-      await refreshInbox();
-      toast.success("Reply sent");
+      await ticketApi.addMessage(ticketCode, { body, attachments: messageAttachments });
+      // Reconcile silently with the server copy (replaces the temp message).
+      void fetchTicketDetail(ticketCode, true);
+      void fetchTickets(true);
+      void fetchCounts();
     } catch {
       toast.error("Failed to send reply");
+      void fetchTicketDetail(ticketCode, true);
     } finally {
       setSending(false);
     }
