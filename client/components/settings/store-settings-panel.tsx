@@ -206,30 +206,21 @@ export default function StoreSettingsPanel() {
 
         <div className="grid gap-3 sm:grid-cols-3">
           {PLATFORM_OPTIONS.map((option) => {
-            const selected = provider === option.id;
+            const selectProvider = () => {
+              setProvider(option.id as StoreProvider);
+              setStep("connect");
+            };
             return (
               <button
                 key={option.id}
                 type="button"
-                onClick={() => setProvider(option.id as StoreProvider)}
+                onClick={selectProvider}
                 className={cn(
                   "group relative flex w-full flex-col items-center gap-3 rounded-2xl border px-4 py-6 text-center transition-all",
-                  selected
-                    ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                    : "border-border/80 hover:border-primary/40 hover:bg-muted/30 hover:shadow-sm",
+                  "border-border/80 hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm hover:ring-1 hover:ring-primary/20",
                 )}
               >
-                {selected ? (
-                  <span className="absolute right-3 top-3 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    <Check className="size-3" />
-                  </span>
-                ) : null}
-                <div
-                  className={cn(
-                    "flex size-14 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card transition-colors",
-                    selected && "border-primary/30 bg-primary/5",
-                  )}
-                >
+                <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card transition-colors group-hover:border-primary/30 group-hover:bg-primary/5">
                   <PlatformBrandIcon platform={option.id} className="size-7 [&_svg]:size-7" />
                 </div>
                 <div className="min-w-0">
@@ -249,16 +240,11 @@ export default function StoreSettingsPanel() {
           <p className="text-xs text-muted-foreground">
             Your credentials are encrypted and only used to sync your store.
           </p>
-          <div className="flex gap-2">
-            {replacing ? (
-              <Button variant="outline" onClick={() => setReplacing(false)}>
-                Cancel
-              </Button>
-            ) : null}
-            <Button disabled={!provider} onClick={() => setStep("connect")}>
-              Continue setup
+          {replacing ? (
+            <Button variant="outline" onClick={() => setReplacing(false)}>
+              Cancel
             </Button>
-          </div>
+          ) : null}
         </div>
       </div>
     </SettingsPanelShell>
