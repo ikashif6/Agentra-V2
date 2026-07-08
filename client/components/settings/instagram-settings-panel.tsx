@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Inbox,
+  Instagram,
   Loader2,
   MessagesSquare,
   Reply,
@@ -370,7 +371,7 @@ export default function InstagramSettingsPanel() {
             {connecting ? (
               <Loader2 className="mr-2 size-4 animate-spin" />
             ) : (
-              <ChannelBrandIcon channel="instagram" className="mr-2 size-4" />
+              <Instagram className="mr-2 size-4" />
             )}
             Continue with Facebook
           </Button>
