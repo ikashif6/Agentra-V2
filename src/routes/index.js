@@ -12,13 +12,14 @@ const helpCenterRoutes   = require('./helpcenter.routes');
 const facebookChannelRoutes = require('./facebook-channel.routes');
 const facebookWebhookRoutes = require('./facebook-webhook.routes');
 const instagramChannelRoutes = require('./instagram-channel.routes');
+const whatsappChannelRoutes = require('./whatsapp-channel.routes');
 
 // Health check
 router.get('/health', (req, res) => {
   res.json({
     success: true,
     message: 'Agentra API is running',
-    build: 'instagram-1',
+    build: 'whatsapp-1',
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || '1.0.0',
     environment: process.env.NODE_ENV || 'development',
@@ -35,6 +36,7 @@ router.use('/users',       usersRoutes);
 router.use('/helpcenter',  helpCenterRoutes);
 router.use('/channels/facebook', facebookChannelRoutes);
 router.use('/channels/instagram', instagramChannelRoutes);
+router.use('/channels/whatsapp', whatsappChannelRoutes);
 router.use('/webhooks/facebook', facebookWebhookRoutes);
 
 module.exports = router;

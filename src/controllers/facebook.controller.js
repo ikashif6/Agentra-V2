@@ -4,6 +4,7 @@ const response = require('../utils/apiResponse');
 const { verifyOAuthState } = require('../utils/token');
 const { processMessengerWebhook } = require('../services/messenger-inbound.service');
 const { processInstagramWebhook } = require('../services/instagram-inbound.service');
+const { processWhatsAppWebhook } = require('../services/whatsapp-inbound.service');
 const {
   isFacebookConfigured,
   buildFacebookOAuthUrl,
@@ -216,6 +217,8 @@ exports.handleWebhook = async (req, res) => {
     const object = req.body?.object;
     if (object === 'instagram') {
       await processInstagramWebhook(req.body);
+    } else if (object === 'whatsapp_business_account') {
+      await processWhatsAppWebhook(req.body);
     } else {
       await processMessengerWebhook(req.body);
     }

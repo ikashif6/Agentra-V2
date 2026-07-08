@@ -6,6 +6,7 @@ const User = require('../models/User');
 const emailService = require('../services/email.service');
 const facebookService = require('../services/facebook.service');
 const instagramService = require('../services/instagram.service');
+const whatsappService = require('../services/whatsapp.service');
 const tokenUtil = require('../utils/token');
 const response = require('../utils/apiResponse');
 const { buildInboxDemoConfigs, buildLiveChatDemoConfigs } = require('../data/demo-ticket-configs');
@@ -987,6 +988,10 @@ exports.addMessage = async (req, res, next) => {
         instagramService
           .sendReplyForTicket(company._id, ticket, msgBody)
           .catch((igErr) => console.error('[instagram reply]', igErr.message));
+      } else if (ticket.source === 'whatsapp') {
+        whatsappService
+          .sendReplyForTicket(company._id, ticket, msgBody)
+          .catch((waErr) => console.error('[whatsapp reply]', waErr.message));
       }
     }
   } catch (err) {

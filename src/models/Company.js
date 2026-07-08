@@ -305,6 +305,20 @@ const companySchema = new mongoose.Schema(
           },
         ],
       },
+      whatsapp: {
+        status: {
+          type: String,
+          enum: ['disconnected', 'pending', 'connected', 'error'],
+          default: 'disconnected',
+        },
+        connectedAt: { type: Date },
+        lastError: { type: String },
+        wabaId: { type: String }, // WhatsApp Business Account id
+        phoneNumberId: { type: String }, // Cloud API phone number id
+        displayPhoneNumber: { type: String },
+        verifiedName: { type: String },
+        accessToken: { type: String, select: false },
+      },
     },
   },
   {
