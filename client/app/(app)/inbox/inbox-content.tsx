@@ -48,6 +48,7 @@ import type {
   TicketDetails,
   TicketMessage,
   TicketPriority,
+  TicketSource,
   TicketStatus,
   User,
   InboxFolder,

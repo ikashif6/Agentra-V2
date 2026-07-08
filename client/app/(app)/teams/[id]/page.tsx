@@ -130,8 +130,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                 <div key={i} className="flex items-center justify-between px-5 py-3">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-9 w-9">
-                      <AvatarFallback className="text-xs font-semibold"
-                        className="bg-brand-muted text-primary">
+                      <AvatarFallback className="bg-brand-muted text-xs font-semibold text-primary">
                         {initials(m.user)}
                       </AvatarFallback>
                     </Avatar>

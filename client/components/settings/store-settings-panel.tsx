@@ -271,7 +271,6 @@ function ProviderConnectForm({
   const [showManual, setShowManual] = useState(false);
 
   const [shopDomain, setShopDomain] = useState("");
-  const [accessToken, setAccessToken] = useState("");
   const [storeUrl, setStoreUrl] = useState("");
   const [consumerKey, setConsumerKey] = useState("");
   const [consumerSecret, setConsumerSecret] = useState("");
@@ -309,13 +308,11 @@ function ProviderConnectForm({
 
   // ── Manual credential entry (fallback / custom) ─────────────────────────────
   const buildCredentials = () => {
-    if (provider === "shopify") return { shopDomain, accessToken };
     if (provider === "woocommerce") return { storeUrl, consumerKey, consumerSecret };
     return { storeUrl, apiKey: apiKey || undefined };
   };
 
   const canSubmitManual = () => {
-    if (provider === "shopify") return shopDomain.trim() && accessToken.trim();
     if (provider === "woocommerce")
       return storeUrl.trim() && consumerKey.trim() && consumerSecret.trim();
     return storeUrl.trim();
@@ -377,7 +374,7 @@ function ProviderConnectForm({
                 onChange={(e) => setShopDomain(e.target.value)}
                 placeholder="your-brand.myshopify.com"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && config.shopifyConfigured && shopDomain.trim()) {
+                  if (e.key === "Enter" && shopDomain.trim()) {
                     e.preventDefault();
                     startShopify();
                   }
@@ -385,41 +382,18 @@ function ProviderConnectForm({
               />
             </Field>
 
-            {config.shopifyConfigured ? (
-              <Button
-                className="w-full bg-[#5E8E3E] text-white hover:bg-[#527d36]"
-                disabled={!shopDomain.trim() || redirecting}
-                onClick={startShopify}
-              >
-                {redirecting ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : (
-                  <PlatformBrandIcon platform="shopify" monochrome className="mr-2" />
-                )}
-                Connect Shopify
-              </Button>
-            ) : (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                One-click connect isn&apos;t configured on this server yet. You can still connect
-                manually with an Admin API token below.
-              </div>
-            )}
-
-            {(!config.shopifyConfigured || showManual) && (
-              <ManualShopify
-                accessToken={accessToken}
-                setAccessToken={setAccessToken}
-              />
-            )}
-            {config.shopifyConfigured && !showManual ? (
-              <button
-                type="button"
-                onClick={() => setShowManual(true)}
-                className="text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
-              >
-                Connect with an API token instead
-              </button>
-            ) : null}
+            <Button
+              className="h-auto w-full bg-[#5E8E3E] py-3 text-white hover:bg-[#527d36]"
+              disabled={!shopDomain.trim() || redirecting}
+              onClick={startShopify}
+            >
+              {redirecting ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <PlatformBrandIcon platform="shopify" monochrome className="mr-2" />
+              )}
+              Connect Shopify
+            </Button>
           </div>
         ) : null}
 
@@ -527,7 +501,6 @@ function ProviderConnectForm({
 
         {/* Manual submit button (custom always; shopify/woo when in manual mode) */}
         {(provider === "custom" ||
-          (provider === "shopify" && (!config.shopifyConfigured || showManual)) ||
           (provider === "woocommerce" && showManual)) && (
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onBack}>
@@ -541,28 +514,6 @@ function ProviderConnectForm({
         )}
       </div>
     </SettingsPanelShell>
-  );
-}
-
-function ManualShopify({
-  accessToken,
-  setAccessToken,
-}: {
-  accessToken: string;
-  setAccessToken: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-4 rounded-xl border border-border/60 p-4">
-      <p className="text-xs font-semibold text-foreground">Connect with an Admin API token</p>
-      <Field label="Admin API access token" hint="Starts with shpat_">
-        <Input
-          type="password"
-          value={accessToken}
-          onChange={(e) => setAccessToken(e.target.value)}
-          placeholder="shpat_..."
-        />
-      </Field>
-    </div>
   );
 }
 

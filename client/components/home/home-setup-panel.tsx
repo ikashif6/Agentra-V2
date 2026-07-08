@@ -107,14 +107,14 @@ export function HomeSetupPanel({ monochrome = false }: { monochrome?: boolean })
             </p>
           </div>
           <Button
-            asChild
+            render={<Link href={active.href} />}
             className={cn(
               "w-fit font-semibold",
               authRadiusClass,
               monochrome && "bg-neutral-900 text-white hover:bg-neutral-800",
             )}
           >
-            <Link href={active.href}>{active.action}</Link>
+            {active.action}
           </Button>
         </div>
       </div>

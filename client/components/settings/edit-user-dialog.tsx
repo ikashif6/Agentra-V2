@@ -100,7 +100,7 @@ export default function EditUserDialog({
       role?: InvitableRole;
     } = {
       firstName: values.firstName.trim(),
-      lastName: values.lastName.trim() || "-",
+      lastName: values.lastName?.trim() || "-",
       email: values.email.trim(),
       jobTitle: values.jobTitle?.trim() ?? "",
     };
