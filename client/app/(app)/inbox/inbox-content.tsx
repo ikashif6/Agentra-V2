@@ -34,6 +34,7 @@ import { InboxTicketDetailsPanel } from "@/components/inbox/inbox-ticket-details
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -82,7 +83,6 @@ const CHANNEL_FILTERS: { id: string; label: string; source?: TicketSource }[] = 
   { id: "facebook", label: "Facebook", source: "facebook" },
   { id: "instagram", label: "Instagram", source: "instagram" },
   { id: "whatsapp", label: "WhatsApp", source: "whatsapp" },
-  { id: "portal", label: "Help center", source: "portal" },
 ];
 
 function initials(name: string) {
@@ -616,40 +616,39 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
               />
               {!isLiveChat ? (
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label="Filter by channel"
-                      className={cn(
-                        "absolute right-1 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md transition-colors hover:bg-muted",
-                        channelFilter !== "all" ? "text-primary" : "text-muted-foreground",
-                      )}
-                    >
-                      <ListFilter className="size-4" />
-                    </button>
+                  <DropdownMenuTrigger
+                    aria-label="Filter by channel"
+                    className={cn(
+                      "absolute right-1 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md transition-colors hover:bg-muted",
+                      channelFilter !== "all" ? "text-primary" : "text-muted-foreground",
+                    )}
+                  >
+                    <ListFilter className="size-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuLabel>Filter by channel</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {CHANNEL_FILTERS.map((option) => (
-                      <DropdownMenuItem
-                        key={option.id}
-                        onClick={() => setChannelFilter(option.id)}
-                        className="gap-2"
-                      >
-                        {option.source ? (
-                          <TicketSourceIcon source={option.source} />
-                        ) : (
-                          <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-md border border-border/50 bg-muted/40">
-                            <Inbox className="size-3" />
-                          </span>
-                        )}
-                        <span className="flex-1 truncate">{option.label}</span>
-                        {channelFilter === option.id ? (
-                          <Check className="size-4 text-primary" />
-                        ) : null}
-                      </DropdownMenuItem>
-                    ))}
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>Filter by channel</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {CHANNEL_FILTERS.map((option) => (
+                        <DropdownMenuItem
+                          key={option.id}
+                          onClick={() => setChannelFilter(option.id)}
+                          className="gap-2"
+                        >
+                          {option.source ? (
+                            <TicketSourceIcon source={option.source} />
+                          ) : (
+                            <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-md border border-border/50 bg-muted/40">
+                              <Inbox className="size-3" />
+                            </span>
+                          )}
+                          <span className="flex-1 truncate">{option.label}</span>
+                          {channelFilter === option.id ? (
+                            <Check className="size-4 text-primary" />
+                          ) : null}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : null}

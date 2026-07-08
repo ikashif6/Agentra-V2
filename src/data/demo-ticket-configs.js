@@ -2,7 +2,7 @@ const INBOX_SOURCES = ['email', 'portal', 'instagram', 'facebook', 'whatsapp'];
 
 const SOURCE_LABELS = {
   email: 'Email',
-  portal: 'Help center',
+  portal: 'Web',
   chat: 'Live chat',
   instagram: 'Instagram',
   facebook: 'Facebook',

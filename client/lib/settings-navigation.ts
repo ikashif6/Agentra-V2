@@ -2,7 +2,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   Building2,
   Clock,
-  HelpCircle,
   Mail,
   MessageCircle,
   Users,
@@ -19,7 +18,6 @@ export type SettingsItemId =
   | "store"
   | "customize-workspace"
   | "business-hours"
-  | "help-center"
   | "email"
   | "chat"
   | "whatsapp"
@@ -97,7 +95,6 @@ export const SETTINGS_SECTIONS: SettingsNavSection[] = [
 const LEGACY_TAB_MAP: Record<string, SettingsItemId> = {
   security: "password-security",
   workspace: "store",
-  helpcenter: "help-center",
 };
 
 export function resolveSettingsItem(
@@ -142,7 +139,6 @@ export const SETTINGS_ITEM_ICONS: Partial<Record<SettingsItemId, LucideIcon>> = 
   store: Store,
   "customize-workspace": Palette,
   "business-hours": Clock,
-  "help-center": HelpCircle,
   email: Mail,
   chat: MessageCircle,
   users: Users,

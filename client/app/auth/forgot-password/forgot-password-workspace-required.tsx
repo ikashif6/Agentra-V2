@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { authRadiusClass } from "@/components/auth/auth-panel-background";
 import { Button } from "@/components/ui/button";
-import { buildMainLoginUrl } from "@/lib/workspace-host";
+import { useMainLoginUrl } from "@/hooks/use-main-login-url";
 
 export function ForgotPasswordWorkspaceRequired() {
+  const mainLoginUrl = useMainLoginUrl();
   return (
     <div className="space-y-5">
       <div>
@@ -15,7 +16,7 @@ export function ForgotPasswordWorkspaceRequired() {
         </p>
       </div>
 
-      <Link href={buildMainLoginUrl()} className="block">
+      <Link href={mainLoginUrl} className="block">
         <Button type="button" className={`h-10 w-full font-semibold ${authRadiusClass}`}>
           Find your workspace
         </Button>

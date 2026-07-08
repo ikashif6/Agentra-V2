@@ -58,7 +58,7 @@ export function flowStepIndex(phase: DemoPhase): number {
 export const WORKSPACE_PREVIEW = {
   domain: "brightpath.agentraa.com",
   agentsOnline: 4,
-  channels: ["Email", "Chat", "Help center"] as const,
+  channels: ["Email", "Chat", "WhatsApp"] as const,
 } as const;
 
 export const TEAM_MEMBERS = [
@@ -116,15 +116,15 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     id: "billing-help",
     metrics: { open: 19, waiting: 5, resolved: 152 },
     routing: {
-      label: "Help center routing",
-      rule: "Billing topic + Help center → send to Finance",
+      label: "Channel routing",
+      rule: "Billing topic + Email → send to Finance",
       toast: "Routed to Daniel · Finance queue",
     },
     ticket: {
       number: "#2852",
       subject: "Charged twice on my subscription",
       department: "Billing",
-      channel: "Help center",
+      channel: "Email",
       customer: {
         name: "Priya Sharma",
         initials: "PS",

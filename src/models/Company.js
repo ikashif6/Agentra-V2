@@ -232,15 +232,21 @@ const companySchema = new mongoose.Schema(
       connectedAt: { type: Date },
       lastSyncAt: { type: Date },
       lastError: { type: String },
+      // When true, secret fields below are AES-encrypted at rest (utils/crypto).
+      encrypted: { type: Boolean, default: false },
+      // Whether provider-side webhooks were auto-registered for real-time sync.
+      webhooksRegistered: { type: Boolean, default: false },
       shopify: {
         shopDomain: { type: String },
         accessToken: { type: String, select: false },
+        scope: { type: String },
         shopName: { type: String },
       },
       woocommerce: {
         storeUrl: { type: String },
         consumerKey: { type: String, select: false },
         consumerSecret: { type: String, select: false },
+        webhookSecret: { type: String, select: false },
         storeName: { type: String },
       },
       custom: {

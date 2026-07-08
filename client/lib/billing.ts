@@ -12,7 +12,7 @@ export const AGENTRA_PRO_PLAN = {
     "Unlimited team members",
     "Unlimited tickets",
     "All channels & integrations",
-    "Help center & store connections",
+    "Store & commerce connections",
   ],
 };
 

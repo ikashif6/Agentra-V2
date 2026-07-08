@@ -51,7 +51,6 @@ export const NOTIFICATION_SECTIONS: NotificationSection[] = [
     events: [
       { id: "channel_email", label: "Email" },
       { id: "channel_chat", label: "Live chat" },
-      { id: "channel_help_center", label: "Help center" },
       { id: "channel_whatsapp", label: "WhatsApp" },
       { id: "channel_instagram", label: "Instagram" },
       { id: "channel_facebook", label: "Facebook" },

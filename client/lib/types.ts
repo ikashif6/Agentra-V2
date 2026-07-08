@@ -145,9 +145,11 @@ export interface StoreIntegration {
   connectedAt?: string | null;
   lastSyncAt?: string | null;
   lastError?: string | null;
+  webhooksRegistered?: boolean;
   shopify?: {
     shopDomain?: string;
     shopName?: string;
+    scope?: string;
     hasAccessToken?: boolean;
   };
   woocommerce?: {
@@ -162,6 +164,46 @@ export interface StoreIntegration {
     webhookSecret?: string;
   };
   syncSettings: StoreSyncSettings;
+}
+
+export interface StoreOrderLineItem {
+  title?: string;
+  variantTitle?: string;
+  sku?: string;
+  quantity?: number;
+  price?: number;
+  imageUrl?: string;
+}
+
+export interface StoreOrderFulfillment {
+  status?: string;
+  trackingCompany?: string;
+  trackingNumber?: string;
+  trackingUrl?: string;
+  shippedAt?: string;
+}
+
+export interface StoreOrder {
+  _id: string;
+  provider: StoreProvider;
+  externalId: string;
+  orderNumber?: string;
+  name?: string;
+  currency?: string;
+  totalPrice?: number;
+  financialStatus?: string;
+  fulfillmentStatus?: string;
+  customer?: {
+    externalId?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+  };
+  lineItems?: StoreOrderLineItem[];
+  fulfillments?: StoreOrderFulfillment[];
+  statusUrl?: string;
+  adminUrl?: string;
+  placedAt?: string;
 }
 
 export interface Company {

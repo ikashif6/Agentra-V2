@@ -1,16 +1,59 @@
 const Company = require('../models/Company');
+const StoreOrder = require('../models/StoreOrder');
 const response = require('../utils/apiResponse');
+const { verifyOAuthState } = require('../utils/token');
 const {
   testShopifyConnection,
   testWooCommerceConnection,
   testCustomConnection,
   generateWebhookSecret,
   sanitizeStoreIntegration,
+  encryptStoreIntegration,
+  getStoreSecrets,
 } = require('../services/store.service');
+const {
+  isShopifyOAuthConfigured,
+  getShopifyRedirectUri,
+  buildShopifyInstallUrl,
+  verifyShopifyOAuthHmac,
+  isValidShopDomain,
+  exchangeShopifyCode,
+  fetchShopifyShopName,
+  registerShopifyWebhooks,
+  buildWooAuthUrl,
+  registerWooWebhooks,
+  buildStoreSettingsRedirect,
+  customWebhookAddress,
+} = require('../services/store-oauth.service');
+const { syncStoreOrders, findOrdersForCustomer } = require('../services/store-sync.service');
 const { logStoreConnected, logStoreDisconnected } = require('../services/activity.service');
+
+const SECRET_SELECT =
+  '+storeIntegration.shopify.accessToken ' +
+  '+storeIntegration.woocommerce.consumerKey ' +
+  '+storeIntegration.woocommerce.consumerSecret ' +
+  '+storeIntegration.woocommerce.webhookSecret ' +
+  '+storeIntegration.custom.apiKey ' +
+  '+storeIntegration.custom.webhookSecret';
+
+function loadCompanyWithStoreSecrets(companyId) {
+  return Company.findById(companyId).select(SECRET_SELECT);
+}
 
 function getIntegration(company) {
   return company.storeIntegration || {};
+}
+
+// Fire-and-forget initial sync so the connect request returns quickly.
+function runBackgroundSync(companyId) {
+  loadCompanyWithStoreSecrets(companyId)
+    .then((company) => (company ? syncStoreOrders(company) : null))
+    .then((result) => {
+      if (result?.synced != null) {
+        console.log(`[store sync] company=${companyId} synced=${result.synced}`);
+      }
+    })
+    .catch((err) => console.error('[store sync]', err.message));
 }
 
 /**
@@ -18,9 +61,16 @@ function getIntegration(company) {
  */
 exports.getStatus = async (req, res, next) => {
   try {
-    const company = req.company;
+    const integration = getIntegration(req.company);
+    const store = sanitizeStoreIntegration(integration);
     return response.success(res, {
-      store: sanitizeStoreIntegration(getIntegration(company)),
+      store,
+      shopifyConfigured: isShopifyOAuthConfigured(),
+      shopifyRedirectUri: getShopifyRedirectUri(),
+      customWebhookUrl:
+        integration.provider === 'custom'
+          ? customWebhookAddress(req.company._id)
+          : undefined,
     });
   } catch (err) {
     next(err);
@@ -28,7 +78,7 @@ exports.getStatus = async (req, res, next) => {
 };
 
 /**
- * POST /store/connect
+ * POST /store/connect  (WooCommerce / custom manual credential entry)
  */
 exports.connect = async (req, res, next) => {
   try {
@@ -39,11 +89,12 @@ exports.connect = async (req, res, next) => {
       return response.badRequest(res, 'Provider must be shopify, woocommerce, or custom');
     }
 
-    let verified;
     const integration = {
       provider,
       status: 'pending',
       lastError: null,
+      encrypted: false,
+      webhooksRegistered: false,
       syncSettings: {
         syncOrders: syncSettings?.syncOrders !== false,
         syncCustomers: syncSettings?.syncCustomers !== false,
@@ -52,7 +103,7 @@ exports.connect = async (req, res, next) => {
     };
 
     if (provider === 'shopify') {
-      verified = await testShopifyConnection({
+      const verified = await testShopifyConnection({
         shopDomain: credentials?.shopDomain,
         accessToken: credentials?.accessToken,
       });
@@ -61,20 +112,34 @@ exports.connect = async (req, res, next) => {
         accessToken: credentials.accessToken.trim(),
         shopName: verified.shopName,
       };
+      integration.webhooksRegistered = await registerShopifyWebhooks({
+        shopDomain: verified.shopDomain,
+        accessToken: credentials.accessToken.trim(),
+        companyId: company._id,
+      });
     } else if (provider === 'woocommerce') {
-      verified = await testWooCommerceConnection({
+      const verified = await testWooCommerceConnection({
         storeUrl: credentials?.storeUrl,
         consumerKey: credentials?.consumerKey,
         consumerSecret: credentials?.consumerSecret,
       });
+      const webhookSecret = generateWebhookSecret();
       integration.woocommerce = {
         storeUrl: verified.storeUrl,
         consumerKey: credentials.consumerKey.trim(),
         consumerSecret: credentials.consumerSecret.trim(),
+        webhookSecret,
         storeName: verified.storeName,
       };
+      integration.webhooksRegistered = await registerWooWebhooks({
+        storeUrl: verified.storeUrl,
+        consumerKey: credentials.consumerKey.trim(),
+        consumerSecret: credentials.consumerSecret.trim(),
+        companyId: company._id,
+        secret: webhookSecret,
+      });
     } else {
-      verified = await testCustomConnection({
+      const verified = await testCustomConnection({
         storeUrl: credentials?.storeUrl,
         apiKey: credentials?.apiKey,
       });
@@ -90,15 +155,12 @@ exports.connect = async (req, res, next) => {
     integration.connectedAt = new Date();
     integration.lastSyncAt = new Date();
 
+    encryptStoreIntegration(integration);
     company.storeIntegration = integration;
     await company.save();
 
-    logStoreConnected({
-      company,
-      actor: req.user,
-      provider: integration.provider || provider,
-      req,
-    });
+    logStoreConnected({ company, actor: req.user, provider, req });
+    runBackgroundSync(company._id);
 
     return response.success(
       res,
@@ -114,17 +176,224 @@ exports.connect = async (req, res, next) => {
 };
 
 /**
+ * GET /store/shopify/oauth/url?shopDomain=...
+ */
+exports.shopifyOAuthUrl = async (req, res, next) => {
+  try {
+    if (!isShopifyOAuthConfigured()) {
+      return response.badRequest(
+        res,
+        'Shopify is not configured yet. Add SHOPIFY_API_KEY and SHOPIFY_API_SECRET to the server.',
+      );
+    }
+    const shopDomain = req.query.shopDomain;
+    if (!shopDomain) {
+      return response.badRequest(res, 'shopDomain is required');
+    }
+    const url = buildShopifyInstallUrl({
+      shopDomain,
+      companyId: req.company._id,
+      subdomain: req.company.subdomain,
+      userId: req.user._id,
+      returnOrigin: req.query.returnOrigin || req.headers.origin,
+    });
+    return response.success(res, { url });
+  } catch (err) {
+    if (err.message && !err.statusCode) {
+      return response.badRequest(res, err.message);
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /store/shopify/oauth/callback
+ */
+exports.shopifyOAuthCallback = async (req, res, next) => {
+  try {
+    const { code, state, shop } = req.query;
+
+    if (!state) return res.status(400).send('Missing OAuth state');
+    if (!verifyShopifyOAuthHmac(req.query)) {
+      return res.status(400).send('Invalid Shopify signature');
+    }
+    if (!isValidShopDomain(shop)) {
+      return res.status(400).send('Invalid shop domain');
+    }
+
+    let payload;
+    try {
+      payload = verifyOAuthState(String(state));
+    } catch {
+      return res.status(400).send('OAuth session expired');
+    }
+    if (payload.purpose !== 'shopify_oauth' || payload.shopDomain !== shop) {
+      return res.status(400).send('OAuth state mismatch');
+    }
+
+    const { subdomain, returnOrigin } = payload;
+
+    try {
+      const { accessToken, scope } = await exchangeShopifyCode(String(shop), String(code));
+      const shopName = await fetchShopifyShopName({ shopDomain: String(shop), accessToken });
+      const webhooksRegistered = await registerShopifyWebhooks({
+        shopDomain: String(shop),
+        accessToken,
+        companyId: payload.companyId,
+      });
+
+      const company = await Company.findById(payload.companyId);
+      if (!company) throw new Error('Workspace not found');
+
+      const integration = {
+        provider: 'shopify',
+        status: 'connected',
+        connectedAt: new Date(),
+        lastSyncAt: new Date(),
+        lastError: null,
+        encrypted: false,
+        webhooksRegistered,
+        shopify: { shopDomain: String(shop), accessToken, scope, shopName },
+        syncSettings: company.storeIntegration?.syncSettings || {
+          syncOrders: true,
+          syncCustomers: true,
+          syncProducts: false,
+        },
+      };
+      encryptStoreIntegration(integration);
+      company.storeIntegration = integration;
+      await company.save();
+
+      logStoreConnected({ company, provider: 'shopify', req });
+      runBackgroundSync(company._id);
+
+      return res.redirect(
+        buildStoreSettingsRedirect(subdomain, { store: 'connected', name: shopName }, returnOrigin),
+      );
+    } catch (connectErr) {
+      console.error('[shopify oauth callback]', connectErr);
+      return res.redirect(
+        buildStoreSettingsRedirect(
+          subdomain,
+          { store: 'error', message: connectErr.message || 'Could not connect Shopify' },
+          returnOrigin,
+        ),
+      );
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /store/woocommerce/oauth/url?storeUrl=...
+ */
+exports.wooOAuthUrl = async (req, res, next) => {
+  try {
+    const storeUrl = req.query.storeUrl;
+    if (!storeUrl) return response.badRequest(res, 'storeUrl is required');
+    const { url } = buildWooAuthUrl({
+      storeUrl,
+      companyId: req.company._id,
+      subdomain: req.company.subdomain,
+      userId: req.user._id,
+      returnOrigin: req.query.returnOrigin || req.headers.origin,
+    });
+    return response.success(res, { url });
+  } catch (err) {
+    if (err.message && !err.statusCode) {
+      return response.badRequest(res, err.message);
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /store/woocommerce/oauth/callback
+ * WooCommerce posts the generated REST keys here (user_id carries our state).
+ */
+exports.wooOAuthCallback = async (req, res, next) => {
+  try {
+    const { user_id: userId, consumer_key: consumerKey, consumer_secret: consumerSecret } =
+      req.body || {};
+
+    if (!userId || !consumerKey || !consumerSecret) {
+      return res.status(400).json({ success: false, message: 'Missing WooCommerce credentials' });
+    }
+
+    let payload;
+    try {
+      payload = verifyOAuthState(String(userId));
+    } catch {
+      return res.status(400).json({ success: false, message: 'OAuth session expired' });
+    }
+    if (payload.purpose !== 'woo_oauth') {
+      return res.status(400).json({ success: false, message: 'OAuth state mismatch' });
+    }
+
+    const company = await Company.findById(payload.companyId);
+    if (!company) {
+      return res.status(404).json({ success: false, message: 'Workspace not found' });
+    }
+
+    const storeUrl = payload.storeUrl;
+    let storeName = storeUrl.replace(/^https?:\/\//, '');
+    try {
+      const verified = await testWooCommerceConnection({ storeUrl, consumerKey, consumerSecret });
+      storeName = verified.storeName;
+    } catch {
+      /* keep fallback name — keys still valid enough to store */
+    }
+
+    const webhookSecret = generateWebhookSecret();
+    const webhooksRegistered = await registerWooWebhooks({
+      storeUrl,
+      consumerKey,
+      consumerSecret,
+      companyId: company._id,
+      secret: webhookSecret,
+    });
+
+    const integration = {
+      provider: 'woocommerce',
+      status: 'connected',
+      connectedAt: new Date(),
+      lastSyncAt: new Date(),
+      lastError: null,
+      encrypted: false,
+      webhooksRegistered,
+      woocommerce: { storeUrl, consumerKey, consumerSecret, webhookSecret, storeName },
+      syncSettings: company.storeIntegration?.syncSettings || {
+        syncOrders: true,
+        syncCustomers: true,
+        syncProducts: false,
+      },
+    };
+    encryptStoreIntegration(integration);
+    company.storeIntegration = integration;
+    await company.save();
+
+    logStoreConnected({ company, provider: 'woocommerce', req });
+    runBackgroundSync(company._id);
+
+    // Woo only needs a 200 here; the browser is redirected via return_url.
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('[woo oauth callback]', err);
+    return res.status(500).json({ success: false, message: 'Could not store WooCommerce keys' });
+  }
+};
+
+/**
  * PATCH /store/settings
  */
 exports.updateSettings = async (req, res, next) => {
   try {
     const company = req.company;
     const integration = getIntegration(company);
-
     if (integration.status !== 'connected') {
       return response.badRequest(res, 'Connect a store before updating sync settings');
     }
-
     const { syncSettings } = req.body;
     if (syncSettings) {
       integration.syncSettings = {
@@ -133,10 +402,8 @@ exports.updateSettings = async (req, res, next) => {
         syncProducts: Boolean(syncSettings.syncProducts),
       };
     }
-
     company.storeIntegration = integration;
     await company.save();
-
     return response.success(
       res,
       { store: sanitizeStoreIntegration(company.storeIntegration) },
@@ -152,38 +419,36 @@ exports.updateSettings = async (req, res, next) => {
  */
 exports.testConnection = async (req, res, next) => {
   try {
-    const company = await Company.findById(req.company._id).select('+storeIntegration.shopify.accessToken +storeIntegration.woocommerce.consumerKey +storeIntegration.woocommerce.consumerSecret +storeIntegration.custom.apiKey');
-
+    const company = await loadCompanyWithStoreSecrets(req.company._id);
     const integration = getIntegration(company);
     if (!integration.provider || integration.status !== 'connected') {
       return response.badRequest(res, 'No connected store to test');
     }
 
-    let verified;
+    const secrets = getStoreSecrets(integration);
     if (integration.provider === 'shopify') {
-      verified = await testShopifyConnection({
+      const verified = await testShopifyConnection({
         shopDomain: integration.shopify.shopDomain,
-        accessToken: integration.shopify.accessToken,
+        accessToken: secrets.shopify.accessToken,
       });
       integration.shopify.shopName = verified.shopName;
     } else if (integration.provider === 'woocommerce') {
-      verified = await testWooCommerceConnection({
+      const verified = await testWooCommerceConnection({
         storeUrl: integration.woocommerce.storeUrl,
-        consumerKey: integration.woocommerce.consumerKey,
-        consumerSecret: integration.woocommerce.consumerSecret,
+        consumerKey: secrets.woocommerce.consumerKey,
+        consumerSecret: secrets.woocommerce.consumerSecret,
       });
       integration.woocommerce.storeName = verified.storeName;
     } else {
-      verified = await testCustomConnection({
+      const verified = await testCustomConnection({
         storeUrl: integration.custom.storeUrl,
-        apiKey: integration.custom.apiKey,
+        apiKey: secrets.custom.apiKey,
       });
       integration.custom.storeName = verified.storeName;
     }
 
     integration.status = 'connected';
     integration.lastError = null;
-    integration.lastSyncAt = new Date();
     company.storeIntegration = integration;
     await company.save();
 
@@ -203,7 +468,6 @@ exports.testConnection = async (req, res, next) => {
     } catch {
       /* ignore secondary failure */
     }
-
     if (err.message && !err.statusCode) {
       return response.badRequest(res, err.message);
     }
@@ -216,31 +480,13 @@ exports.testConnection = async (req, res, next) => {
  */
 exports.syncNow = async (req, res, next) => {
   try {
-    const company = await Company.findById(req.company._id).select('+storeIntegration.shopify.accessToken +storeIntegration.woocommerce.consumerKey +storeIntegration.woocommerce.consumerSecret +storeIntegration.custom.apiKey');
-
+    const company = await loadCompanyWithStoreSecrets(req.company._id);
     const integration = getIntegration(company);
     if (integration.status !== 'connected') {
       return response.badRequest(res, 'Connect a store before syncing');
     }
 
-    // Re-verify connection as a lightweight sync handshake for now
-    if (integration.provider === 'shopify') {
-      await testShopifyConnection({
-        shopDomain: integration.shopify.shopDomain,
-        accessToken: integration.shopify.accessToken,
-      });
-    } else if (integration.provider === 'woocommerce') {
-      await testWooCommerceConnection({
-        storeUrl: integration.woocommerce.storeUrl,
-        consumerKey: integration.woocommerce.consumerKey,
-        consumerSecret: integration.woocommerce.consumerSecret,
-      });
-    } else {
-      await testCustomConnection({
-        storeUrl: integration.custom.storeUrl,
-        apiKey: integration.custom.apiKey,
-      });
-    }
+    const result = await syncStoreOrders(company);
 
     integration.lastSyncAt = new Date();
     integration.lastError = null;
@@ -249,19 +495,43 @@ exports.syncNow = async (req, res, next) => {
 
     return response.success(
       res,
-      { store: sanitizeStoreIntegration(company.storeIntegration) },
-      'Store sync completed',
+      { store: sanitizeStoreIntegration(company.storeIntegration), synced: result.synced },
+      `Synced ${result.synced} orders`,
     );
   } catch (err) {
-    const company = req.company;
-    const integration = getIntegration(company);
-    integration.lastError = err.message;
-    company.storeIntegration = integration;
-    await company.save();
-
+    try {
+      const company = req.company;
+      const integration = getIntegration(company);
+      integration.lastError = err.message;
+      company.storeIntegration = integration;
+      await company.save();
+    } catch {
+      /* ignore */
+    }
     if (err.message && !err.statusCode) {
       return response.badRequest(res, err.message);
     }
+    next(err);
+  }
+};
+
+/**
+ * GET /store/orders?email=&phone=
+ * Returns recent store orders matched to a customer (used by the inbox).
+ */
+exports.listOrders = async (req, res, next) => {
+  try {
+    const integration = getIntegration(req.company);
+    if (integration.status !== 'connected') {
+      return response.success(res, { connected: false, orders: [] });
+    }
+    const orders = await findOrdersForCustomer(req.company._id, {
+      email: req.query.email,
+      phone: req.query.phone,
+      limit: Math.min(parseInt(req.query.limit, 10) || 10, 25),
+    });
+    return response.success(res, { connected: true, provider: integration.provider, orders });
+  } catch (err) {
     next(err);
   }
 };
@@ -274,13 +544,14 @@ exports.disconnect = async (req, res, next) => {
     const company = req.company;
     company.storeIntegration = {
       status: 'disconnected',
-      syncSettings: {
-        syncOrders: true,
-        syncCustomers: true,
-        syncProducts: false,
-      },
+      syncSettings: { syncOrders: true, syncCustomers: true, syncProducts: false },
     };
     await company.save();
+
+    // Drop synced orders for this company (best effort).
+    StoreOrder.deleteMany({ company: company._id }).catch((err) =>
+      console.error('[store disconnect cleanup]', err.message),
+    );
 
     logStoreDisconnected({ company, actor: req.user, req });
 

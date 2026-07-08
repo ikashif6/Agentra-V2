@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Circle, Mail, BookOpen, Users } from "lucide-react";
+import { Circle, Mail, Users } from "lucide-react";
 import { AiAgentIcon } from "@/components/icons/ai-agent-icon";
 import { cn } from "@/lib/utils";
 import { APP_CARD } from "@/lib/app-surfaces";
@@ -28,15 +28,6 @@ const SETUP_STEPS: SetupStep[] = [
     href: "/settings?tab=workspace",
     action: "Connect email",
     icon: <Mail className="size-4" />,
-  },
-  {
-    id: "helpcenter",
-    title: "Publish your help center",
-    description: "Give customers self-service articles and a contact form on your domain.",
-    duration: "5 min",
-    href: "/settings?tab=helpcenter",
-    action: "Set up help center",
-    icon: <BookOpen className="size-4" />,
   },
   {
     id: "team",

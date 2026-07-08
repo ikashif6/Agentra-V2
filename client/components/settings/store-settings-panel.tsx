@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Check,
   CheckCircle2,
+  Copy,
   Loader2,
   RefreshCw,
   Store,
@@ -23,7 +25,12 @@ import { PLATFORM_OPTIONS } from "@/components/onboarding/onboarding-config";
 import { PlatformBrandIcon } from "@/components/onboarding/platform-brand-icons";
 import SettingsPanelShell from "./settings-panel-shell";
 
-type WizardStep = "choose" | "connect" | "sync";
+type WizardStep = "choose" | "connect";
+
+type StoreConfig = {
+  shopifyConfigured: boolean;
+  customWebhookUrl?: string;
+};
 
 const PROVIDER_COPY: Record<
   StoreProvider,
@@ -31,45 +38,53 @@ const PROVIDER_COPY: Record<
 > = {
   shopify: {
     title: "Connect Shopify",
-    subtitle: "Link your Shopify admin so orders and customers appear in Agentra.",
+    subtitle: "Authorize Agentra from your Shopify admin — no tokens to copy.",
     steps: [
-      "In Shopify admin, go to Settings → Apps and sales channels → Develop apps.",
-      "Create a custom app with read access to customers and orders.",
-      "Copy the Admin API access token and paste it below.",
+      "Enter your store domain (e.g. your-brand.myshopify.com).",
+      "Click Connect Shopify and approve access in the Shopify window.",
+      "You're done — orders sync automatically into the inbox.",
     ],
   },
   woocommerce: {
     title: "Connect WooCommerce",
-    subtitle: "Use REST API keys from your WordPress store.",
+    subtitle: "Approve Agentra from your WooCommerce store in one step.",
     steps: [
-      "In WordPress, open WooCommerce → Settings → Advanced → REST API.",
-      "Add a key with Read permissions for orders and customers.",
-      "Paste the consumer key and secret below.",
+      "Enter your store URL (e.g. https://shop.example.com).",
+      "Click Authorize with WooCommerce and approve read access.",
+      "Keys are exchanged automatically and orders start syncing.",
     ],
   },
   custom: {
     title: "Connect custom store",
     subtitle: "Point Agentra at your own storefront or headless API.",
     steps: [
-      "Enter the public URL of your store or API base.",
-      "Optionally add an API key if your endpoint requires authentication.",
-      "We will verify the connection and generate a webhook secret for events.",
+      "Enter the base URL of your store API.",
+      "Optionally add an API key if your endpoints require auth.",
+      "Implement the Agentra order contract shown after connecting.",
     ],
   },
 };
 
 export default function StoreSettingsPanel() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [store, setStore] = useState<StoreIntegration | null>(null);
+  const [config, setConfig] = useState<StoreConfig>({ shopifyConfigured: false });
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<WizardStep>("choose");
   const [provider, setProvider] = useState<StoreProvider | null>(null);
   const [replacing, setReplacing] = useState(false);
+  const handledRedirect = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await storeApi.getStatus();
       setStore(data.data.store);
+      setConfig({
+        shopifyConfigured: Boolean(data.data.shopifyConfigured),
+        customWebhookUrl: data.data.customWebhookUrl,
+      });
     } catch (err: unknown) {
       const { message } = getApiError(err, "Failed to load store settings");
       toast.error(message);
@@ -81,6 +96,42 @@ export default function StoreSettingsPanel() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Handle the OAuth redirect back from Shopify / WooCommerce.
+  useEffect(() => {
+    if (handledRedirect.current) return;
+    const status = searchParams.get("store");
+    if (!status) return;
+    handledRedirect.current = true;
+
+    if (status === "connected") {
+      toast.success(
+        searchParams.get("name")
+          ? `${searchParams.get("name")} connected`
+          : "Store connected",
+      );
+      load();
+    } else if (status === "error") {
+      toast.error(searchParams.get("message") || "Could not connect store");
+    } else if (status === "pending") {
+      toast.info("Finishing connection…");
+      // Woo posts keys server-to-server; poll a few times for completion.
+      let tries = 0;
+      const timer = setInterval(async () => {
+        tries += 1;
+        await load();
+        const { data } = await storeApi.getStatus().catch(() => ({ data: null }));
+        if (data?.data?.store?.status === "connected" || tries >= 6) {
+          clearInterval(timer);
+          if (data?.data?.store?.status === "connected") toast.success("Store connected");
+        }
+      }, 2500);
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    ["store", "name", "message"].forEach((k) => params.delete(k));
+    router.replace(`/settings?${params.toString()}`, { scroll: false });
+  }, [searchParams, router, load]);
 
   const onConnected = (next: StoreIntegration) => {
     setStore(next);
@@ -114,6 +165,7 @@ export default function StoreSettingsPanel() {
     return (
       <ConnectedStoreView
         store={store}
+        config={config}
         onRefresh={load}
         onDisconnect={onDisconnected}
         onChangeProvider={() => setReplacing(true)}
@@ -125,6 +177,7 @@ export default function StoreSettingsPanel() {
     return (
       <ProviderConnectForm
         provider={provider}
+        config={config}
         replacing={replacing}
         onBack={() => {
           setStep("choose");
@@ -141,7 +194,7 @@ export default function StoreSettingsPanel() {
       title="Store"
       description="Choose where you sell so Agentra can pull orders and customer context into support."
     >
-      <div className="space-y-4">
+      <div className="mx-auto max-w-4xl space-y-6">
         {replacing ? (
           <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
             Connecting a new provider will replace your current store link.
@@ -160,43 +213,52 @@ export default function StoreSettingsPanel() {
                 type="button"
                 onClick={() => setProvider(option.id as StoreProvider)}
                 className={cn(
-                  "flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-all",
+                  "group relative flex w-full flex-col items-center gap-3 rounded-2xl border px-4 py-6 text-center transition-all",
                   selected
-                    ? "border-primary bg-primary/5 shadow-[inset_0_0_0_1px_rgba(216,90,48,0.2)]"
-                    : "border-border/80 hover:border-primary/30 hover:bg-muted/30",
+                    ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                    : "border-border/80 hover:border-primary/40 hover:bg-muted/30 hover:shadow-sm",
                 )}
               >
+                {selected ? (
+                  <span className="absolute right-3 top-3 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <Check className="size-3" />
+                  </span>
+                ) : null}
                 <div
                   className={cn(
-                    "flex size-10 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-card",
+                    "flex size-14 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-card transition-colors",
                     selected && "border-primary/30 bg-primary/5",
                   )}
                 >
-                  <PlatformBrandIcon platform={option.id} className="size-5 [&_svg]:size-5" />
+                  <PlatformBrandIcon platform={option.id} className="size-7 [&_svg]:size-7" />
                 </div>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">{option.label}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     {option.id === "custom"
                       ? "Headless, bespoke, or in-house stack"
-                      : `Official ${option.label} integration`}
+                      : `One-click ${option.label} connection`}
                   </p>
                 </div>
-                {selected ? <Check className="size-4 shrink-0 text-primary" /> : null}
               </button>
             );
           })}
         </div>
 
-        <div className="flex justify-end gap-2 pt-2">
-          {replacing ? (
-            <Button variant="outline" onClick={() => setReplacing(false)}>
-              Cancel
+        <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-5">
+          <p className="text-xs text-muted-foreground">
+            Your credentials are encrypted and only used to sync your store.
+          </p>
+          <div className="flex gap-2">
+            {replacing ? (
+              <Button variant="outline" onClick={() => setReplacing(false)}>
+                Cancel
+              </Button>
+            ) : null}
+            <Button disabled={!provider} onClick={() => setStep("connect")}>
+              Continue setup
             </Button>
-          ) : null}
-          <Button disabled={!provider} onClick={() => setStep("connect")}>
-            Continue setup
-          </Button>
+          </div>
         </div>
       </div>
     </SettingsPanelShell>
@@ -205,18 +267,22 @@ export default function StoreSettingsPanel() {
 
 function ProviderConnectForm({
   provider,
+  config,
   replacing,
   onBack,
   onConnected,
 }: {
   provider: StoreProvider;
+  config: StoreConfig;
   replacing?: boolean;
   onBack: () => void;
   onConnected: (store: StoreIntegration) => void;
 }) {
   const copy = PROVIDER_COPY[provider];
   const [submitting, setSubmitting] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [showManual, setShowManual] = useState(false);
 
   const [shopDomain, setShopDomain] = useState("");
   const [accessToken, setAccessToken] = useState("");
@@ -224,37 +290,59 @@ function ProviderConnectForm({
   const [consumerKey, setConsumerKey] = useState("");
   const [consumerSecret, setConsumerSecret] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [syncOrders, setSyncOrders] = useState(true);
-  const [syncCustomers, setSyncCustomers] = useState(true);
-  const [syncProducts, setSyncProducts] = useState(false);
 
+  // ── One-click OAuth (Shopify) ───────────────────────────────────────────────
+  const startShopify = async () => {
+    if (!shopDomain.trim()) return;
+    setRedirecting(true);
+    setFormError(null);
+    try {
+      const { data } = await storeApi.shopifyOAuthUrl(shopDomain.trim());
+      window.location.href = data.data.url;
+    } catch (err: unknown) {
+      const { message } = getApiError(err, "Could not start Shopify connection");
+      setFormError(message);
+      setRedirecting(false);
+    }
+  };
+
+  // ── One-click authorize (WooCommerce) ───────────────────────────────────────
+  const startWoo = async () => {
+    if (!storeUrl.trim()) return;
+    setRedirecting(true);
+    setFormError(null);
+    try {
+      const { data } = await storeApi.wooOAuthUrl(storeUrl.trim());
+      window.location.href = data.data.url;
+    } catch (err: unknown) {
+      const { message } = getApiError(err, "Could not start WooCommerce authorization");
+      setFormError(message);
+      setRedirecting(false);
+    }
+  };
+
+  // ── Manual credential entry (fallback / custom) ─────────────────────────────
   const buildCredentials = () => {
-    if (provider === "shopify") {
-      return { shopDomain, accessToken };
-    }
-    if (provider === "woocommerce") {
-      return { storeUrl, consumerKey, consumerSecret };
-    }
+    if (provider === "shopify") return { shopDomain, accessToken };
+    if (provider === "woocommerce") return { storeUrl, consumerKey, consumerSecret };
     return { storeUrl, apiKey: apiKey || undefined };
   };
 
-  const canSubmit = () => {
+  const canSubmitManual = () => {
     if (provider === "shopify") return shopDomain.trim() && accessToken.trim();
-    if (provider === "woocommerce") {
+    if (provider === "woocommerce")
       return storeUrl.trim() && consumerKey.trim() && consumerSecret.trim();
-    }
     return storeUrl.trim();
   };
 
-  const onSubmit = async () => {
-    if (!canSubmit()) return;
+  const onSubmitManual = async () => {
+    if (!canSubmitManual()) return;
     setSubmitting(true);
     setFormError(null);
     try {
       const { data } = await storeApi.connect({
         provider,
         credentials: buildCredentials(),
-        syncSettings: { syncOrders, syncCustomers, syncProducts },
       });
       toast.success(replacing ? "Store switched successfully" : "Store connected");
       onConnected(data.data.store);
@@ -268,7 +356,7 @@ function ProviderConnectForm({
 
   return (
     <SettingsPanelShell title={copy.title} description={copy.subtitle}>
-      <div className="space-y-6">
+      <div className="mx-auto max-w-2xl space-y-6">
         <button
           type="button"
           onClick={onBack}
@@ -280,7 +368,7 @@ function ProviderConnectForm({
 
         <div className="rounded-xl bg-muted/30 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Before you connect
+            How it works
           </p>
           <ol className="mt-3 space-y-2">
             {copy.steps.map((item, i) => (
@@ -294,98 +382,156 @@ function ProviderConnectForm({
           </ol>
         </div>
 
-        <div className="space-y-4">
-          {provider === "shopify" ? (
-            <>
-              <Field label="Shopify store domain" hint="e.g. your-brand.myshopify.com">
-                <Input
-                  value={shopDomain}
-                  onChange={(e) => setShopDomain(e.target.value)}
-                  placeholder="your-brand.myshopify.com"
-                />
-              </Field>
-              <Field label="Admin API access token" hint="Starts with shpat_">
-                <Input
-                  type="password"
-                  value={accessToken}
-                  onChange={(e) => setAccessToken(e.target.value)}
-                  placeholder="shpat_..."
-                />
-              </Field>
-            </>
-          ) : null}
+        {/* Shopify — one-click OAuth */}
+        {provider === "shopify" ? (
+          <div className="space-y-4">
+            <Field label="Shopify store domain" hint="e.g. your-brand.myshopify.com">
+              <Input
+                value={shopDomain}
+                onChange={(e) => setShopDomain(e.target.value)}
+                placeholder="your-brand.myshopify.com"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && config.shopifyConfigured && shopDomain.trim()) {
+                    e.preventDefault();
+                    startShopify();
+                  }
+                }}
+              />
+            </Field>
 
-          {provider === "woocommerce" ? (
-            <>
-              <Field label="Store URL" hint="Your WordPress site URL">
-                <Input
-                  value={storeUrl}
-                  onChange={(e) => setStoreUrl(e.target.value)}
-                  placeholder="https://shop.example.com"
-                />
-              </Field>
-              <Field label="Consumer key">
-                <Input
-                  value={consumerKey}
-                  onChange={(e) => setConsumerKey(e.target.value)}
-                  placeholder="ck_..."
-                />
-              </Field>
-              <Field label="Consumer secret">
-                <Input
-                  type="password"
-                  value={consumerSecret}
-                  onChange={(e) => setConsumerSecret(e.target.value)}
-                  placeholder="cs_..."
-                />
-              </Field>
-            </>
-          ) : null}
+            {config.shopifyConfigured ? (
+              <Button
+                className="w-full bg-[#5E8E3E] text-white hover:bg-[#527d36]"
+                disabled={!shopDomain.trim() || redirecting}
+                onClick={startShopify}
+              >
+                {redirecting ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <PlatformBrandIcon platform="shopify" monochrome className="mr-2" />
+                )}
+                Connect Shopify
+              </Button>
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                One-click connect isn&apos;t configured on this server yet. You can still connect
+                manually with an Admin API token below.
+              </div>
+            )}
 
-          {provider === "custom" ? (
-            <>
-              <Field label="Store or API URL">
-                <Input
-                  value={storeUrl}
-                  onChange={(e) => setStoreUrl(e.target.value)}
-                  placeholder="https://api.yourstore.com"
-                />
-              </Field>
-              <Field label="API key (optional)" hint="Bearer token if your endpoint requires auth">
-                <Input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Optional"
-                />
-              </Field>
-            </>
-          ) : null}
-        </div>
+            {(!config.shopifyConfigured || showManual) && (
+              <ManualShopify
+                accessToken={accessToken}
+                setAccessToken={setAccessToken}
+              />
+            )}
+            {config.shopifyConfigured && !showManual ? (
+              <button
+                type="button"
+                onClick={() => setShowManual(true)}
+                className="text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
+              >
+                Connect with an API token instead
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
-        <Separator />
+        {/* WooCommerce — one-click authorize */}
+        {provider === "woocommerce" ? (
+          <div className="space-y-4">
+            <Field label="Store URL" hint="Your WordPress site URL">
+              <Input
+                value={storeUrl}
+                onChange={(e) => setStoreUrl(e.target.value)}
+                placeholder="https://shop.example.com"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && storeUrl.trim() && !showManual) {
+                    e.preventDefault();
+                    startWoo();
+                  }
+                }}
+              />
+            </Field>
 
-        <div className="space-y-3">
-          <p className="text-sm font-semibold text-foreground">What to sync</p>
-          <SyncToggle
-            label="Orders"
-            description="Attach order history to customer conversations"
-            checked={syncOrders}
-            onChange={setSyncOrders}
-          />
-          <SyncToggle
-            label="Customers"
-            description="Match shoppers to tickets automatically"
-            checked={syncCustomers}
-            onChange={setSyncCustomers}
-          />
-          <SyncToggle
-            label="Products"
-            description="Surface catalog details in the inbox (optional)"
-            checked={syncProducts}
-            onChange={setSyncProducts}
-          />
-        </div>
+            {!showManual ? (
+              <>
+                <Button
+                  className="w-full bg-[#7F54B3] text-white hover:bg-[#6f489d]"
+                  disabled={!storeUrl.trim() || redirecting}
+                  onClick={startWoo}
+                >
+                  {redirecting ? (
+                    <Loader2 className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <PlatformBrandIcon platform="woocommerce" monochrome className="mr-2" />
+                  )}
+                  Authorize with WooCommerce
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setShowManual(true)}
+                  className="text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
+                >
+                  Enter REST API keys manually instead
+                </button>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <Field label="Consumer key">
+                  <Input
+                    value={consumerKey}
+                    onChange={(e) => setConsumerKey(e.target.value)}
+                    placeholder="ck_..."
+                  />
+                </Field>
+                <Field label="Consumer secret">
+                  <Input
+                    type="password"
+                    value={consumerSecret}
+                    onChange={(e) => setConsumerSecret(e.target.value)}
+                    placeholder="cs_..."
+                  />
+                </Field>
+                <button
+                  type="button"
+                  onClick={() => setShowManual(false)}
+                  className="text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
+                >
+                  Use one-click authorize instead
+                </button>
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {/* Custom — manual */}
+        {provider === "custom" ? (
+          <div className="space-y-4">
+            <Field label="Store or API URL">
+              <Input
+                value={storeUrl}
+                onChange={(e) => setStoreUrl(e.target.value)}
+                placeholder="https://api.yourstore.com"
+              />
+            </Field>
+            <Field label="API key (optional)" hint="Bearer token if your endpoint requires auth">
+              <Input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Optional"
+              />
+            </Field>
+            <div className="rounded-xl bg-muted/30 p-4 text-xs text-muted-foreground">
+              After connecting, implement{" "}
+              <code className="rounded bg-card px-1 py-0.5 font-mono text-foreground">
+                GET /agentra/orders?email=
+              </code>{" "}
+              on your base URL and push new orders to the webhook shown on the next screen.
+            </div>
+          </div>
+        ) : null}
 
         {formError ? (
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -393,27 +539,56 @@ function ProviderConnectForm({
           </p>
         ) : null}
 
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onBack}>
-            Cancel
-          </Button>
-          <Button disabled={!canSubmit() || submitting} onClick={onSubmit}>
-            {submitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-            Verify & connect
-          </Button>
-        </div>
+        {/* Manual submit button (custom always; shopify/woo when in manual mode) */}
+        {(provider === "custom" ||
+          (provider === "shopify" && (!config.shopifyConfigured || showManual)) ||
+          (provider === "woocommerce" && showManual)) && (
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onBack}>
+              Cancel
+            </Button>
+            <Button disabled={!canSubmitManual() || submitting} onClick={onSubmitManual}>
+              {submitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              Verify &amp; connect
+            </Button>
+          </div>
+        )}
       </div>
     </SettingsPanelShell>
   );
 }
 
+function ManualShopify({
+  accessToken,
+  setAccessToken,
+}: {
+  accessToken: string;
+  setAccessToken: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-4 rounded-xl border border-border/60 p-4">
+      <p className="text-xs font-semibold text-foreground">Connect with an Admin API token</p>
+      <Field label="Admin API access token" hint="Starts with shpat_">
+        <Input
+          type="password"
+          value={accessToken}
+          onChange={(e) => setAccessToken(e.target.value)}
+          placeholder="shpat_..."
+        />
+      </Field>
+    </div>
+  );
+}
+
 function ConnectedStoreView({
   store,
+  config,
   onRefresh,
   onDisconnect,
   onChangeProvider,
 }: {
   store: StoreIntegration;
+  config: StoreConfig;
   onRefresh: () => Promise<void>;
   onDisconnect: () => void;
   onChangeProvider: () => void;
@@ -443,15 +618,22 @@ function ConnectedStoreView({
         ? "WooCommerce"
         : "Custom";
 
+  const copyText = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error("Could not copy");
+    }
+  };
+
   const onTest = async () => {
     setTesting(true);
     try {
       const { data } = await storeApi.testConnection();
       toast.success("Connection verified");
       onRefresh();
-      if (data.data.store) {
-        setSyncSettings(data.data.store.syncSettings);
-      }
+      if (data.data.store) setSyncSettings(data.data.store.syncSettings);
     } catch (err: unknown) {
       const { message } = getApiError(err, "Connection test failed");
       toast.error(message);
@@ -463,8 +645,12 @@ function ConnectedStoreView({
   const onSync = async () => {
     setSyncing(true);
     try {
-      await storeApi.syncNow();
-      toast.success("Sync completed");
+      const { data } = await storeApi.syncNow();
+      toast.success(
+        typeof data.data?.synced === "number"
+          ? `Synced ${data.data.synced} orders`
+          : "Sync completed",
+      );
       onRefresh();
     } catch (err: unknown) {
       const { message } = getApiError(err, "Sync failed");
@@ -489,7 +675,7 @@ function ConnectedStoreView({
   };
 
   const onDisconnectClick = async () => {
-    if (!confirm("Disconnect this store? Order and customer sync will stop.")) return;
+    if (!confirm("Disconnect this store? Synced orders will be removed.")) return;
     setDisconnecting(true);
     try {
       await storeApi.disconnect();
@@ -505,7 +691,7 @@ function ConnectedStoreView({
 
   return (
     <SettingsPanelShell title="Store" description="Your commerce platform is linked to this workspace">
-      <div className="space-y-6">
+      <div className="mx-auto max-w-2xl space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-4 rounded-xl border border-border bg-muted/30 p-4">
           <div className="flex items-start gap-3">
             <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
@@ -517,14 +703,24 @@ function ConnectedStoreView({
                 {providerLabel}
                 {storeUrl ? `, ${storeUrl}` : ""}
               </p>
-              {store.connectedAt ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Connected {new Date(store.connectedAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
-                  {store.lastSyncAt
-                    ? `. Last sync ${new Date(store.lastSyncAt).toLocaleString()}`
-                    : ""}
-                </p>
-              ) : null}
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {store.connectedAt ? (
+                  <p className="text-xs text-muted-foreground">
+                    Connected{" "}
+                    {new Date(store.connectedAt).toLocaleDateString(undefined, {
+                      dateStyle: "medium",
+                    })}
+                    {store.lastSyncAt
+                      ? `. Last sync ${new Date(store.lastSyncAt).toLocaleString()}`
+                      : ""}
+                  </p>
+                ) : null}
+                {store.webhooksRegistered ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    <Check className="size-3" /> Real-time sync on
+                  </span>
+                ) : null}
+              </div>
             </div>
           </div>
           {store.provider ? (
@@ -538,16 +734,29 @@ function ConnectedStoreView({
           </p>
         ) : null}
 
-        {store.custom?.webhookSecret ? (
-          <div className="rounded-xl bg-muted/30 p-4">
+        {store.provider === "custom" && (config.customWebhookUrl || store.custom?.webhookSecret) ? (
+          <div className="space-y-3 rounded-xl bg-muted/30 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Webhook secret
+              Real-time order webhook
             </p>
-            <p className="mt-1 break-all font-mono text-sm text-foreground">
-              {store.custom.webhookSecret}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Use this when configuring outbound webhooks from your custom store.
+            {config.customWebhookUrl ? (
+              <CopyRow
+                label="Webhook URL"
+                value={config.customWebhookUrl}
+                onCopy={() => copyText(config.customWebhookUrl!, "Webhook URL")}
+              />
+            ) : null}
+            {store.custom?.webhookSecret ? (
+              <CopyRow
+                label="Signing secret"
+                value={store.custom.webhookSecret}
+                onCopy={() => copyText(store.custom!.webhookSecret!, "Secret")}
+              />
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              POST new/updated orders here, signed with{" "}
+              <code className="font-mono">x-agentra-signature</code> (base64 HMAC-SHA256 of the body
+              using the secret).
             </p>
           </div>
         ) : null}
@@ -583,13 +792,21 @@ function ConnectedStoreView({
         <Separator />
 
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" disabled={testing} onClick={onTest}>
-            {testing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />}
-            Test connection
-          </Button>
           <Button variant="outline" size="sm" disabled={syncing} onClick={onSync}>
-            {syncing ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Store className="mr-2 size-4" />}
+            {syncing ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 size-4" />
+            )}
             Sync now
+          </Button>
+          <Button variant="outline" size="sm" disabled={testing} onClick={onTest}>
+            {testing ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Store className="mr-2 size-4" />
+            )}
+            Test connection
           </Button>
           <Button variant="outline" size="sm" onClick={onChangeProvider}>
             Switch provider
@@ -611,6 +828,30 @@ function ConnectedStoreView({
         </div>
       </div>
     </SettingsPanelShell>
+  );
+}
+
+function CopyRow({
+  label,
+  value,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  onCopy: () => void;
+}) {
+  return (
+    <div>
+      <p className="mb-1 text-[11px] font-medium text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-2">
+        <code className="min-w-0 flex-1 truncate rounded-md bg-card px-2 py-1.5 font-mono text-xs text-foreground">
+          {value}
+        </code>
+        <Button type="button" variant="outline" size="icon" className="size-8 shrink-0" onClick={onCopy}>
+          <Copy className="size-3.5" />
+        </Button>
+      </div>
+    </div>
   );
 }
 

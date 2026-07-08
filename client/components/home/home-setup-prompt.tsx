@@ -17,7 +17,7 @@ export function HomeSetupPrompt({ onDefer, monochrome = false }: HomeSetupPrompt
       <div className="space-y-1">
         <h2 className="text-base font-semibold text-foreground">Finish setting up your workspace?</h2>
         <p className="max-w-xl text-sm text-muted-foreground">
-          Connect your channels, publish your help center, and invite your team when you&apos;re ready.
+          Connect your channels and invite your team when you&apos;re ready.
         </p>
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">

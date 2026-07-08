@@ -68,7 +68,6 @@ export const DEFAULT_WEEKLY_SCHEDULE: WeeklySchedule = {
 };
 
 export const BUSINESS_HOURS_TARGETS = [
-  { id: "help-center", label: "Help center" },
   { id: "email", label: "Email" },
   { id: "chat", label: "Live chat" },
   { id: "whatsapp", label: "WhatsApp" },

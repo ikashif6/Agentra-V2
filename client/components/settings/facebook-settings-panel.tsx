@@ -220,7 +220,7 @@ export default function FacebookSettingsPanel() {
     const connectedAt = formatConnectedAt(facebook.connectedAt);
     return (
       <SettingsPanelShell title="Facebook" description="Messenger and page inbox">
-        <div className="mx-auto max-w-2xl space-y-6">
+        <div className="mx-auto max-w-3xl space-y-6">
           {/* Connected Page identity */}
           <div className="overflow-hidden rounded-2xl border border-border/70">
             <div className="flex items-center gap-4 border-b border-border/60 bg-emerald-500/5 p-5">
@@ -366,7 +366,7 @@ export default function FacebookSettingsPanel() {
 
   return (
     <SettingsPanelShell title="Facebook" description="Messenger and page inbox">
-      <div className="mx-auto max-w-2xl">
+      <div className="mx-auto max-w-3xl">
         {/* Hero */}
         <div className="flex flex-col items-center rounded-2xl border border-border/70 bg-gradient-to-b from-primary/5 to-transparent px-6 py-10 text-center">
           <div className="flex size-16 items-center justify-center rounded-2xl border border-border/70 bg-card shadow-sm">

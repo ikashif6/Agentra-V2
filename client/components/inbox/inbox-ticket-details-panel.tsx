@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
+  ExternalLink,
+  Package,
   Plus,
   Tag,
+  Truck,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,7 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import type { Ticket, TicketDetails } from "@/lib/types";
+import { storeApi } from "@/lib/api";
+import type { StoreOrder, Ticket, TicketDetails } from "@/lib/types";
 import { InboxMetadataPicker } from "@/components/inbox/inbox-metadata-picker";
 import {
   CONTACT_REASON_OPTIONS,
@@ -21,6 +25,186 @@ import {
   PRODUCT_OPTIONS,
   RESOLUTION_OPTIONS,
 } from "@/lib/ticket-metadata-options";
+
+function formatMoney(amount?: number, currency?: string) {
+  if (amount == null) return "";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: currency || "USD",
+    }).format(amount);
+  } catch {
+    return `${amount} ${currency ?? ""}`.trim();
+  }
+}
+
+function financialTone(status?: string) {
+  const s = (status || "").toLowerCase();
+  if (s === "paid") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (s === "refunded" || s === "cancelled" || s === "failed")
+    return "bg-red-50 text-red-700 border-red-200";
+  return "bg-amber-50 text-amber-700 border-amber-200";
+}
+
+function CustomerOrders({ email, phone }: { email: string; phone: string }) {
+  const [orders, setOrders] = useState<StoreOrder[] | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const cleanEmail = email.trim();
+    const cleanPhone = phone.trim();
+    if (!cleanEmail && !cleanPhone) {
+      setOrders([]);
+      setConnected(false);
+      return;
+    }
+    setLoading(true);
+    storeApi
+      .listOrders({ email: cleanEmail || undefined, phone: cleanPhone || undefined })
+      .then(({ data }) => {
+        if (!active) return;
+        setConnected(Boolean(data.data.connected));
+        setOrders(data.data.orders ?? []);
+      })
+      .catch(() => {
+        if (active) {
+          setConnected(false);
+          setOrders([]);
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [email, phone]);
+
+  // Hide entirely when no store is connected.
+  if (!connected && !loading) return null;
+
+  return (
+    <section className="border-b border-border/60">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left"
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Package className="size-4 text-muted-foreground" />
+          Orders
+          {orders && orders.length > 0 ? (
+            <Badge variant="secondary" className="h-5 min-w-5 justify-center px-1.5 text-[10px]">
+              {orders.length}
+            </Badge>
+          ) : null}
+        </span>
+        {open ? (
+          <ChevronUp className="size-4 text-muted-foreground" />
+        ) : (
+          <ChevronDown className="size-4 text-muted-foreground" />
+        )}
+      </button>
+
+      {open ? (
+        <div className="space-y-2 px-4 pb-4">
+          {loading && !orders ? (
+            <p className="text-xs text-muted-foreground">Loading orders…</p>
+          ) : orders && orders.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No matching orders for this customer.
+            </p>
+          ) : (
+            orders?.map((order) => <OrderCard key={order._id} order={order} />)
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function OrderCard({ order }: { order: StoreOrder }) {
+  const tracking = order.fulfillments?.find((f) => f.trackingUrl || f.trackingNumber);
+  const itemCount = order.lineItems?.reduce((sum, li) => sum + (li.quantity ?? 0), 0) ?? 0;
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-card p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-foreground">
+          {order.orderNumber || order.name || `#${order.externalId}`}
+        </span>
+        <span className="text-sm font-medium text-foreground">
+          {formatMoney(order.totalPrice, order.currency)}
+        </span>
+      </div>
+
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        {order.financialStatus ? (
+          <span
+            className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium capitalize ${financialTone(
+              order.financialStatus,
+            )}`}
+          >
+            {order.financialStatus}
+          </span>
+        ) : null}
+        {order.fulfillmentStatus ? (
+          <span className="rounded-full border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
+            {order.fulfillmentStatus}
+          </span>
+        ) : null}
+        {order.placedAt ? (
+          <span className="text-[10px] text-muted-foreground">
+            {new Date(order.placedAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
+          </span>
+        ) : null}
+      </div>
+
+      {itemCount > 0 ? (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {itemCount} item{itemCount === 1 ? "" : "s"}
+          {order.lineItems?.[0]?.title ? ` · ${order.lineItems[0].title}` : ""}
+          {order.lineItems && order.lineItems.length > 1
+            ? ` +${order.lineItems.length - 1} more`
+            : ""}
+        </p>
+      ) : null}
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {tracking?.trackingUrl ? (
+          <a
+            href={tracking.trackingUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+          >
+            <Truck className="size-3" />
+            Track shipment
+          </a>
+        ) : tracking?.trackingNumber ? (
+          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Truck className="size-3" />
+            {tracking.trackingNumber}
+          </span>
+        ) : null}
+        {order.adminUrl ? (
+          <a
+            href={order.adminUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
+          >
+            <ExternalLink className="size-3" />
+            View in store
+          </a>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 function initials(name: string) {
   return name
@@ -434,6 +618,12 @@ export function InboxTicketDetailsPanel({
             </div>
           ) : null}
         </section>
+
+        {/* Store orders */}
+        <CustomerOrders
+          email={savedEmail || (!isPlaceholderEmail ? rawEmail : "")}
+          phone={details.customerPhone ?? ""}
+        />
 
         {/* Ticket history */}
         <section className="px-4 py-4">

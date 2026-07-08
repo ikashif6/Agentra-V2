@@ -23,7 +23,6 @@ import {
 } from "@/components/settings/settings-placeholders";
 import BillingPanel from "@/components/settings/billing-panel";
 import AccessPermissionsPanel from "@/components/settings/access-permissions-panel";
-import HelpCenterSettings from "@/components/helpcenter/HelpCenterSettings";
 import UsersSettingsPanel from "@/components/settings/users-settings-panel";
 import TeamsSettingsPanel from "@/components/settings/teams-settings-panel";
 import ActivityLogPanel from "@/components/settings/activity-log-panel";
@@ -82,8 +81,6 @@ export default function SettingsContent() {
         return isStaff ? <CustomizeWorkspacePanel /> : null;
       case "business-hours":
         return isStaff ? <BusinessHoursPanel /> : null;
-      case "help-center":
-        return isStaff ? <HelpCenterSettings /> : null;
       case "email":
         return isStaff ? <EmailSettingsPanel /> : null;
       case "chat":
@@ -158,7 +155,7 @@ export default function SettingsContent() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8">
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-10 md:px-8">
             <div className="w-full">{panel}</div>
           </div>
         </section>

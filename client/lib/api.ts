@@ -328,10 +328,26 @@ export const storeApi = {
     credentials: Record<string, string | undefined>;
     syncSettings?: Partial<StoreSyncSettings>;
   }) => api.post("/store/connect", data),
+  shopifyOAuthUrl: (shopDomain: string) =>
+    api.get("/store/shopify/oauth/url", {
+      params: {
+        shopDomain,
+        returnOrigin: typeof window !== "undefined" ? window.location.origin : undefined,
+      },
+    }),
+  wooOAuthUrl: (storeUrl: string) =>
+    api.get("/store/woocommerce/oauth/url", {
+      params: {
+        storeUrl,
+        returnOrigin: typeof window !== "undefined" ? window.location.origin : undefined,
+      },
+    }),
   updateSettings: (data: { syncSettings: StoreSyncSettings }) =>
     api.patch("/store/settings", data),
   testConnection: () => api.post("/store/test"),
   syncNow: () => api.post("/store/sync"),
+  listOrders: (params: { email?: string; phone?: string; limit?: number }) =>
+    api.get("/store/orders", { params }),
   disconnect: () => api.delete("/store"),
 };
 

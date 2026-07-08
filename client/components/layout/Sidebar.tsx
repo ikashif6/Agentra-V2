@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronLeft, ChevronRight, CircleHelp, LogOut, Moon, Sun } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleHelp, LogOut, Moon, Sun, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -118,10 +118,8 @@ function ProfileAvatar({
 }
 
 function SidebarAccountMenu({
-  role,
   collapsed = false,
 }: {
-  role: Role;
   collapsed?: boolean;
 }) {
   const { user, company, logout, refreshUser } = useAuth();
@@ -135,10 +133,6 @@ function SidebarAccountMenu({
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
   const anchorRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-
-  const isStaff = ["owner", "admin"].includes(role);
-  const helpCenterHref = isStaff ? "/settings?tab=helpcenter" : SITE_LEGAL.helpCenter;
-  const helpCenterExternal = !isStaff;
 
   const displayName =
     user?.fullName?.trim() ||
@@ -281,6 +275,17 @@ function SidebarAccountMenu({
         </div>
       </div>
 
+      <Link
+        href="/profile"
+        onClick={() => setMenuOpen(false)}
+        className="flex items-center gap-2 px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-muted"
+      >
+        <UserRound className="size-4 shrink-0 text-muted-foreground" />
+        Edit profile
+      </Link>
+
+      <div className="h-px bg-border" />
+
       <div className="flex items-center justify-between px-3 py-2.5">
         <span className="text-sm text-foreground">Available</span>
         <Switch
@@ -334,27 +339,16 @@ function SidebarAccountMenu({
 
       <div className="h-px bg-border" />
 
-      {helpCenterExternal ? (
-        <a
-          href={helpCenterHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => setMenuOpen(false)}
-          className="flex items-center gap-2 px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-muted"
-        >
-          <CircleHelp className="size-4 shrink-0 text-muted-foreground" />
-          Help Center
-        </a>
-      ) : (
-        <Link
-          href={helpCenterHref}
-          onClick={() => setMenuOpen(false)}
-          className="flex items-center gap-2 px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-muted"
-        >
-          <CircleHelp className="size-4 shrink-0 text-muted-foreground" />
-          Help Center
-        </Link>
-      )}
+      <a
+        href={SITE_LEGAL.helpCenter}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => setMenuOpen(false)}
+        className="flex items-center gap-2 px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-muted"
+      >
+        <CircleHelp className="size-4 shrink-0 text-muted-foreground" />
+        Help Center
+      </a>
 
       <div className="h-px bg-border" />
 
@@ -483,7 +477,7 @@ export default function Sidebar({ embedded = false }: SidebarProps) {
       </nav>
 
       <div className="shrink-0 border-t border-border/60 p-3">
-        <SidebarAccountMenu role={role} collapsed={isCollapsed} />
+        <SidebarAccountMenu collapsed={isCollapsed} />
       </div>
     </aside>
   );

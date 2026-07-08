@@ -13,7 +13,6 @@ const DEFAULT_RULES = {
   live_chat_ticket: { sound: 'classic', browser: true },
   channel_email: { sound: 'classic', browser: true },
   channel_chat: { sound: 'chime', browser: true },
-  channel_help_center: { sound: 'soft', browser: true },
   channel_whatsapp: { sound: 'ping', browser: false },
   channel_instagram: { sound: 'soft', browser: false },
   channel_facebook: { sound: 'soft', browser: false },

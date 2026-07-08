@@ -10,7 +10,7 @@ export type SourceMeta = {
 };
 
 export const TICKET_SOURCE_META: Record<TicketSource, SourceMeta> = {
-  portal: { label: "Help center", useLucide: "portal" },
+  portal: { label: "Web", useLucide: "portal" },
   email: { label: "Email", channel: "email" },
   chat: { label: "Live chat", channel: "chat" },
   chatbot: { label: "Live chat", channel: "chat" },
@@ -22,7 +22,7 @@ export const TICKET_SOURCE_META: Record<TicketSource, SourceMeta> = {
 /** Analytics labels — chat + chatbot merge into Live chat (AI Agent is the workspace, not the channel). */
 export const ANALYTICS_SOURCE_LABELS: Record<string, string> = {
   email: "Email",
-  portal: "Help center",
+  portal: "Web",
   instagram: "Instagram",
   facebook: "Facebook",
   whatsapp: "WhatsApp",

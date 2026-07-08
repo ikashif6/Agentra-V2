@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Loader2, Menu, Search, Ticket } from "lucide-react";
+import { Bell, CheckCheck, Loader2, Menu, Search, Ticket } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserLocalTime } from "@/hooks/use-user-local-time";
 import { ticketApi } from "@/lib/api";
@@ -57,6 +58,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const [notifications, setNotifications] = useState<TicketType[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [markingRead, setMarkingRead] = useState(false);
 
   const title =
     Object.entries(PAGE_TITLES).find(
@@ -142,7 +144,29 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     router.push(`/inbox?ticket=${code}`);
   };
 
-  const unreadCount = notifications.length;
+  const unreadCount = notifications.filter((ticket) => ticket.isUnread).length;
+
+  const markAllRead = async () => {
+    if (markingRead || notifications.length === 0) return;
+    const unread = notifications.filter((ticket) => ticket.isUnread);
+    setMarkingRead(true);
+    setNotifications((prev) => prev.map((ticket) => ({ ...ticket, isUnread: false })));
+    try {
+      if (unread.length > 0) {
+        await Promise.all(
+          unread.map((ticket) => ticketApi.update(ticket.ticket_code, { isUnread: false })),
+        );
+      }
+      toast.success(
+        unread.length > 0 ? "All notifications marked as read" : "You're all caught up",
+      );
+    } catch {
+      await loadNotifications();
+      toast.error("Could not mark all as read");
+    } finally {
+      setMarkingRead(false);
+    }
+  };
 
   return (
     <>
@@ -190,13 +214,34 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
 
             {notificationsOpen ? (
               <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-lg border border-border/80 bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/10">
-                <div className="border-b border-border/60 px-4 py-3">
-                  <p className="text-sm font-semibold text-foreground">Notifications</p>
-                  <p className="text-xs text-muted-foreground">
-                    {unreadCount > 0
-                      ? `${unreadCount} open conversation${unreadCount === 1 ? "" : "s"}`
-                      : "No open conversations"}
-                  </p>
+                <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-tight text-foreground">Notifications</p>
+                    <p className="mt-0.5 text-xs leading-tight text-muted-foreground">
+                      {unreadCount > 0
+                        ? `${unreadCount} unread`
+                        : notifications.length > 0
+                          ? `${notifications.length} open conversation${notifications.length === 1 ? "" : "s"}`
+                          : "No open conversations"}
+                    </p>
+                  </div>
+                  {notifications.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={markAllRead}
+                      disabled={markingRead}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
+                    >
+                      {markingRead ? (
+                        <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                      ) : (
+                        <CheckCheck className="size-3.5 shrink-0" />
+                      )}
+                      <span className="whitespace-nowrap">
+                        {markingRead ? "Marking…" : "Mark all as read"}
+                      </span>
+                    </button>
+                  ) : null}
                 </div>
 
                 <div className="max-h-80 overflow-y-auto p-1">
@@ -217,9 +262,14 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                         className="flex w-full cursor-pointer flex-col items-start gap-1 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent"
                       >
                         <div className="flex w-full items-start justify-between gap-2">
-                          <p className="line-clamp-1 text-sm font-medium text-foreground">
-                            {ticket.ticket_title}
-                          </p>
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            {ticket.isUnread ? (
+                              <span className="size-1.5 shrink-0 rounded-full bg-primary" />
+                            ) : null}
+                            <p className="line-clamp-1 text-sm font-medium text-foreground">
+                              {ticket.ticket_title}
+                            </p>
+                          </div>
                           <span className="shrink-0 text-[10px] text-muted-foreground">
                             {formatRelative(ticket.lastActivity || ticket.createdAt)}
                           </span>

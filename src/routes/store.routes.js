@@ -20,6 +20,26 @@ const settingsRules = [
   body('syncSettings.syncProducts').optional().isBoolean(),
 ];
 
+// ── OAuth: Shopify (install redirect + callback) ─────────────────────────────
+router.get(
+  '/shopify/oauth/url',
+  resolveTenant,
+  protect,
+  authorize('owner', 'admin'),
+  storeController.shopifyOAuthUrl,
+);
+router.get('/shopify/oauth/callback', storeController.shopifyOAuthCallback);
+
+// ── OAuth: WooCommerce (wc-auth authorize + key callback) ────────────────────
+router.get(
+  '/woocommerce/oauth/url',
+  resolveTenant,
+  protect,
+  authorize('owner', 'admin'),
+  storeController.wooOAuthUrl,
+);
+router.post('/woocommerce/oauth/callback', storeController.wooOAuthCallback);
+
 router.get(
   '/',
   resolveTenant,
@@ -27,6 +47,9 @@ router.get(
   authorize('owner', 'admin'),
   storeController.getStatus,
 );
+
+// Orders lookup for the inbox — available to any authenticated member.
+router.get('/orders', resolveTenant, protect, storeController.listOrders);
 
 router.post(
   '/connect',

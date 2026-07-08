@@ -14,7 +14,6 @@ import { Ticket as TicketType } from "@/lib/types";
 import { STATUS_LABELS, PRIORITY_LABELS } from "@/lib/constants";
 import { AppCard, AppCardBody, AppCardHeader } from "@/components/app/app-card";
 import { AppEmptyState, AppListDivider, AppListRowLink } from "@/components/app/app-list-row";
-import { HomeMetrics } from "@/components/home/home-metrics";
 import { HomeSetupPanel } from "@/components/home/home-setup-panel";
 import { HomeSetupPrompt } from "@/components/home/home-setup-prompt";
 import { HomeResourceCards } from "@/components/home/home-resource-cards";
@@ -29,12 +28,10 @@ export default function HomePage() {
   const [recent, setRecent] = useState<TicketType[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingDemo, setLoadingDemo] = useState(false);
-  const [metricsKey, setMetricsKey] = useState(0);
 
   const onboardingComplete = Boolean(user?.onboardingCompleted);
   const showPrompt = ready && !onboardingComplete && !deferred;
   const showSetupPanel = ready && !onboardingComplete && deferred;
-  const showMetrics = onboardingComplete || deferred;
 
   const loadRecent = async () => {
     try {
@@ -53,7 +50,6 @@ export default function HomePage() {
       toast.success(
         `Demo data ready: ${payload.inboxCount ?? 20} inbox + ${payload.liveChatCount ?? payload.aiAgentCount ?? 20} AI Agent conversations (${payload.created ?? 0} new)`,
       );
-      setMetricsKey((key) => key + 1);
       await loadRecent();
     } catch {
       toast.error("Could not load demo data");
@@ -84,8 +80,6 @@ export default function HomePage() {
               : "Finish setup to start managing customer conversations."}
         </p>
       </div>
-
-      {showMetrics ? <HomeMetrics monochrome reloadToken={metricsKey} /> : null}
 
       {showPrompt ? <HomeSetupPrompt monochrome onDefer={setDeferred} /> : null}
 

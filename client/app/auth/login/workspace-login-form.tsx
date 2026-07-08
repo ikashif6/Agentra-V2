@@ -17,7 +17,8 @@ import { getApiError } from "@/lib/api-error";
 import { setSubdomain } from "@/lib/auth";
 import { useAuth } from "@/contexts/AuthContext";
 import { Company, User } from "@/lib/types";
-import { buildMainLoginUrl, getWorkspaceDisplayHost } from "@/lib/workspace-host";
+import { getWorkspaceDisplayHost } from "@/lib/workspace-host";
+import { useMainLoginUrl } from "@/hooks/use-main-login-url";
 import { cn } from "@/lib/utils";
 
 const schema = z.object({
@@ -35,6 +36,7 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
+  const mainLoginUrl = useMainLoginUrl();
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<{ message: string; code?: string } | null>(null);
@@ -183,7 +185,7 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
       </form>
 
       <p className="text-center text-sm text-muted-foreground">
-        <a href={buildMainLoginUrl()} className="font-medium text-primary hover:underline">
+        <a href={mainLoginUrl} className="font-medium text-primary hover:underline">
           Sign in to a different workspace
         </a>
       </p>

@@ -51,9 +51,46 @@ const start = async () => {
   // Kick off shortly after boot (let DB settle).
   setTimeout(runEmailPoll, 10 * 1000);
 
+  // ── Store order sync (fallback for missed webhooks) ────────────────────────
+  const Company = require('./models/Company');
+  const { syncStoreOrders } = require('./services/store-sync.service');
+  const storeSyncMs = parseInt(process.env.STORE_SYNC_INTERVAL_MS, 10) || 15 * 60 * 1000;
+  const STORE_SECRET_SELECT =
+    '+storeIntegration.shopify.accessToken ' +
+    '+storeIntegration.woocommerce.consumerKey ' +
+    '+storeIntegration.woocommerce.consumerSecret ' +
+    '+storeIntegration.custom.apiKey';
+  let storeSyncing = false;
+  const runStoreSync = async () => {
+    if (storeSyncing) return;
+    storeSyncing = true;
+    try {
+      const companies = await Company.find({ 'storeIntegration.status': 'connected' })
+        .select(STORE_SECRET_SELECT);
+      for (const company of companies) {
+        try {
+          await syncStoreOrders(company);
+          company.storeIntegration.lastSyncAt = new Date();
+          await company.save();
+        } catch (err) {
+          console.error('[store sync poll]', String(company._id), err.message);
+        }
+      }
+    } catch (err) {
+      console.error('[store sync poll]', err.message);
+    } finally {
+      storeSyncing = false;
+    }
+  };
+  const storeSyncTimer = setInterval(runStoreSync, storeSyncMs);
+  setTimeout(runStoreSync, 30 * 1000);
+
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('exit', () => clearInterval(emailPollTimer));
+  process.on('exit', () => {
+    clearInterval(emailPollTimer);
+    clearInterval(storeSyncTimer);
+  });
 
   process.on('unhandledRejection', (err) => {
     console.error('Unhandled Promise Rejection:', err);

@@ -272,7 +272,7 @@ export default function WhatsAppSettingsPanel() {
     const connectedAt = formatConnectedAt(whatsapp.connectedAt);
     return (
       <SettingsPanelShell title="WhatsApp" description="Business messaging inbox">
-        <div className="mx-auto max-w-2xl space-y-6">
+        <div className="mx-auto max-w-3xl space-y-6">
           <div className="overflow-hidden rounded-2xl border border-border/70">
             <div className="flex items-center gap-4 border-b border-border/60 bg-emerald-500/5 p-5">
               <div className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-card">
@@ -357,7 +357,7 @@ export default function WhatsAppSettingsPanel() {
 
   return (
     <SettingsPanelShell title="WhatsApp" description="Business messaging inbox">
-      <div className="mx-auto max-w-2xl">
+      <div className="mx-auto max-w-3xl">
         <div className="flex flex-col items-center rounded-2xl border border-border/70 bg-gradient-to-b from-primary/5 to-transparent px-6 py-10 text-center">
           <div className="flex size-16 items-center justify-center rounded-2xl border border-border/70 bg-card shadow-sm">
             <ChannelBrandIcon channel="whatsapp" className="size-9" />
