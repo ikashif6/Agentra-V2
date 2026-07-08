@@ -145,16 +145,20 @@ async function exchangeForLongLivedUserToken(shortLivedToken) {
   return body.access_token;
 }
 
+function getPublicPagePictureUrl(pageId) {
+  return `https://graph.facebook.com/${GRAPH_VERSION}/${pageId}/picture?type=large`;
+}
+
 async function fetchManagedPages(userAccessToken) {
   const body = await graphGet('/me/accounts', userAccessToken, {
-    fields: 'id,name,category,access_token,picture{url}',
+    fields: 'id,name,category,access_token',
   });
 
   return (body?.data ?? []).map((page) => ({
     id: page.id,
     name: page.name,
     category: page.category || '',
-    pictureUrl: page.picture?.data?.url || '',
+    pictureUrl: getPublicPagePictureUrl(page.id),
     accessToken: page.access_token,
   }));
 }
@@ -176,13 +180,13 @@ async function subscribePageToApp(pageId, pageAccessToken) {
 
 async function verifyPageAccess(pageId, pageAccessToken) {
   const body = await graphGet(`/${pageId}`, pageAccessToken, {
-    fields: 'id,name,picture{url}',
+    fields: 'id,name',
   });
 
   return {
     pageId: body.id,
     pageName: body.name,
-    pagePictureUrl: body.picture?.data?.url || '',
+    pagePictureUrl: getPublicPagePictureUrl(body.id),
   };
 }
 
