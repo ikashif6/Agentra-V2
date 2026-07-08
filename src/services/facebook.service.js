@@ -435,4 +435,7 @@ module.exports = {
   getMessengerUserProfile,
   sendMessengerMessage,
   sendReplyForTicket,
+  htmlToPlainText,
+  subscribePageToApp,
+  getApiBaseUrl,
 };

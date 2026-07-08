@@ -283,6 +283,18 @@ export const facebookChannelApi = {
   disconnect: () => api.delete("/channels/facebook", { baseURL: FACEBOOK_API_BASE }),
 };
 
+export const instagramChannelApi = {
+  getStatus: () => api.get("/channels/instagram", { baseURL: FACEBOOK_API_BASE }),
+  getOAuthUrl: (returnOrigin?: string) =>
+    api.get("/channels/instagram/oauth/url", {
+      baseURL: FACEBOOK_API_BASE,
+      params: returnOrigin ? { returnOrigin } : undefined,
+    }),
+  connectAccount: (igUserId: string) =>
+    api.post("/channels/instagram/connect", { igUserId }, { baseURL: FACEBOOK_API_BASE }),
+  disconnect: () => api.delete("/channels/instagram", { baseURL: FACEBOOK_API_BASE }),
+};
+
 export const storeApi = {
   getStatus: () => api.get("/store"),
   connect: (data: {

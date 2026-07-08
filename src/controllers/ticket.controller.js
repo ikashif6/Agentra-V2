@@ -5,6 +5,7 @@ const Counter = require('../models/Counter');
 const User = require('../models/User');
 const emailService = require('../services/email.service');
 const facebookService = require('../services/facebook.service');
+const instagramService = require('../services/instagram.service');
 const tokenUtil = require('../utils/token');
 const response = require('../utils/apiResponse');
 const { buildInboxDemoConfigs, buildLiveChatDemoConfigs } = require('../data/demo-ticket-configs');
@@ -975,12 +976,18 @@ exports.addMessage = async (req, res, next) => {
     const newMsg = ticket.messages[ticket.messages.length - 1];
     response.created(res, { message: newMsg }, 'Message added');
 
-    // Deliver agent replies to Messenger AFTER responding, so the inbox is not
-    // blocked waiting on the Graph API round-trip.
-    if (!internal && ticket.source === 'facebook' && isStaff(req)) {
-      facebookService
-        .sendReplyForTicket(company._id, ticket, msgBody)
-        .catch((fbErr) => console.error('[facebook reply]', fbErr.message));
+    // Deliver agent replies back to the channel AFTER responding, so the inbox
+    // is not blocked waiting on the Graph API round-trip.
+    if (!internal && isStaff(req)) {
+      if (ticket.source === 'facebook') {
+        facebookService
+          .sendReplyForTicket(company._id, ticket, msgBody)
+          .catch((fbErr) => console.error('[facebook reply]', fbErr.message));
+      } else if (ticket.source === 'instagram') {
+        instagramService
+          .sendReplyForTicket(company._id, ticket, msgBody)
+          .catch((igErr) => console.error('[instagram reply]', igErr.message));
+      }
     }
   } catch (err) {
     next(err);

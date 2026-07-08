@@ -78,6 +78,27 @@ export interface FacebookChannelIntegration {
   pendingPages?: FacebookPendingPage[];
 }
 
+export interface InstagramPendingAccount {
+  igUserId: string;
+  igUsername?: string;
+  igPictureUrl?: string;
+  pageId?: string;
+  pageName?: string;
+}
+
+export interface InstagramChannelIntegration {
+  status: ChannelIntegrationStatus;
+  connectedAt?: string | null;
+  lastError?: string | null;
+  igUserId?: string | null;
+  igUsername?: string | null;
+  igPictureUrl?: string | null;
+  pageId?: string | null;
+  pageName?: string | null;
+  hasPageAccessToken?: boolean;
+  pendingAccounts?: InstagramPendingAccount[];
+}
+
 export interface StoreIntegration {
   provider: StoreProvider | null;
   status: StoreIntegrationStatus;

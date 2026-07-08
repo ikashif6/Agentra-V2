@@ -280,6 +280,31 @@ const companySchema = new mongoose.Schema(
           },
         ],
       },
+      instagram: {
+        status: {
+          type: String,
+          enum: ['disconnected', 'pending', 'connected', 'error'],
+          default: 'disconnected',
+        },
+        connectedAt: { type: Date },
+        lastError: { type: String },
+        igUserId: { type: String }, // Instagram business account id
+        igUsername: { type: String },
+        igPictureUrl: { type: String },
+        pageId: { type: String }, // linked Facebook Page id
+        pageName: { type: String },
+        pageAccessToken: { type: String, select: false },
+        userAccessToken: { type: String, select: false },
+        pendingAccounts: [
+          {
+            igUserId: { type: String },
+            igUsername: { type: String },
+            igPictureUrl: { type: String },
+            pageId: { type: String },
+            pageName: { type: String },
+          },
+        ],
+      },
     },
   },
   {

@@ -3,6 +3,7 @@ const Company = require('../models/Company');
 const response = require('../utils/apiResponse');
 const { verifyOAuthState } = require('../utils/token');
 const { processMessengerWebhook } = require('../services/messenger-inbound.service');
+const { processInstagramWebhook } = require('../services/instagram-inbound.service');
 const {
   isFacebookConfigured,
   buildFacebookOAuthUrl,
@@ -212,8 +213,13 @@ exports.handleWebhook = async (req, res) => {
   res.sendStatus(200);
 
   try {
-    await processMessengerWebhook(req.body);
+    const object = req.body?.object;
+    if (object === 'instagram') {
+      await processInstagramWebhook(req.body);
+    } else {
+      await processMessengerWebhook(req.body);
+    }
   } catch (err) {
-    console.error('[facebook webhook]', err.message);
+    console.error('[meta webhook]', err.message);
   }
 };

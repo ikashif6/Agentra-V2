@@ -160,6 +160,12 @@ const ticketSchema = new Schema(
       psid: { type: String }, // Page-scoped ID of the Messenger user
     },
 
+    // ── Instagram DM linkage (source === 'instagram') ─────────────────────────
+    instagram: {
+      igUserId: { type: String }, // our Instagram business account id
+      igsid: { type: String }, // Instagram-scoped ID of the customer
+    },
+
     details: {
       contactReason: { type: String, default: '' },
       product: { type: String, default: '' },
@@ -214,6 +220,7 @@ ticketSchema.index({ 'peoples.user': 1 });
 ticketSchema.index({ assigned_agent: 1 });
 ticketSchema.index({ company: 1, inboxFolder: 1, status: 1 });
 ticketSchema.index({ company: 1, source: 1, 'facebook.psid': 1 });
+ticketSchema.index({ company: 1, source: 1, 'instagram.igsid': 1 });
 
 // ─── Static: generate the next ticket code for a company ─────────────────────
 ticketSchema.statics.generateCode = async function (companyId, prefix = 'TKT') {
