@@ -107,6 +107,8 @@ function buildFacebookOAuthUrl({ companyId, subdomain, userId, returnOrigin }) {
   url.searchParams.set('state', state);
   url.searchParams.set('scope', SCOPES);
   url.searchParams.set('response_type', 'code');
+  // Force the permission dialog so previously-granted (stale) scopes are re-requested.
+  url.searchParams.set('auth_type', 'rerequest');
 
   return url.toString();
 }
