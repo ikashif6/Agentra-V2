@@ -96,7 +96,10 @@ const isProduction = process.env.NODE_ENV === "production";
 app.use(
   rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
-    max: parseInt(process.env.RATE_LIMIT_MAX, 10) || (isProduction ? 100 : 2000),
+    // Authenticated dashboards poll frequently (inbox refresh, etc.), so this
+    // abuse-prevention cap must be generous. Login is separately protected by
+    // the stricter auth limiter in auth.routes.js.
+    max: parseInt(process.env.RATE_LIMIT_MAX, 10) || (isProduction ? 2000 : 5000),
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Too many requests, please slow down.' },
