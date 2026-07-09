@@ -84,7 +84,12 @@ api.interceptors.response.use(
         Cookies.remove("accessToken");
         Cookies.remove("refreshToken");
         Cookies.remove("subdomain");
-        if (typeof window !== "undefined") window.location.href = "/auth/login";
+        if (
+          typeof window !== "undefined" &&
+          !window.location.pathname.startsWith("/auth/")
+        ) {
+          window.location.href = "/auth/login";
+        }
         return Promise.reject(error);
       } finally {
         refreshing = false;

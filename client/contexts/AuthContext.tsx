@@ -39,7 +39,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const init = async () => {
-      if (isAuthenticated()) {
+      const onAuthPage =
+        typeof window !== "undefined" && window.location.pathname.startsWith("/auth/");
+
+      if (isAuthenticated() && !onAuthPage) {
         // Try cached user first for instant render
         const cached = getUser();
         if (cached) {

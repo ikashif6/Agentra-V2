@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, param } = require('express-validator');
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 const authController = require('../controllers/auth.controller');
 const { resolveTenant, protect } = require('../middleware/auth.middleware');
@@ -14,10 +14,18 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
   max:
     parseInt(process.env.AUTH_RATE_LIMIT_MAX, 10) ||
-    (process.env.NODE_ENV === 'production' ? 10 : 100),
+    (process.env.NODE_ENV === 'production' ? 50 : 100),
   message: { success: false, message: 'Too many auth attempts. Please try again in 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: true },
+  keyGenerator: (req) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string' && forwarded.length > 0) {
+      return ipKeyGenerator(forwarded.split(',')[0].trim());
+    }
+    return ipKeyGenerator(req);
+  },
 });
 
 const otpLimiter = rateLimit({

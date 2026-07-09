@@ -3,12 +3,29 @@ const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 const routes = require('./routes');
 const { errorHandler, notFoundHandler } = require('./middleware/error.middleware');
 
 const app = express();
+
+// Trust proxy first — required for correct client IPs behind Railway/load balancers.
+app.set('trust proxy', 1);
+
+/** Per-user buckets for authenticated traffic; per-IP for everything else. */
+function rateLimitKey(req) {
+  const auth = req.headers.authorization;
+  if (typeof auth === 'string' && auth.startsWith('Bearer ')) {
+    const token = auth.slice(7);
+    if (token.length >= 8) return `auth:${token.slice(-24)}`;
+  }
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    return `ip:${ipKeyGenerator(forwarded.split(',')[0].trim())}`;
+  }
+  return `ip:${ipKeyGenerator(req)}`;
+}
 
 // ─── Security headers ─────────────────────────────────────────────────────────
 app.use(helmet());
@@ -102,16 +119,18 @@ app.use(
     max: parseInt(process.env.RATE_LIMIT_MAX, 10) || (isProduction ? 2000 : 5000),
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: rateLimitKey,
+    validate: { trustProxy: true },
     message: { success: false, message: 'Too many requests, please slow down.' },
     // Never throttle inbound provider webhooks (Meta can send bursts).
+    // Auth routes have their own limiter — don't double-count login attempts here.
     skip: (req) =>
       req.path.startsWith('/api/v1/webhooks/') ||
+      req.path.startsWith('/api/v1/auth') ||
+      req.path.startsWith('/api/uploads/') ||
       (!isProduction && req.method === 'OPTIONS'),
   })
 );
-
-// ─── Trust proxy (needed for correct IP behind load balancers) ────────────────
-app.set('trust proxy', 1);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/v1', routes);
