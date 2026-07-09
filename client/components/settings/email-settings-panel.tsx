@@ -177,7 +177,11 @@ export default function EmailSettingsPanel() {
         smtpHost: "",
         smtpPort: "",
       });
-      toast.success("Email connected");
+      toast.success(
+        data.data.email?.outboundVia === "resend"
+          ? "Email connected — inbound via IMAP; replies sent via secure relay (Reply-To: your address)"
+          : "Email connected",
+      );
     } catch (err: unknown) {
       const { message } = getApiError(err, "Could not connect email");
       toast.error(message);
@@ -259,8 +263,17 @@ export default function EmailSettingsPanel() {
 
           <p className="text-xs text-muted-foreground">
             New emails to <span className="font-medium text-foreground">{email.address}</span> arrive
-            in your inbox as tickets. Replies you send are delivered from your own address, so
-            conversations stay threaded for the customer.
+            in your inbox as tickets.
+            {email.outboundVia === "resend" ? (
+              <>
+                {" "}
+                Replies are delivered via Agentra&apos;s mail relay with{" "}
+                <span className="font-medium text-foreground">Reply-To: {email.address}</span> — customer
+                replies still land in your inbox.
+              </>
+            ) : (
+              <> Replies you send are delivered from your own address, so conversations stay threaded for the customer.</>
+            )}
           </p>
 
           <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-5">

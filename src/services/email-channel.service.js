@@ -20,6 +20,7 @@ function sanitizeEmailIntegration(integration) {
     provider: plain.provider || null,
     address: plain.address || null,
     displayName: plain.displayName || null,
+    outboundVia: plain.outboundVia || 'smtp',
     connectedAt: plain.connectedAt || null,
     lastSyncAt: plain.lastSyncAt || null,
     lastError: plain.lastError || null,
@@ -60,7 +61,7 @@ async function connectImap(company, input) {
     throw new Error('Could not detect mail server settings for this address. Enter them manually.');
   }
 
-  const { maxUid, smtp } = await imapService.testConnection(cfg, password);
+  const { maxUid, smtp, outboundVia } = await imapService.testConnection(cfg, password);
 
   company.channelIntegrations = company.channelIntegrations || {};
   company.channelIntegrations.email = {
@@ -68,6 +69,7 @@ async function connectImap(company, input) {
     provider: 'imap',
     address: email,
     displayName: input.displayName || company.name,
+    outboundVia,
     connectedAt: new Date(),
     lastSyncAt: new Date(),
     lastError: null,
@@ -143,20 +145,33 @@ async function sendReplyForTicket(companyId, ticket, html) {
   // Always embed the ticket code so the customer's reply threads back correctly.
   const subject = `Re: [${ticket.ticket_code}] ${baseTitle}`;
 
+  const from = `${stored.displayName} <${stored.address}>`;
   const headers = {};
   if (ticket.email?.lastMessageId) {
     headers['In-Reply-To'] = ticket.email.lastMessageId;
     headers['References'] = (ticket.email.references || ticket.email.lastMessageId).trim();
   }
 
-  const from = `${stored.displayName} <${stored.address}>`;
-  const info = await imapService.sendMail(stored.cfg, stored.password, {
-    from,
-    to,
-    subject,
-    html,
-    headers,
-  });
+  let info;
+  if (integration.outboundVia === 'resend') {
+    const { sendChannelReplyViaResend } = require('./email.service');
+    info = await sendChannelReplyViaResend({
+      displayName: stored.displayName,
+      fromAddress: stored.address,
+      to,
+      subject,
+      html,
+      headers,
+    });
+  } else {
+    info = await imapService.sendMail(stored.cfg, stored.password, {
+      from,
+      to,
+      subject,
+      html,
+      headers,
+    });
+  }
 
   // Record our outbound Message-ID so the customer's reply threads correctly.
   if (info?.messageId) {

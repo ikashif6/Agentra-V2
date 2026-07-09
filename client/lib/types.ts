@@ -122,6 +122,7 @@ export interface EmailChannelIntegration {
   provider?: "imap" | "google" | "microsoft" | null;
   address?: string | null;
   displayName?: string | null;
+  outboundVia?: "smtp" | "resend" | null;
   connectedAt?: string | null;
   lastSyncAt?: string | null;
   lastError?: string | null;

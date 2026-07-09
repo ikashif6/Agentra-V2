@@ -335,6 +335,46 @@ async function sendTicketTrackOtp({ email, firstName, otp, ticket_code, subdomai
   });
 }
 
+/**
+ * Send a support-ticket reply when direct SMTP is unavailable (e.g. Railway Hobby).
+ * Uses Resend over HTTPS; sets Reply-To to the connected mailbox so customer replies
+ * still land in IMAP.
+ */
+async function sendChannelReplyViaResend({
+  displayName,
+  fromAddress,
+  to,
+  subject,
+  html,
+  headers = {},
+}) {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error('RESEND_API_KEY is not configured for outbound email relay');
+  }
+
+  const relayEmail = process.env.RESEND_FROM_EMAIL || 'noreply@agentraa.com';
+  const relayName = displayName || process.env.RESEND_FROM_NAME || 'Support';
+
+  const { data, error } = await getResend().emails.send({
+    from: `${relayName} <${relayEmail}>`,
+    to,
+    replyTo: fromAddress,
+    subject,
+    html,
+    headers: Object.keys(headers).length ? headers : undefined,
+  });
+
+  if (error) {
+    console.error('Resend channel reply error:', error);
+    throw new Error(`Failed to send reply: ${error.message}`);
+  }
+
+  const domain = relayEmail.split('@')[1] || 'agentraa.com';
+  return {
+    messageId: data?.id ? `<${data.id}@${domain}>` : undefined,
+  };
+}
+
 module.exports = {
   sendEmailVerification,
   sendMagicLink,
@@ -344,4 +384,5 @@ module.exports = {
   sendTicketTrackOtp,
   sendTeamInvite,
   sendTeamInviteByOwner,
+  sendChannelReplyViaResend,
 };

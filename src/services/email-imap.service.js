@@ -133,10 +133,20 @@ function buildSmtpTransport(cfg, password) {
   });
 }
 
-// Verify both IMAP login and SMTP login work before saving.
-// Returns the current INBOX max UID so we don't need a second IMAP session.
+function isSmtpLikelyBlocked(err) {
+  const msg = String(err?.message || '').toLowerCase();
+  return (
+    msg.includes('timed out') ||
+    msg.includes('timeout') ||
+    msg.includes('econnrefused') ||
+    msg.includes('enetunreach') ||
+    msg.includes('ports 465 and 587')
+  );
+}
+
+// Verify IMAP login (required). SMTP is optional when blocked — use Resend for outbound.
 async function testConnection(cfg, password) {
-  if (!cfg.imapHost || !cfg.smtpHost) {
+  if (!cfg.imapHost) {
     throw new Error('Could not determine mail server settings. Enter them manually.');
   }
 
@@ -156,9 +166,29 @@ async function testConnection(cfg, password) {
     }
   }
 
-  const smtpCfg = await verifySmtp(cfg, password);
+  let smtp = null;
+  let outboundVia = 'smtp';
 
-  return { maxUid, smtp: smtpCfg };
+  if (!cfg.smtpHost) {
+    throw new Error('Could not determine mail server settings. Enter them manually.');
+  }
+
+  try {
+    smtp = await verifySmtp(cfg, password);
+  } catch (err) {
+    if (isSmtpLikelyBlocked(err) && process.env.RESEND_API_KEY) {
+      outboundVia = 'resend';
+      smtp = {
+        smtpHost: cfg.smtpHost,
+        smtpPort: cfg.smtpPort,
+        smtpSecure: cfg.smtpSecure,
+      };
+    } else {
+      throw err;
+    }
+  }
+
+  return { maxUid, smtp, outboundVia };
 }
 
 async function verifySmtp(cfg, password) {

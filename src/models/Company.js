@@ -337,6 +337,11 @@ const companySchema = new mongoose.Schema(
         },
         address: { type: String }, // the connected mailbox address
         displayName: { type: String }, // sender name shown to customers
+        outboundVia: {
+          type: String,
+          enum: ['smtp', 'resend'],
+          default: 'smtp',
+        },
         connectedAt: { type: Date },
         lastSyncAt: { type: Date },
         lastError: { type: String },
