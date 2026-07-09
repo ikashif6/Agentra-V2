@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const Counter = require('../models/Counter');
+const { saveBufferToUploads } = require('../utils/save-upload');
 
 const ACTIVE_STATUSES = ['open', 'in_progress', 'on_hold'];
 
@@ -36,6 +37,77 @@ function messageBody(parsed) {
   if (parsed.textAsHtml) return parsed.textAsHtml;
   if (parsed.text) return `<p>${String(parsed.text).replace(/\n/g, '<br>')}</p>`;
   return '(empty message)';
+}
+
+function escapeRegex(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeContentId(contentId) {
+  return String(contentId || '').replace(/^<|>$/g, '').trim();
+}
+
+function replaceCidInHtml(html, contentId, url) {
+  const cid = normalizeContentId(contentId);
+  if (!cid) return html;
+  const pattern = new RegExp(`cid:<?${escapeRegex(cid)}>?`, 'gi');
+  return html.replace(pattern, url);
+}
+
+function stripUnresolvedCidImages(html) {
+  return html.replace(/<img\b[^>]*\bsrc=["']cid:[^"']+["'][^>]*>/gi, '');
+}
+
+function getDisposition(att) {
+  const d = att?.contentDisposition;
+  if (typeof d === 'string') return d.toLowerCase();
+  if (d?.value) return String(d.value).toLowerCase();
+  return '';
+}
+
+async function processEmailBodyAndAttachments(company, parsed) {
+  let html = messageBody(parsed);
+  const attachments = [];
+
+  for (const [index, att] of (parsed.attachments || []).entries()) {
+    const raw = att?.content;
+    if (!raw) continue;
+
+    const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+    if (buffer.length === 0) continue;
+
+    const filename = att.filename || `attachment-${index + 1}`;
+
+    try {
+      const saved = await saveBufferToUploads(company.subdomain, buffer, {
+        originalFilename: filename,
+        mimetype: att.contentType,
+      });
+
+      const cid = normalizeContentId(att.contentId || att.cid);
+      const disposition = getDisposition(att);
+
+      if (cid) {
+        html = replaceCidInHtml(html, cid, saved.url);
+      }
+
+      if (disposition === 'attachment' || (!cid && disposition !== 'inline' && !att.related)) {
+        attachments.push({
+          url: saved.url,
+          filename: saved.filename,
+          mimetype: saved.mimetype,
+          size: saved.size,
+        });
+      }
+    } catch (err) {
+      console.error('[email-inbound] Failed to save attachment:', err.message);
+    }
+  }
+
+  return {
+    body: stripUnresolvedCidImages(html),
+    attachments,
+  };
 }
 
 async function findOrCreateCustomer(company, address, name) {
@@ -108,7 +180,7 @@ async function processInboundEmail(company, parsed) {
   if (connected && address === connected) return;
 
   const subject = parsed.subject || '(no subject)';
-  const body = messageBody(parsed);
+  const { body, attachments } = await processEmailBodyAndAttachments(company, parsed);
   const messageId = parsed.messageId || null;
   const customer = await findOrCreateCustomer(company, address, name);
 
@@ -120,6 +192,7 @@ async function processInboundEmail(company, parsed) {
       sender: customer._id,
       senderEmail: customer.email,
       body,
+      attachments,
       sentAt: now,
     });
     if (['resolved', 'closed', 'self_closed'].includes(existing.status)) {
@@ -158,6 +231,7 @@ async function processInboundEmail(company, parsed) {
         sender: customer._id,
         senderEmail: customer.email,
         body,
+        attachments,
         sentAt: now,
       },
     ],

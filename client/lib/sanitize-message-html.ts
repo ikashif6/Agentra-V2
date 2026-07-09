@@ -49,6 +49,14 @@ export function sanitizeMessageHtml(html: string): string {
           }
         }
 
+        if (tag === "img") {
+          const src = el.getAttribute("src") || "";
+          if (/^cid:/i.test(src)) {
+            el.remove();
+            continue;
+          }
+        }
+
         if (tag === "a") {
           el.setAttribute("target", "_blank");
           el.setAttribute("rel", "noopener noreferrer");
