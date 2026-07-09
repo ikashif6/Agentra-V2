@@ -317,7 +317,7 @@ export const emailChannelApi = {
     smtpHost?: string;
     smtpPort?: number;
     smtpSecure?: boolean;
-  }) => api.post("/channels/email/connect", payload),
+  }) => api.post("/channels/email/connect", payload, { timeout: 90000 }),
   disconnect: () => api.delete("/channels/email"),
 };
 

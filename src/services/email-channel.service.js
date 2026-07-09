@@ -60,8 +60,7 @@ async function connectImap(company, input) {
     throw new Error('Could not detect mail server settings for this address. Enter them manually.');
   }
 
-  await imapService.testConnection(cfg, password);
-  const maxUid = await imapService.getCurrentMaxUid(cfg, password).catch(() => 0);
+  const { maxUid, smtp } = await imapService.testConnection(cfg, password);
 
   company.channelIntegrations = company.channelIntegrations || {};
   company.channelIntegrations.email = {
@@ -78,9 +77,9 @@ async function connectImap(company, input) {
       port: cfg.imapPort,
       secure: cfg.imapSecure,
       user: cfg.user,
-      smtpHost: cfg.smtpHost,
-      smtpPort: cfg.smtpPort,
-      smtpSecure: cfg.smtpSecure,
+      smtpHost: smtp.smtpHost,
+      smtpPort: smtp.smtpPort,
+      smtpSecure: smtp.smtpSecure,
     },
     secret: imapService.packSecret(cfg, password),
   };

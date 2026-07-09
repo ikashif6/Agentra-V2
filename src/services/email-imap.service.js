@@ -3,6 +3,19 @@ const nodemailer = require('nodemailer');
 const { simpleParser } = require('mailparser');
 const { encryptJson, decryptJson } = require('../utils/crypto');
 
+const MAIL_TIMEOUT_MS = parseInt(process.env.MAIL_CONNECT_TIMEOUT_MS, 10) || 20000;
+
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 // ─── Provider presets ─────────────────────────────────────────────────────────
 // Lets users connect with just email + app password for popular providers.
 const PROVIDER_PRESETS = {
@@ -59,7 +72,19 @@ const DOMAIN_TO_PRESET = {
   'zoho.com': 'zoho',
   'icloud.com': 'icloud',
   'me.com': 'icloud',
+  'hostinger.com': 'hostinger',
 };
+
+const HOSTINGER_PRESET = {
+  imapHost: 'imap.hostinger.com',
+  imapPort: 993,
+  imapSecure: true,
+  smtpHost: 'smtp.hostinger.com',
+  smtpPort: 465,
+  smtpSecure: true,
+};
+
+PROVIDER_PRESETS.hostinger = HOSTINGER_PRESET;
 
 function guessPreset(email) {
   const domain = String(email || '').split('@')[1]?.toLowerCase();
@@ -90,6 +115,9 @@ function buildImapClient(cfg, password) {
     secure: cfg.imapSecure,
     auth: { user: cfg.user, pass: password },
     logger: false,
+    connectionTimeout: MAIL_TIMEOUT_MS,
+    greetingTimeout: MAIL_TIMEOUT_MS,
+    socketTimeout: MAIL_TIMEOUT_MS,
   });
 }
 
@@ -99,19 +127,25 @@ function buildSmtpTransport(cfg, password) {
     port: cfg.smtpPort,
     secure: cfg.smtpSecure,
     auth: { user: cfg.user, pass: password },
+    connectionTimeout: MAIL_TIMEOUT_MS,
+    greetingTimeout: MAIL_TIMEOUT_MS,
+    socketTimeout: MAIL_TIMEOUT_MS,
   });
 }
 
 // Verify both IMAP login and SMTP login work before saving.
+// Returns the current INBOX max UID so we don't need a second IMAP session.
 async function testConnection(cfg, password) {
   if (!cfg.imapHost || !cfg.smtpHost) {
     throw new Error('Could not determine mail server settings. Enter them manually.');
   }
 
+  let maxUid = 0;
   const client = buildImapClient(cfg, password);
   try {
-    await client.connect();
-    await client.mailboxOpen('INBOX');
+    await withTimeout(client.connect(), MAIL_TIMEOUT_MS, 'IMAP connect');
+    const mailbox = await withTimeout(client.mailboxOpen('INBOX'), MAIL_TIMEOUT_MS, 'IMAP login');
+    maxUid = Math.max(0, (mailbox.uidNext || 1) - 1);
   } catch (err) {
     throw new Error(`IMAP login failed: ${err.message}`);
   } finally {
@@ -122,11 +156,42 @@ async function testConnection(cfg, password) {
     }
   }
 
-  const transport = buildSmtpTransport(cfg, password);
+  const smtpCfg = await verifySmtp(cfg, password);
+
+  return { maxUid, smtp: smtpCfg };
+}
+
+async function verifySmtp(cfg, password) {
+  const primary = buildSmtpTransport(cfg, password);
   try {
-    await transport.verify();
-  } catch (err) {
-    throw new Error(`SMTP login failed: ${err.message}`);
+    await withTimeout(primary.verify(), MAIL_TIMEOUT_MS, 'SMTP login');
+    return {
+      smtpHost: cfg.smtpHost,
+      smtpPort: cfg.smtpPort,
+      smtpSecure: cfg.smtpSecure,
+    };
+  } catch (firstErr) {
+    const isHostinger = /hostinger\.com$/i.test(cfg.smtpHost || '');
+    if (!isHostinger || cfg.smtpPort === 587) {
+      const hint =
+        cfg.smtpPort === 465 ? ' Try SMTP port 587 with TLS instead of 465.' : '';
+      throw new Error(`SMTP login failed: ${firstErr.message}.${hint}`);
+    }
+
+    const altCfg = { ...cfg, smtpPort: 587, smtpSecure: false };
+    const alt = buildSmtpTransport(altCfg, password);
+    try {
+      await withTimeout(alt.verify(), MAIL_TIMEOUT_MS, 'SMTP login (port 587)');
+      return {
+        smtpHost: altCfg.smtpHost,
+        smtpPort: altCfg.smtpPort,
+        smtpSecure: altCfg.smtpSecure,
+      };
+    } catch (secondErr) {
+      throw new Error(
+        `SMTP login failed on ports 465 and 587: ${secondErr.message}`,
+      );
+    }
   }
 }
 
