@@ -1,3 +1,5 @@
+import { stripQuotedReplyHtml } from "@/lib/email-reply-strip";
+
 const ALLOWED_TAGS = new Set([
   "b",
   "strong",
@@ -21,6 +23,48 @@ const ALLOWED_ATTRS: Record<string, Set<string>> = {
   p: new Set(["class"]),
   div: new Set(["class"]),
 };
+
+function isAllowedMessageImage(el: HTMLElement): boolean {
+  const src = (el.getAttribute("src") || "").trim();
+  if (!src || /^cid:/i.test(src)) return false;
+  if (el.classList.contains("inline-emoji") || el.hasAttribute("data-emoji")) {
+    return true;
+  }
+  // Inline images we host (including resolved email attachments).
+  if (src.includes("/api/uploads/")) return true;
+  return false;
+}
+
+function nodeHasRenderableContent(node: Node): boolean {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return (node.textContent ?? "").replace(/\u00a0/g, " ").trim().length > 0;
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  const el = node as HTMLElement;
+  const tag = el.tagName.toLowerCase();
+  if (tag === "br") return false;
+  if (tag === "img" || tag === "video") return true;
+  return Array.from(el.childNodes).some(nodeHasRenderableContent);
+}
+
+function trimTrailingEmptyHtml(root: HTMLElement) {
+  while (root.lastChild) {
+    const last = root.lastChild;
+    if (last.nodeType === Node.TEXT_NODE && !(last.textContent ?? "").trim()) {
+      last.remove();
+      continue;
+    }
+    if (last.nodeType === Node.ELEMENT_NODE) {
+      const el = last as HTMLElement;
+      const tag = el.tagName.toLowerCase();
+      if (tag === "br" || !nodeHasRenderableContent(el)) {
+        el.remove();
+        continue;
+      }
+    }
+    break;
+  }
+}
 
 export function sanitizeMessageHtml(html: string): string {
   if (typeof window === "undefined" || !html.trim()) return "";
@@ -50,8 +94,7 @@ export function sanitizeMessageHtml(html: string): string {
         }
 
         if (tag === "img") {
-          const src = el.getAttribute("src") || "";
-          if (/^cid:/i.test(src)) {
+          if (!isAllowedMessageImage(el)) {
             el.remove();
             continue;
           }
@@ -68,7 +111,9 @@ export function sanitizeMessageHtml(html: string): string {
   };
 
   clean(doc.body);
-  return doc.body.innerHTML;
+  stripQuotedReplyHtml(doc.body);
+  trimTrailingEmptyHtml(doc.body);
+  return doc.body.innerHTML.trim();
 }
 
 export function messageHtmlToPlain(html: string): string {

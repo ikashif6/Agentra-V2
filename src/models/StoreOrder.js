@@ -14,12 +14,32 @@ const { Schema } = mongoose;
 
 const lineItemSchema = new Schema(
   {
+    externalId: { type: String },
     title: { type: String },
     variantTitle: { type: String },
     sku: { type: String },
     quantity: { type: Number, default: 1 },
+    fulfillableQuantity: { type: Number },
     price: { type: Number },
     imageUrl: { type: String },
+    grams: { type: Number },
+  },
+  { _id: false },
+);
+
+const shippingLineSchema = new Schema(
+  {
+    title: { type: String },
+    price: { type: Number },
+  },
+  { _id: false },
+);
+
+const taxLineSchema = new Schema(
+  {
+    title: { type: String },
+    rate: { type: Number },
+    price: { type: Number },
   },
   { _id: false },
 );
@@ -31,6 +51,20 @@ const fulfillmentSchema = new Schema(
     trackingNumber: { type: String },
     trackingUrl: { type: String },
     shippedAt: { type: Date },
+  },
+  { _id: false },
+);
+
+const addressSchema = new Schema(
+  {
+    name: { type: String },
+    address1: { type: String },
+    address2: { type: String },
+    city: { type: String },
+    province: { type: String },
+    zip: { type: String },
+    country: { type: String },
+    phone: { type: String },
   },
   { _id: false },
 );
@@ -58,8 +92,21 @@ const storeOrderSchema = new Schema(
     currency: { type: String },
     totalPrice: { type: Number },
     subtotalPrice: { type: Number },
+    totalShipping: { type: Number },
+    totalTax: { type: Number },
     financialStatus: { type: String }, // paid | pending | refunded | ...
     fulfillmentStatus: { type: String }, // fulfilled | unfulfilled | partial | ...
+    channel: { type: String },
+    tags: [{ type: String }],
+    note: { type: String },
+    itemCount: { type: Number },
+    onHold: { type: Boolean, default: false },
+    shippingMethod: { type: String },
+    shippingLines: [shippingLineSchema],
+    taxLines: [taxLineSchema],
+    totalWeightGrams: { type: Number },
+    fulfillmentService: { type: String },
+    closedAt: { type: Date },
 
     customer: {
       externalId: { type: String },
@@ -67,6 +114,9 @@ const storeOrderSchema = new Schema(
       email: { type: String, lowercase: true, trim: true },
       phone: { type: String, trim: true },
     },
+
+    shippingAddress: addressSchema,
+    billingAddress: addressSchema,
 
     lineItems: [lineItemSchema],
     fulfillments: [fulfillmentSchema],

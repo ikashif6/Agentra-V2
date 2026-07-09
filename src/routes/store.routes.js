@@ -50,6 +50,7 @@ router.get(
 
 // Orders lookup for the inbox — available to any authenticated member.
 router.get('/orders', resolveTenant, protect, storeController.listOrders);
+router.get('/orders/:orderId', resolveTenant, protect, storeController.getOrder);
 
 router.post(
   '/orders/:orderId/cancel',
@@ -63,6 +64,20 @@ router.post(
   resolveTenant,
   protect,
   storeController.fulfillOrder,
+);
+
+router.post(
+  '/orders/:orderId/actions',
+  resolveTenant,
+  protect,
+  storeController.runOrderAction,
+);
+
+router.patch(
+  '/orders/:orderId',
+  resolveTenant,
+  protect,
+  storeController.updateOrder,
 );
 
 router.post(

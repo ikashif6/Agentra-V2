@@ -5,22 +5,28 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
-  Loader2,
   Package,
   Plus,
   Tag,
-  Truck,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { storeApi } from "@/lib/api";
-import { getApiError } from "@/lib/api-error";
 import type { StoreOrder, Ticket, TicketDetails } from "@/lib/types";
+import { OrderDetailsDialog } from "@/components/inbox/order-details-dialog";
+import {
+  financialTone,
+  formatFinancialLabel,
+  formatFulfillmentLabel,
+  formatMoney,
+  formatOrderListDate,
+  fulfillmentTone,
+  orderItemCount,
+} from "@/components/inbox/order-utils";
 import { InboxMetadataPicker } from "@/components/inbox/inbox-metadata-picker";
 import {
   CONTACT_REASON_OPTIONS,
@@ -28,37 +34,6 @@ import {
   PRODUCT_OPTIONS,
   RESOLUTION_OPTIONS,
 } from "@/lib/ticket-metadata-options";
-
-function formatMoney(amount?: number, currency?: string) {
-  if (amount == null) return "";
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency || "USD",
-    }).format(amount);
-  } catch {
-    return `${amount} ${currency ?? ""}`.trim();
-  }
-}
-
-function financialTone(status?: string) {
-  const s = (status || "").toLowerCase();
-  if (s === "paid") return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (s === "refunded" || s === "cancelled" || s === "failed")
-    return "bg-red-50 text-red-700 border-red-200";
-  return "bg-amber-50 text-amber-700 border-amber-200";
-}
-
-function orderIsCancelled(order: StoreOrder) {
-  const fin = (order.financialStatus || "").toLowerCase();
-  const ful = (order.fulfillmentStatus || "").toLowerCase();
-  return fin === "cancelled" || fin === "refunded" || ful === "cancelled";
-}
-
-function orderIsFulfilled(order: StoreOrder) {
-  const ful = (order.fulfillmentStatus || "").toLowerCase();
-  return ful === "fulfilled" || ful === "shipped" || ful === "completed";
-}
 
 function CustomerOrders({ email, phone }: { email: string; phone: string }) {
   const [orders, setOrders] = useState<StoreOrder[] | null>(null);
@@ -101,7 +76,6 @@ function CustomerOrders({ email, phone }: { email: string; phone: string }) {
     setOrders((prev) => prev?.map((o) => (o._id === updated._id ? updated : o)) ?? []);
   };
 
-  // Hide entirely when no store is connected.
   if (!connected && !loading) return null;
 
   return (
@@ -153,210 +127,99 @@ function OrderCard({
   order: StoreOrder;
   onUpdated: (order: StoreOrder) => void;
 }) {
-  const [busy, setBusy] = useState<"cancel" | "fulfill" | null>(null);
-  const [showFulfillForm, setShowFulfillForm] = useState(false);
-  const [trackingNumber, setTrackingNumber] = useState("");
-  const [trackingCompany, setTrackingCompany] = useState("");
-
-  const cancelled = orderIsCancelled(order);
-  const fulfilled = orderIsFulfilled(order);
-  const tracking = order.fulfillments?.find((f) => f.trackingUrl || f.trackingNumber);
-
-  const handleCancel = async () => {
-    if (!confirm(`Cancel order ${order.orderNumber || order.name}? The customer can be notified.`)) {
-      return;
-    }
-    setBusy("cancel");
-    try {
-      const { data } = await storeApi.cancelOrder(order._id, {
-        reason: "customer",
-        restock: true,
-        notifyCustomer: true,
-      });
-      if (data.data?.order) onUpdated(data.data.order);
-      toast.success("Order cancelled");
-    } catch (err: unknown) {
-      const { message } = getApiError(err, "Could not cancel order");
-      toast.error(message);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleFulfill = async () => {
-    setBusy("fulfill");
-    try {
-      const { data } = await storeApi.fulfillOrder(order._id, {
-        trackingNumber: trackingNumber.trim() || undefined,
-        trackingCompany: trackingCompany.trim() || undefined,
-        notifyCustomer: true,
-      });
-      if (data.data?.order) onUpdated(data.data.order);
-      toast.success("Order marked as fulfilled");
-      setShowFulfillForm(false);
-      setTrackingNumber("");
-      setTrackingCompany("");
-    } catch (err: unknown) {
-      const { message } = getApiError(err, "Could not fulfill order");
-      toast.error(message);
-    } finally {
-      setBusy(null);
-    }
-  };
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const firstItem = order.lineItems?.[0];
+  const itemCount = orderItemCount(order);
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold text-foreground">
-          {order.orderNumber || order.name || `#${order.externalId}`}
-        </span>
-        <span className="text-sm font-medium text-foreground">
-          {formatMoney(order.totalPrice, order.currency)}
-        </span>
-      </div>
+    <>
+      <div className="rounded-lg border border-border/60 bg-card p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">
+              {order.orderNumber || order.name || `#${order.externalId}`}
+            </p>
+            {order.placedAt ? (
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {formatOrderListDate(order.placedAt)}
+                {order.channel ? ` · ${order.channel}` : ""}
+              </p>
+            ) : null}
+          </div>
+          <span className="shrink-0 text-sm font-semibold text-foreground">
+            {formatMoney(order.totalPrice, order.currency)}
+          </span>
+        </div>
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-        {order.financialStatus ? (
-          <span
-            className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium capitalize ${financialTone(
-              order.financialStatus,
-            )}`}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {order.financialStatus ? (
+            <span
+              className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${financialTone(
+                order.financialStatus,
+              )}`}
+            >
+              {formatFinancialLabel(order.financialStatus)}
+            </span>
+          ) : null}
+          {order.fulfillmentStatus ? (
+            <span
+              className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${fulfillmentTone(
+                order.fulfillmentStatus,
+              )}`}
+            >
+              {formatFulfillmentLabel(order.fulfillmentStatus)}
+            </span>
+          ) : null}
+          {itemCount > 0 ? (
+            <span className="text-[10px] text-muted-foreground">
+              {itemCount} item{itemCount === 1 ? "" : "s"}
+            </span>
+          ) : null}
+        </div>
+
+        {firstItem ? (
+          <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{firstItem.quantity ?? 1}×</span>{" "}
+            {firstItem.title}
+            {firstItem.variantTitle ? ` · ${firstItem.variantTitle}` : ""}
+          </p>
+        ) : null}
+
+        {order.customer?.name ? (
+          <p className="mt-1.5 text-[11px] text-muted-foreground">{order.customer.name}</p>
+        ) : null}
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 flex-1 text-xs"
+            onClick={() => setDetailsOpen(true)}
           >
-            {order.financialStatus}
-          </span>
-        ) : null}
-        {order.fulfillmentStatus ? (
-          <span className="rounded-full border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
-            {order.fulfillmentStatus}
-          </span>
-        ) : null}
-        {order.placedAt ? (
-          <span className="text-[10px] text-muted-foreground">
-            {new Date(order.placedAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
-          </span>
-        ) : null}
-      </div>
-
-      {order.lineItems && order.lineItems.length > 0 ? (
-        <ul className="mt-2.5 space-y-1.5 border-t border-border/50 pt-2.5">
-          {order.lineItems.map((item, i) => (
-            <li key={`${item.title}-${i}`} className="flex items-start justify-between gap-2 text-xs">
-              <span className="min-w-0 text-foreground">
-                <span className="font-medium">{item.quantity ?? 1}×</span> {item.title}
-                {item.variantTitle ? (
-                  <span className="text-muted-foreground"> · {item.variantTitle}</span>
-                ) : null}
-              </span>
-              {item.price != null ? (
-                <span className="shrink-0 text-muted-foreground">
-                  {formatMoney((item.price ?? 0) * (item.quantity ?? 1), order.currency)}
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {tracking ? (
-        <div className="mt-2.5 rounded-md bg-muted/40 px-2.5 py-2 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1 font-medium text-foreground">
-            <Truck className="size-3" />
-            Shipment
-          </span>
-          {tracking.trackingCompany ? <p className="mt-0.5">{tracking.trackingCompany}</p> : null}
-          {tracking.trackingNumber ? <p>{tracking.trackingNumber}</p> : null}
-          {tracking.trackingUrl ? (
+            View details
+          </Button>
+          {order.adminUrl ? (
             <a
-              href={tracking.trackingUrl}
+              href={order.adminUrl}
               target="_blank"
               rel="noreferrer"
-              className="mt-0.5 inline-block font-medium text-primary hover:underline"
+              title="Open in admin"
+              className={buttonVariants({ variant: "ghost", size: "sm", className: "h-7 px-2" })}
             >
-              Track package
+              <ExternalLink className="size-3.5" />
             </a>
           ) : null}
         </div>
-      ) : null}
+      </div>
 
-      {!cancelled && !fulfilled ? (
-        <div className="mt-3 space-y-2 border-t border-border/50 pt-2.5">
-          {showFulfillForm ? (
-            <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 p-2.5">
-              <p className="text-[11px] font-medium text-foreground">Fulfillment details (optional)</p>
-              <Input
-                value={trackingCompany}
-                onChange={(e) => setTrackingCompany(e.target.value)}
-                placeholder="Carrier (e.g. UPS)"
-                className="h-8 text-xs"
-              />
-              <Input
-                value={trackingNumber}
-                onChange={(e) => setTrackingNumber(e.target.value)}
-                placeholder="Tracking number"
-                className="h-8 text-xs"
-              />
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-7 flex-1 text-xs"
-                  disabled={busy === "fulfill"}
-                  onClick={() => void handleFulfill()}
-                >
-                  {busy === "fulfill" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-                  Confirm fulfill
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 text-xs"
-                  onClick={() => setShowFulfillForm(false)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs"
-                disabled={busy !== null}
-                onClick={() => setShowFulfillForm(true)}
-              >
-                Mark fulfilled
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs text-destructive hover:text-destructive"
-                disabled={busy !== null}
-                onClick={() => void handleCancel()}
-              >
-                {busy === "cancel" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-                Cancel order
-              </Button>
-            </div>
-          )}
-        </div>
-      ) : null}
-
-      {order.adminUrl ? (
-        <a
-          href={order.adminUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-2 inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground hover:underline"
-        >
-          <ExternalLink className="size-2.5" />
-          Open in Shopify admin
-        </a>
-      ) : null}
-    </div>
+      <OrderDetailsDialog
+        order={order}
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        onUpdated={onUpdated}
+      />
+    </>
   );
 }
 

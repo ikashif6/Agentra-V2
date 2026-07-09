@@ -5,6 +5,7 @@ import {
   isMessageHtml,
   sanitizeMessageHtml,
 } from "@/lib/sanitize-message-html";
+import { stripQuotedPlainText } from "@/lib/email-reply-strip";
 import { cn } from "@/lib/utils";
 
 function renderMarkdownLine(text: string, keyPrefix: string) {
@@ -89,9 +90,9 @@ export function FormattedMessageBody({
   if (isMessageHtml(body)) {
     const safe = sanitizeMessageHtml(body);
     return (
-      <div className={cn("space-y-2 text-foreground", className)}>
+      <div className={cn("text-foreground", className)}>
         <div
-          className="prose-message whitespace-pre-wrap break-words [&_a]:text-primary [&_a]:underline [&_img.inline-emoji]:inline-block [&_img.inline-emoji]:size-[1.1em] [&_img.inline-emoji]:align-[-0.15em] [&_img.inline-emoji]:border-0 [&_img.inline-emoji]:my-0 [&_img:not(.inline-emoji)]:my-2 [&_img:not(.inline-emoji)]:max-h-48 [&_img:not(.inline-emoji)]:rounded-md [&_img:not(.inline-emoji)]:border [&_img:not(.inline-emoji)]:border-border/60 [&_video]:my-2 [&_video]:max-h-48 [&_video]:max-w-full [&_video]:rounded-md [&_video]:border [&_video]:border-border/60"
+          className="break-words leading-normal [&_a]:text-primary [&_a]:underline [&_div]:my-0 [&_img.inline-emoji]:my-0 [&_img.inline-emoji]:inline-block [&_img.inline-emoji]:size-[1.1em] [&_img.inline-emoji]:align-[-0.15em] [&_img.inline-emoji]:border-0 [&_img:not(.inline-emoji)]:my-2 [&_img:not(.inline-emoji)]:max-h-48 [&_img:not(.inline-emoji)]:rounded-md [&_img:not(.inline-emoji)]:border [&_img:not(.inline-emoji)]:border-border/60 [&_p]:my-0 [&_p+p]:mt-2 [&_video]:my-2 [&_video]:max-h-48 [&_video]:max-w-full [&_video]:rounded-md [&_video]:border [&_video]:border-border/60"
           dangerouslySetInnerHTML={{ __html: safe }}
         />
         {attachments && attachments.length > 0 ? (
@@ -113,11 +114,11 @@ export function FormattedMessageBody({
     );
   }
 
-  const lines = body.split("\n");
+  const lines = stripQuotedPlainText(body).split("\n");
 
   return (
-    <div className={cn("space-y-2 text-foreground", className)}>
-      <div className="whitespace-pre-wrap break-words">
+    <div className={cn("text-foreground", className)}>
+      <div className="whitespace-pre-wrap break-words leading-normal">
         {lines.map((line, index) => (
           <Fragment key={index}>
             {index > 0 ? <br /> : null}

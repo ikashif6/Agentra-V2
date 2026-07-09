@@ -6,7 +6,9 @@ const {
   normalizeStoreUrl,
 } = require('./store.service');
 
-const SHOPIFY_SCOPES = process.env.SHOPIFY_SCOPES || 'read_orders,read_customers,read_products';
+const SHOPIFY_SCOPES =
+  process.env.SHOPIFY_SCOPES ||
+  'read_orders,write_orders,read_customers,write_customers,read_products,read_fulfillments,write_fulfillments';
 
 // ─── Config ────────────────────────────────────────────────────────────────
 

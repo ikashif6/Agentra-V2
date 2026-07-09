@@ -16,6 +16,8 @@ const start = async () => {
 
   await connectDB();
 
+  const disableBackgroundJobs = process.env.DISABLE_BACKGROUND_JOBS === 'true';
+
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 Agentra API running on 0.0.0.0:${PORT}`);
     console.log(`   Environment : ${process.env.NODE_ENV || 'development'}`);
@@ -47,9 +49,14 @@ const start = async () => {
       emailPolling = false;
     }
   };
-  const emailPollTimer = setInterval(runEmailPoll, emailPollMs);
-  // Kick off shortly after boot (let DB settle).
-  setTimeout(runEmailPoll, 10 * 1000);
+  let emailPollTimer;
+  if (disableBackgroundJobs) {
+    console.log('   Background jobs: disabled (DISABLE_BACKGROUND_JOBS=true)');
+  } else {
+    emailPollTimer = setInterval(runEmailPoll, emailPollMs);
+    // Kick off shortly after boot (let DB settle).
+    setTimeout(runEmailPoll, 10 * 1000);
+  }
 
   // ── Store order sync (fallback for missed webhooks) ────────────────────────
   const Company = require('./models/Company');
@@ -82,14 +89,17 @@ const start = async () => {
       storeSyncing = false;
     }
   };
-  const storeSyncTimer = setInterval(runStoreSync, storeSyncMs);
-  setTimeout(runStoreSync, 30 * 1000);
+  let storeSyncTimer;
+  if (!disableBackgroundJobs) {
+    storeSyncTimer = setInterval(runStoreSync, storeSyncMs);
+    setTimeout(runStoreSync, 30 * 1000);
+  }
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('exit', () => {
-    clearInterval(emailPollTimer);
-    clearInterval(storeSyncTimer);
+    if (emailPollTimer) clearInterval(emailPollTimer);
+    if (storeSyncTimer) clearInterval(storeSyncTimer);
   });
 
   process.on('unhandledRejection', (err) => {

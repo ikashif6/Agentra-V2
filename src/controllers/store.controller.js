@@ -26,7 +26,7 @@ const {
   customWebhookAddress,
 } = require('../services/store-oauth.service');
 const { syncStoreOrders, findOrdersForCustomer } = require('../services/store-sync.service');
-const { cancelStoreOrder, fulfillStoreOrder } = require('../services/store-order-actions.service');
+const { cancelStoreOrder, fulfillStoreOrder, getStoreOrderDetail, runStoreOrderAction, updateStoreOrder } = require('../services/store-order-actions.service');
 const { logStoreConnected, logStoreDisconnected } = require('../services/activity.service');
 
 const SECRET_SELECT =
@@ -576,6 +576,75 @@ exports.fulfillOrder = async (req, res, next) => {
       notifyCustomer: req.body?.notifyCustomer,
     });
     return response.success(res, { order }, 'Order fulfilled');
+  } catch (err) {
+    if (err.message && !err.statusCode) return response.badRequest(res, err.message);
+    next(err);
+  }
+};
+
+/**
+ * GET /store/orders/:orderId
+ */
+exports.getOrder = async (req, res, next) => {
+  try {
+    const integration = getIntegration(req.company);
+    if (integration.status !== 'connected') {
+      return response.badRequest(res, 'No store connected');
+    }
+    const company = await loadCompanyWithStoreSecrets(req.company._id);
+    const detail = await getStoreOrderDetail(company, req.params.orderId);
+    return response.success(res, detail);
+  } catch (err) {
+    if (err.message && !err.statusCode) return response.badRequest(res, err.message);
+    next(err);
+  }
+};
+
+/**
+ * POST /store/orders/:orderId/actions
+ */
+exports.runOrderAction = async (req, res, next) => {
+  try {
+    const integration = getIntegration(req.company);
+    if (integration.status !== 'connected') {
+      return response.badRequest(res, 'No store connected');
+    }
+    const action = req.body?.action;
+    if (!action) return response.badRequest(res, 'action is required');
+
+    const company = await loadCompanyWithStoreSecrets(req.company._id);
+    const result = await runStoreOrderAction(company, req.params.orderId, action, req.body || {});
+
+    if (result?.duplicateUrl) {
+      return response.success(res, { duplicateUrl: result.duplicateUrl }, 'Draft order created');
+    }
+
+    return response.success(res, { order: result }, 'Order updated');
+  } catch (err) {
+    if (err.message && !err.statusCode) return response.badRequest(res, err.message);
+    next(err);
+  }
+};
+
+/**
+ * PATCH /store/orders/:orderId
+ */
+exports.updateOrder = async (req, res, next) => {
+  try {
+    const integration = getIntegration(req.company);
+    if (integration.status !== 'connected') {
+      return response.badRequest(res, 'No store connected');
+    }
+    const company = await loadCompanyWithStoreSecrets(req.company._id);
+    const order = await updateStoreOrder(company, req.params.orderId, {
+      note: req.body?.note,
+      tags: req.body?.tags,
+      email: req.body?.email,
+      updateCustomerProfile: req.body?.updateCustomerProfile,
+      shippingAddress: req.body?.shippingAddress,
+      billingAddress: req.body?.billingAddress,
+    });
+    return response.success(res, { order }, 'Order updated');
   } catch (err) {
     if (err.message && !err.statusCode) return response.badRequest(res, err.message);
     next(err);

@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const Counter = require('../models/Counter');
 const { saveBufferToUploads } = require('../utils/save-upload');
+const { stripQuotedHtml, stripQuotedPlainText } = require('../utils/email-reply-strip');
 
 const ACTIVE_STATUSES = ['open', 'in_progress', 'on_hold'];
 
@@ -33,9 +34,12 @@ function extractAddress(addressObj) {
 }
 
 function messageBody(parsed) {
-  if (parsed.html) return parsed.html;
-  if (parsed.textAsHtml) return parsed.textAsHtml;
-  if (parsed.text) return `<p>${String(parsed.text).replace(/\n/g, '<br>')}</p>`;
+  if (parsed.html) return stripQuotedHtml(parsed.html);
+  if (parsed.textAsHtml) return stripQuotedHtml(parsed.textAsHtml);
+  if (parsed.text) {
+    const plain = stripQuotedPlainText(parsed.text);
+    return `<p>${String(plain).replace(/\n/g, '<br>')}</p>`;
+  }
   return '(empty message)';
 }
 
@@ -56,6 +60,30 @@ function replaceCidInHtml(html, contentId, url) {
 
 function stripUnresolvedCidImages(html) {
   return html.replace(/<img\b[^>]*\bsrc=["']cid:[^"']+["'][^>]*>/gi, '');
+}
+
+function stripExternalImages(html) {
+  const uploadsMarker = '/api/uploads/';
+  const baseUrl = process.env.APP_API_URL || '';
+
+  return html.replace(/<img\b[^>]*>/gi, (tag) => {
+    if (/\bclass=["'][^"']*inline-emoji/i.test(tag)) return tag;
+    if (/\bdata-emoji=/i.test(tag)) return tag;
+
+    const match = tag.match(/\bsrc=["']([^"']+)["']/i);
+    if (!match) return '';
+    const src = match[1];
+    if (/^cid:/i.test(src)) return '';
+    if (src.includes(uploadsMarker)) return tag;
+    if (baseUrl && src.startsWith(baseUrl)) return tag;
+    return '';
+  });
+}
+
+function trimTrailingEmptyHtml(html) {
+  return String(html || '')
+    .replace(/(?:\s|<br\s*\/?>)+$/gi, '')
+    .trim();
 }
 
 function getDisposition(att) {
@@ -105,7 +133,7 @@ async function processEmailBodyAndAttachments(company, parsed) {
   }
 
   return {
-    body: stripUnresolvedCidImages(html),
+    body: trimTrailingEmptyHtml(stripExternalImages(stripUnresolvedCidImages(html))),
     attachments,
   };
 }

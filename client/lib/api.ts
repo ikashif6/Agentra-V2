@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import Cookies from "js-cookie";
-import type { StoreProvider, StoreSyncSettings } from "./types";
+import type { StoreOrderAddress, StoreProvider, StoreSyncSettings } from "./types";
 import { API_BASE, FACEBOOK_API_BASE } from "./constants";
 
 export const api = axios.create({
@@ -353,6 +353,32 @@ export const storeApi = {
   syncNow: () => api.post("/store/sync"),
   listOrders: (params: { email?: string; phone?: string; limit?: number }) =>
     api.get("/store/orders", { params }),
+  getOrder: (orderId: string) => api.get(`/store/orders/${orderId}`),
+  updateOrder: (
+    orderId: string,
+    payload: {
+      note?: string;
+      tags?: string[];
+      email?: string;
+      updateCustomerProfile?: boolean;
+      shippingAddress?: StoreOrderAddress;
+      billingAddress?: StoreOrderAddress;
+    },
+  ) => api.patch(`/store/orders/${orderId}`, payload),
+  runOrderAction: (
+    orderId: string,
+    payload: {
+      action: string;
+      message?: string;
+      email?: string;
+      reason?: string;
+      restock?: boolean;
+      notifyCustomer?: boolean;
+      trackingNumber?: string;
+      trackingCompany?: string;
+      trackingUrl?: string;
+    },
+  ) => api.post(`/store/orders/${orderId}/actions`, payload),
   cancelOrder: (
     orderId: string,
     payload?: { reason?: string; restock?: boolean; notifyCustomer?: boolean },

@@ -168,12 +168,15 @@ export interface StoreIntegration {
 }
 
 export interface StoreOrderLineItem {
+  externalId?: string;
   title?: string;
   variantTitle?: string;
   sku?: string;
   quantity?: number;
+  fulfillableQuantity?: number;
   price?: number;
   imageUrl?: string;
+  grams?: number;
 }
 
 export interface StoreOrderFulfillment {
@@ -184,6 +187,17 @@ export interface StoreOrderFulfillment {
   shippedAt?: string;
 }
 
+export interface StoreOrderAddress {
+  name?: string;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  province?: string;
+  zip?: string;
+  country?: string;
+  phone?: string;
+}
+
 export interface StoreOrder {
   _id: string;
   provider: StoreProvider;
@@ -192,19 +206,80 @@ export interface StoreOrder {
   name?: string;
   currency?: string;
   totalPrice?: number;
+  subtotalPrice?: number;
+  totalShipping?: number;
+  totalTax?: number;
+  shippingLines?: { title?: string; price?: number }[];
+  taxLines?: { title?: string; rate?: number; price?: number }[];
+  totalWeightGrams?: number;
   financialStatus?: string;
   fulfillmentStatus?: string;
+  channel?: string;
+  tags?: string[];
+  note?: string;
+  itemCount?: number;
+  onHold?: boolean;
+  shippingMethod?: string;
+  fulfillmentService?: string;
+  closedAt?: string;
   customer?: {
     externalId?: string;
     name?: string;
     email?: string;
     phone?: string;
   };
+  shippingAddress?: StoreOrderAddress;
+  billingAddress?: StoreOrderAddress;
   lineItems?: StoreOrderLineItem[];
   fulfillments?: StoreOrderFulfillment[];
   statusUrl?: string;
   adminUrl?: string;
   placedAt?: string;
+}
+
+export interface StoreOrderTimelineEvent {
+  id: string;
+  at: string;
+  type: string;
+  message: string;
+}
+
+export interface StoreOrderConversionHighlight {
+  id: string;
+  icon: "order" | "session" | "chart";
+  text: string;
+}
+
+export interface StoreOrderConversionSession {
+  id: string;
+  occurredAt?: string;
+  landingPage?: string | null;
+  referrerUrl?: string | null;
+  source?: string | null;
+  sourceDescription?: string | null;
+  sourceType?: string | null;
+  utmParameters?: {
+    campaign?: string | null;
+    content?: string | null;
+    medium?: string | null;
+    source?: string | null;
+    term?: string | null;
+  } | null;
+  visitLabel?: string;
+  firstPageLabel?: string | null;
+  rowLabel?: string;
+}
+
+export interface StoreOrderConversion {
+  ready: boolean;
+  customerOrderIndex?: number | null;
+  daysToConversion?: number | null;
+  totalSessions?: number | null;
+  highlights: StoreOrderConversionHighlight[];
+  sessions: StoreOrderConversionSession[];
+  firstVisit?: StoreOrderConversionSession | null;
+  lastVisit?: StoreOrderConversionSession | null;
+  fallback?: boolean;
 }
 
 export interface Company {

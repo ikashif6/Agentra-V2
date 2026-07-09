@@ -173,6 +173,7 @@ function getStoreSecrets(integration) {
   const enc = Boolean(integration?.encrypted);
   return {
     shopify: {
+      shopDomain: integration?.shopify?.shopDomain,
       accessToken: readSecret(integration?.shopify?.accessToken, enc),
     },
     woocommerce: {
@@ -199,34 +200,232 @@ function fullName(first, last) {
   return [first, last].filter(Boolean).join(' ').trim() || undefined;
 }
 
+function normalizeAddress(addr) {
+  if (!addr?.address1 && !addr?.city) return undefined;
+  return {
+    name: addr.name || undefined,
+    address1: addr.address1 || undefined,
+    address2: addr.address2 || undefined,
+    city: addr.city || undefined,
+    province: addr.province || addr.state || undefined,
+    zip: addr.zip || addr.postcode || undefined,
+    country: addr.country || undefined,
+    phone: addr.phone || undefined,
+  };
+}
+
+function mapShopifyChannel(sourceName) {
+  if (!sourceName) return undefined;
+  if (sourceName === 'web' || sourceName === 'online_store') return 'Online Store';
+  return String(sourceName).replace(/_/g, ' ');
+}
+
+function lineItemCount(lineItems) {
+  if (!Array.isArray(lineItems) || lineItems.length === 0) return 0;
+  return lineItems.reduce((sum, li) => sum + (toNumber(li.quantity) ?? 1), 0);
+}
+
+function moneyFromSet(priceSet) {
+  return toNumber(priceSet?.shop_money?.amount ?? priceSet?.presentment_money?.amount);
+}
+
+function sumLinePrices(lines) {
+  if (!Array.isArray(lines) || lines.length === 0) return undefined;
+  let sum = 0;
+  let hasValue = false;
+  for (const line of lines) {
+    const price =
+      moneyFromSet(line.price_set) ??
+      moneyFromSet(line.discounted_price_set) ??
+      toNumber(line.discounted_price) ??
+      toNumber(line.price);
+    if (price != null) {
+      sum += price;
+      hasValue = true;
+    }
+  }
+  return hasValue ? sum : undefined;
+}
+
+function lineItemWeightGrams(lineItems) {
+  if (!Array.isArray(lineItems) || lineItems.length === 0) return undefined;
+  const grams = lineItems.reduce(
+    (sum, li) => sum + (toNumber(li.grams) || 0) * (toNumber(li.quantity) ?? 1),
+    0,
+  );
+  return grams > 0 ? grams : undefined;
+}
+
+function mapTaxLines(taxLines) {
+  if (!Array.isArray(taxLines) || taxLines.length === 0) return undefined;
+  const mapped = taxLines
+    .map((line) => ({
+      title: line.title || undefined,
+      rate: toNumber(line.rate),
+      price: moneyFromSet(line.price_set) ?? toNumber(line.price),
+    }))
+    .filter((line) => line.title || line.price != null);
+  return mapped.length ? mapped : undefined;
+}
+
+function aggregateTaxFromLineItems(lineItems) {
+  const byKey = new Map();
+  for (const li of lineItems || []) {
+    for (const taxLine of li.tax_lines || []) {
+      const title = taxLine.title || 'Tax';
+      const rate = toNumber(taxLine.rate);
+      const key = `${title}::${rate ?? ''}`;
+      const price = moneyFromSet(taxLine.price_set) ?? toNumber(taxLine.price) ?? 0;
+      const existing = byKey.get(key) || { title, rate, price: 0 };
+      existing.price += price;
+      byKey.set(key, existing);
+    }
+  }
+  const lines = [...byKey.values()].filter((line) => line.title || line.price > 0);
+  return lines.length ? lines : undefined;
+}
+
+function resolveTaxLines(o, lineItems) {
+  return mapTaxLines(o.tax_lines) ?? aggregateTaxFromLineItems(lineItems);
+}
+
+function mapShippingLines(shippingLines) {
+  if (!Array.isArray(shippingLines) || shippingLines.length === 0) return undefined;
+  const mapped = shippingLines
+    .map((line) => ({
+      title: line.title || undefined,
+      price:
+        moneyFromSet(line.discounted_price_set) ??
+        toNumber(line.discounted_price) ??
+        moneyFromSet(line.price_set) ??
+        toNumber(line.price),
+    }))
+    .filter((line) => line.title || line.price != null);
+  return mapped.length ? mapped : undefined;
+}
+
+function finalizeShopifyPayment(raw, data) {
+  const subtotal =
+    data.subtotalPrice ??
+    toNumber(raw.current_subtotal_price) ??
+    toNumber(raw.total_line_items_price);
+  const total = data.totalPrice ?? toNumber(raw.current_total_price);
+  const discounts = toNumber(raw.total_discounts) ?? 0;
+
+  data.subtotalPrice = subtotal;
+  data.totalPrice = total;
+
+  if (!data.taxLines?.length) {
+    data.taxLines = aggregateTaxFromLineItems(raw.line_items);
+  }
+
+  if (data.totalTax == null && data.taxLines?.length) {
+    data.totalTax = data.taxLines.reduce((sum, line) => sum + (line.price ?? 0), 0);
+  }
+
+  if (data.totalShipping == null && data.shippingLines?.length) {
+    data.totalShipping = data.shippingLines.reduce((sum, line) => sum + (line.price ?? 0), 0);
+  }
+
+  if (subtotal != null && total != null) {
+    const remainder = Math.round((total - subtotal + discounts) * 100) / 100;
+    if (remainder > 0.001) {
+      if (data.totalTax == null && data.totalShipping != null) {
+        data.totalTax = Math.round((remainder - data.totalShipping) * 100) / 100;
+      } else if (data.totalShipping == null && data.totalTax != null) {
+        data.totalShipping = Math.round((remainder - data.totalTax) * 100) / 100;
+      }
+    }
+  }
+
+  if (data.totalShipping != null && !data.shippingLines?.length) {
+    data.shippingLines = [
+      {
+        title: data.shippingMethod || raw.shipping_lines?.[0]?.title || 'Shipping',
+        price: data.totalShipping,
+      },
+    ];
+  }
+
+  if (data.totalTax != null && !data.taxLines?.length) {
+    data.taxLines = [{ title: 'Taxes', price: data.totalTax }];
+  }
+
+  if (!data.shippingMethod && data.shippingLines?.[0]?.title) {
+    data.shippingMethod = data.shippingLines[0].title;
+  }
+
+  return data;
+}
+
 function normalizeShopifyOrder(o, shopDomain) {
   const customer = o.customer || {};
   const shipping = o.shipping_address || {};
-  return {
+  const billing = o.billing_address || {};
+  const lineItems = Array.isArray(o.line_items) ? o.line_items : [];
+  const shippingLines = mapShippingLines(o.shipping_lines);
+  const taxLines = resolveTaxLines(o, lineItems);
+
+  return finalizeShopifyPayment(o, {
     provider: 'shopify',
     externalId: String(o.id),
     orderNumber: o.name || (o.order_number ? `#${o.order_number}` : undefined),
     name: o.name,
     currency: o.currency,
-    totalPrice: toNumber(o.total_price),
-    subtotalPrice: toNumber(o.subtotal_price),
+    totalPrice: toNumber(o.total_price) ?? toNumber(o.current_total_price),
+    subtotalPrice:
+      toNumber(o.subtotal_price) ??
+      toNumber(o.current_subtotal_price) ??
+      toNumber(o.total_line_items_price),
+    totalShipping:
+      moneyFromSet(o.total_shipping_price_set) ??
+      moneyFromSet(o.current_shipping_price_set) ??
+      toNumber(o.total_shipping_price) ??
+      sumLinePrices(o.shipping_lines),
+    totalTax:
+      moneyFromSet(o.total_tax_set) ??
+      toNumber(o.total_tax) ??
+      moneyFromSet(o.current_total_tax_set) ??
+      toNumber(o.current_total_tax) ??
+      sumLinePrices(o.tax_lines) ??
+      (taxLines ? taxLines.reduce((sum, line) => sum + (line.price ?? 0), 0) : undefined),
     financialStatus: o.financial_status,
     fulfillmentStatus: o.fulfillment_status || 'unfulfilled',
+    channel: mapShopifyChannel(o.source_name),
+    tags: o.tags
+      ? String(o.tags)
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+      : [],
+    note: o.note || undefined,
+    itemCount: lineItemCount(lineItems),
+    onHold: Boolean(o.fulfillment_status === 'on_hold' || o.cancel_reason === 'other'),
+    shippingMethod: o.shipping_lines?.[0]?.title || undefined,
+    shippingLines,
+    taxLines,
+    totalWeightGrams: lineItemWeightGrams(lineItems) ?? toNumber(o.total_weight) ?? undefined,
+    fulfillmentService: lineItems[0]?.fulfillment_service || undefined,
+    closedAt: o.closed_at ? new Date(o.closed_at) : undefined,
     customer: {
       externalId: customer.id ? String(customer.id) : undefined,
       name: fullName(customer.first_name, customer.last_name) || shipping.name,
       email: o.email || customer.email || undefined,
       phone: o.phone || customer.phone || shipping.phone || undefined,
     },
-    lineItems: Array.isArray(o.line_items)
-      ? o.line_items.map((li) => ({
-          title: li.title,
-          variantTitle: li.variant_title || undefined,
-          sku: li.sku || undefined,
-          quantity: toNumber(li.quantity) ?? 1,
-          price: toNumber(li.price),
-        }))
-      : [],
+    shippingAddress: normalizeAddress(shipping),
+    billingAddress: normalizeAddress(billing),
+    lineItems: lineItems.map((li) => ({
+      externalId: li.id ? String(li.id) : undefined,
+      title: li.title,
+      variantTitle: li.variant_title || undefined,
+      sku: li.sku || undefined,
+      quantity: toNumber(li.quantity) ?? 1,
+      fulfillableQuantity: toNumber(li.fulfillable_quantity),
+      price: toNumber(li.price),
+      imageUrl: li.image?.src || li.image_url || undefined,
+      grams: toNumber(li.grams),
+    })),
     fulfillments: Array.isArray(o.fulfillments)
       ? o.fulfillments.map((f) => ({
           status: f.shipment_status || f.status,
@@ -241,7 +440,7 @@ function normalizeShopifyOrder(o, shopDomain) {
     adminUrl: shopDomain ? `https://${shopDomain}/admin/orders/${o.id}` : undefined,
     placedAt: o.created_at ? new Date(o.created_at) : undefined,
     updatedAtStore: o.updated_at ? new Date(o.updated_at) : undefined,
-  };
+  });
 }
 
 function mapWooFinancialStatus(status) {
@@ -261,6 +460,8 @@ function mapWooFinancialStatus(status) {
 
 function normalizeWooOrder(o, storeUrl) {
   const billing = o.billing || {};
+  const shipping = o.shipping || {};
+  const lineItems = Array.isArray(o.line_items) ? o.line_items : [];
   return {
     provider: 'woocommerce',
     externalId: String(o.id),
@@ -268,23 +469,48 @@ function normalizeWooOrder(o, storeUrl) {
     name: `#${o.number || o.id}`,
     currency: o.currency,
     totalPrice: toNumber(o.total),
+    subtotalPrice: toNumber(o.subtotal),
+    totalShipping: toNumber(o.shipping_total),
+    totalTax: toNumber(o.total_tax),
     financialStatus: mapWooFinancialStatus(o.status),
     fulfillmentStatus: o.status === 'completed' ? 'fulfilled' : 'unfulfilled',
+    channel: 'WooCommerce',
+    tags: Array.isArray(o.tags) ? o.tags.map((tag) => String(tag)) : [],
+    note: o.customer_note || undefined,
+    itemCount: lineItemCount(lineItems),
     customer: {
       externalId: o.customer_id ? String(o.customer_id) : undefined,
       name: fullName(billing.first_name, billing.last_name),
       email: billing.email || undefined,
       phone: billing.phone || undefined,
     },
-    lineItems: Array.isArray(o.line_items)
-      ? o.line_items.map((li) => ({
+    shippingAddress: normalizeAddress({
+      name: fullName(shipping.first_name, shipping.last_name),
+      address1: shipping.address_1,
+      address2: shipping.address_2,
+      city: shipping.city,
+      state: shipping.state,
+      postcode: shipping.postcode,
+      country: shipping.country,
+      phone: shipping.phone,
+    }),
+    billingAddress: normalizeAddress({
+      name: fullName(billing.first_name, billing.last_name),
+      address1: billing.address_1,
+      address2: billing.address_2,
+      city: billing.city,
+      state: billing.state,
+      postcode: billing.postcode,
+      country: billing.country,
+      phone: billing.phone,
+    }),
+    lineItems: lineItems.map((li) => ({
           title: li.name,
           sku: li.sku || undefined,
           quantity: toNumber(li.quantity) ?? 1,
           price: toNumber(li.price),
           imageUrl: li.image?.src || undefined,
-        }))
-      : [],
+        })),
     fulfillments: [],
     adminUrl: storeUrl ? `${storeUrl}/wp-admin/post.php?post=${o.id}&action=edit` : undefined,
     placedAt: o.date_created ? new Date(o.date_created) : undefined,
