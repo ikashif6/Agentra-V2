@@ -11,8 +11,8 @@ export const LEGAL = {
   website: `https://${BASE_DOMAIN}`,
   portal: PORTAL_ORIGIN,
   api: `https://api.${BASE_DOMAIN}`,
-  supportEmail: "support@agentraa.com",
-  privacyEmail: "privacy@agentraa.com",
+  supportEmail: "agentraa0@gmail.com",
+  privacyEmail: "agentraa0@gmail.com",
   effectiveDate: "July 9, 2026",
   lastUpdated: "July 9, 2026",
 } as const;

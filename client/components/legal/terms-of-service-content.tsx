@@ -14,11 +14,11 @@ export function TermsOfServiceContent() {
         <p>
           The Service is available at <a href={LEGAL.portal}>{LEGAL.portal}</a> (workspace login and
           portal), per-workspace URLs such as{" "}
-          <code className="rounded bg-white/5 px-1.5 py-0.5 text-sm text-zinc-200">
+          <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm text-gray-800">
             yourcompany.agentraa.com
           </code>
           , public help centers (including{" "}
-          <code className="rounded bg-white/5 px-1.5 py-0.5 text-sm text-zinc-200">
+          <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm text-gray-800">
             help.yourcompany.agentraa.com
           </code>{" "}
           or verified custom domains), ticket tracking pages, and our API at{" "}
@@ -74,7 +74,7 @@ export function TermsOfServiceContent() {
         <LegalSubsection title="3.2 Subdomains and URLs">
           <p>
             Each workspace receives a unique subdomain (for example{" "}
-            <code className="rounded bg-white/5 px-1.5 py-0.5 text-sm text-zinc-200">
+            <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm text-gray-800">
               acme.agentraa.com
             </code>
             ). Subdomains must comply with our naming rules and may not impersonate others or
@@ -399,7 +399,7 @@ export function TermsOfServiceContent() {
           For questions about these Terms, contact:
         </p>
         <p>
-          <strong className="text-white">{LEGAL.companyName}</strong>
+          <strong className="text-gray-900">{LEGAL.companyName}</strong>
           <br />
           Email:{" "}
           <a href={`mailto:${LEGAL.supportEmail}`} className="text-[#D85A30] hover:underline">

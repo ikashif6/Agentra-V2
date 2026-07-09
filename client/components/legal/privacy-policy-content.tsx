@@ -10,7 +10,7 @@ export function PrivacyPolicyContent() {
           &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) collects, uses, discloses, and protects
           information when you use the {LEGAL.productName} platform — including our web application
           at <a href={LEGAL.portal}>{LEGAL.portal}</a>, workspace subdomains such as{" "}
-          <code className="rounded bg-white/5 px-1.5 py-0.5 text-sm text-zinc-200">
+          <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm text-gray-800">
             yourcompany.agentraa.com
           </code>
           , public help centers, ticket tracking pages, APIs, and related services (collectively, the
@@ -31,9 +31,9 @@ export function PrivacyPolicyContent() {
       <LegalSection id="roles" title="2. Our role and your role">
         <p>
           Depending on how you interact with {LEGAL.productName}, we may process personal
-          information as a <strong className="text-white">data controller</strong> (for example,
+          information as a <strong className="text-gray-900">data controller</strong> (for example,
           when you sign up for a workspace, pay for a subscription, or contact us for support) or as
-          a <strong className="text-white">data processor</strong> on behalf of our business
+          a <strong className="text-gray-900">data processor</strong> on behalf of our business
           customers (for example, when end-customers message a company through Facebook Messenger,
           Instagram, WhatsApp, email, or a help center hosted on {LEGAL.productName}).
         </p>
@@ -379,7 +379,7 @@ export function PrivacyPolicyContent() {
           For privacy questions, requests, or complaints, contact:
         </p>
         <p>
-          <strong className="text-white">{LEGAL.companyName}</strong>
+          <strong className="text-gray-900">{LEGAL.companyName}</strong>
           <br />
           Email:{" "}
           <a href={`mailto:${LEGAL.privacyEmail}`} className="text-[#D85A30] hover:underline">
