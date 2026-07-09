@@ -26,6 +26,7 @@ const {
   customWebhookAddress,
 } = require('../services/store-oauth.service');
 const { syncStoreOrders, findOrdersForCustomer } = require('../services/store-sync.service');
+const { cancelStoreOrder, fulfillStoreOrder } = require('../services/store-order-actions.service');
 const { logStoreConnected, logStoreDisconnected } = require('../services/activity.service');
 
 const SECRET_SELECT =
@@ -532,6 +533,51 @@ exports.listOrders = async (req, res, next) => {
     });
     return response.success(res, { connected: true, provider: integration.provider, orders });
   } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /store/orders/:orderId/cancel
+ */
+exports.cancelOrder = async (req, res, next) => {
+  try {
+    const integration = getIntegration(req.company);
+    if (integration.status !== 'connected') {
+      return response.badRequest(res, 'No store connected');
+    }
+    const company = await loadCompanyWithStoreSecrets(req.company._id);
+    const order = await cancelStoreOrder(company, req.params.orderId, {
+      reason: req.body?.reason,
+      restock: req.body?.restock,
+      notifyCustomer: req.body?.notifyCustomer,
+    });
+    return response.success(res, { order }, 'Order cancelled');
+  } catch (err) {
+    if (err.message && !err.statusCode) return response.badRequest(res, err.message);
+    next(err);
+  }
+};
+
+/**
+ * POST /store/orders/:orderId/fulfill
+ */
+exports.fulfillOrder = async (req, res, next) => {
+  try {
+    const integration = getIntegration(req.company);
+    if (integration.status !== 'connected') {
+      return response.badRequest(res, 'No store connected');
+    }
+    const company = await loadCompanyWithStoreSecrets(req.company._id);
+    const order = await fulfillStoreOrder(company, req.params.orderId, {
+      trackingNumber: req.body?.trackingNumber,
+      trackingCompany: req.body?.trackingCompany,
+      trackingUrl: req.body?.trackingUrl,
+      notifyCustomer: req.body?.notifyCustomer,
+    });
+    return response.success(res, { order }, 'Order fulfilled');
+  } catch (err) {
+    if (err.message && !err.statusCode) return response.badRequest(res, err.message);
     next(err);
   }
 };

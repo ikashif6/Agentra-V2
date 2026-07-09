@@ -24,7 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { InboxReplyComposer } from "@/components/inbox/inbox-reply-composer";
 import { FormattedMessageBody } from "@/lib/format-message-body";
-import { messageHtmlToPlain } from "@/lib/sanitize-message-html";
+import { messageHtmlToPlain, isMessageHtml } from "@/lib/sanitize-message-html";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -134,7 +134,9 @@ function customerLabel(ticket: Ticket) {
 
 function lastPreview(ticket: Ticket) {
   const last = ticket.messages?.[ticket.messages.length - 1];
-  return last?.body?.slice(0, 120) ?? ticket.ticket_description?.slice(0, 120) ?? "";
+  const raw = last?.body ?? ticket.ticket_description ?? "";
+  const plain = isMessageHtml(raw) ? messageHtmlToPlain(raw) : raw;
+  return plain.replace(/\s+/g, " ").trim().slice(0, 120);
 }
 
 function isLiveChatScope(scope: ConversationScope) {

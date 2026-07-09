@@ -52,6 +52,20 @@ router.get(
 router.get('/orders', resolveTenant, protect, storeController.listOrders);
 
 router.post(
+  '/orders/:orderId/cancel',
+  resolveTenant,
+  protect,
+  storeController.cancelOrder,
+);
+
+router.post(
+  '/orders/:orderId/fulfill',
+  resolveTenant,
+  protect,
+  storeController.fulfillOrder,
+);
+
+router.post(
   '/connect',
   resolveTenant,
   protect,

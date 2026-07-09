@@ -348,6 +348,19 @@ export const storeApi = {
   syncNow: () => api.post("/store/sync"),
   listOrders: (params: { email?: string; phone?: string; limit?: number }) =>
     api.get("/store/orders", { params }),
+  cancelOrder: (
+    orderId: string,
+    payload?: { reason?: string; restock?: boolean; notifyCustomer?: boolean },
+  ) => api.post(`/store/orders/${orderId}/cancel`, payload ?? {}),
+  fulfillOrder: (
+    orderId: string,
+    payload?: {
+      trackingNumber?: string;
+      trackingCompany?: string;
+      trackingUrl?: string;
+      notifyCustomer?: boolean;
+    },
+  ) => api.post(`/store/orders/${orderId}/fulfill`, payload ?? {}),
   disconnect: () => api.delete("/store"),
 };
 

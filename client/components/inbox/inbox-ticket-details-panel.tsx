@@ -5,18 +5,21 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  Loader2,
   Package,
   Plus,
   Tag,
   Truck,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { storeApi } from "@/lib/api";
+import { getApiError } from "@/lib/api-error";
 import type { StoreOrder, Ticket, TicketDetails } from "@/lib/types";
 import { InboxMetadataPicker } from "@/components/inbox/inbox-metadata-picker";
 import {
@@ -44,6 +47,17 @@ function financialTone(status?: string) {
   if (s === "refunded" || s === "cancelled" || s === "failed")
     return "bg-red-50 text-red-700 border-red-200";
   return "bg-amber-50 text-amber-700 border-amber-200";
+}
+
+function orderIsCancelled(order: StoreOrder) {
+  const fin = (order.financialStatus || "").toLowerCase();
+  const ful = (order.fulfillmentStatus || "").toLowerCase();
+  return fin === "cancelled" || fin === "refunded" || ful === "cancelled";
+}
+
+function orderIsFulfilled(order: StoreOrder) {
+  const ful = (order.fulfillmentStatus || "").toLowerCase();
+  return ful === "fulfilled" || ful === "shipped" || ful === "completed";
 }
 
 function CustomerOrders({ email, phone }: { email: string; phone: string }) {
@@ -83,6 +97,10 @@ function CustomerOrders({ email, phone }: { email: string; phone: string }) {
     };
   }, [email, phone]);
 
+  const handleOrderUpdated = (updated: StoreOrder) => {
+    setOrders((prev) => prev?.map((o) => (o._id === updated._id ? updated : o)) ?? []);
+  };
+
   // Hide entirely when no store is connected.
   if (!connected && !loading) return null;
 
@@ -118,7 +136,9 @@ function CustomerOrders({ email, phone }: { email: string; phone: string }) {
               No matching orders for this customer.
             </p>
           ) : (
-            orders?.map((order) => <OrderCard key={order._id} order={order} />)
+            orders?.map((order) => (
+              <OrderCard key={order._id} order={order} onUpdated={handleOrderUpdated} />
+            ))
           )}
         </div>
       ) : null}
@@ -126,9 +146,63 @@ function CustomerOrders({ email, phone }: { email: string; phone: string }) {
   );
 }
 
-function OrderCard({ order }: { order: StoreOrder }) {
+function OrderCard({
+  order,
+  onUpdated,
+}: {
+  order: StoreOrder;
+  onUpdated: (order: StoreOrder) => void;
+}) {
+  const [busy, setBusy] = useState<"cancel" | "fulfill" | null>(null);
+  const [showFulfillForm, setShowFulfillForm] = useState(false);
+  const [trackingNumber, setTrackingNumber] = useState("");
+  const [trackingCompany, setTrackingCompany] = useState("");
+
+  const cancelled = orderIsCancelled(order);
+  const fulfilled = orderIsFulfilled(order);
   const tracking = order.fulfillments?.find((f) => f.trackingUrl || f.trackingNumber);
-  const itemCount = order.lineItems?.reduce((sum, li) => sum + (li.quantity ?? 0), 0) ?? 0;
+
+  const handleCancel = async () => {
+    if (!confirm(`Cancel order ${order.orderNumber || order.name}? The customer can be notified.`)) {
+      return;
+    }
+    setBusy("cancel");
+    try {
+      const { data } = await storeApi.cancelOrder(order._id, {
+        reason: "customer",
+        restock: true,
+        notifyCustomer: true,
+      });
+      if (data.data?.order) onUpdated(data.data.order);
+      toast.success("Order cancelled");
+    } catch (err: unknown) {
+      const { message } = getApiError(err, "Could not cancel order");
+      toast.error(message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleFulfill = async () => {
+    setBusy("fulfill");
+    try {
+      const { data } = await storeApi.fulfillOrder(order._id, {
+        trackingNumber: trackingNumber.trim() || undefined,
+        trackingCompany: trackingCompany.trim() || undefined,
+        notifyCustomer: true,
+      });
+      if (data.data?.order) onUpdated(data.data.order);
+      toast.success("Order marked as fulfilled");
+      setShowFulfillForm(false);
+      setTrackingNumber("");
+      setTrackingCompany("");
+    } catch (err: unknown) {
+      const { message } = getApiError(err, "Could not fulfill order");
+      toast.error(message);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <div className="rounded-lg border border-border/60 bg-card p-3">
@@ -163,45 +237,125 @@ function OrderCard({ order }: { order: StoreOrder }) {
         ) : null}
       </div>
 
-      {itemCount > 0 ? (
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          {itemCount} item{itemCount === 1 ? "" : "s"}
-          {order.lineItems?.[0]?.title ? ` · ${order.lineItems[0].title}` : ""}
-          {order.lineItems && order.lineItems.length > 1
-            ? ` +${order.lineItems.length - 1} more`
-            : ""}
-        </p>
+      {order.lineItems && order.lineItems.length > 0 ? (
+        <ul className="mt-2.5 space-y-1.5 border-t border-border/50 pt-2.5">
+          {order.lineItems.map((item, i) => (
+            <li key={`${item.title}-${i}`} className="flex items-start justify-between gap-2 text-xs">
+              <span className="min-w-0 text-foreground">
+                <span className="font-medium">{item.quantity ?? 1}×</span> {item.title}
+                {item.variantTitle ? (
+                  <span className="text-muted-foreground"> · {item.variantTitle}</span>
+                ) : null}
+              </span>
+              {item.price != null ? (
+                <span className="shrink-0 text-muted-foreground">
+                  {formatMoney((item.price ?? 0) * (item.quantity ?? 1), order.currency)}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
       ) : null}
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        {tracking?.trackingUrl ? (
-          <a
-            href={tracking.trackingUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-          >
+      {tracking ? (
+        <div className="mt-2.5 rounded-md bg-muted/40 px-2.5 py-2 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1 font-medium text-foreground">
             <Truck className="size-3" />
-            Track shipment
-          </a>
-        ) : tracking?.trackingNumber ? (
-          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Truck className="size-3" />
-            {tracking.trackingNumber}
+            Shipment
           </span>
-        ) : null}
-        {order.adminUrl ? (
-          <a
-            href={order.adminUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
-          >
-            <ExternalLink className="size-3" />
-            View in store
-          </a>
-        ) : null}
-      </div>
+          {tracking.trackingCompany ? <p className="mt-0.5">{tracking.trackingCompany}</p> : null}
+          {tracking.trackingNumber ? <p>{tracking.trackingNumber}</p> : null}
+          {tracking.trackingUrl ? (
+            <a
+              href={tracking.trackingUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-0.5 inline-block font-medium text-primary hover:underline"
+            >
+              Track package
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!cancelled && !fulfilled ? (
+        <div className="mt-3 space-y-2 border-t border-border/50 pt-2.5">
+          {showFulfillForm ? (
+            <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 p-2.5">
+              <p className="text-[11px] font-medium text-foreground">Fulfillment details (optional)</p>
+              <Input
+                value={trackingCompany}
+                onChange={(e) => setTrackingCompany(e.target.value)}
+                placeholder="Carrier (e.g. UPS)"
+                className="h-8 text-xs"
+              />
+              <Input
+                value={trackingNumber}
+                onChange={(e) => setTrackingNumber(e.target.value)}
+                placeholder="Tracking number"
+                className="h-8 text-xs"
+              />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-7 flex-1 text-xs"
+                  disabled={busy === "fulfill"}
+                  onClick={() => void handleFulfill()}
+                >
+                  {busy === "fulfill" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                  Confirm fulfill
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={() => setShowFulfillForm(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                disabled={busy !== null}
+                onClick={() => setShowFulfillForm(true)}
+              >
+                Mark fulfilled
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs text-destructive hover:text-destructive"
+                disabled={busy !== null}
+                onClick={() => void handleCancel()}
+              >
+                {busy === "cancel" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                Cancel order
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {order.adminUrl ? (
+        <a
+          href={order.adminUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground hover:underline"
+        >
+          <ExternalLink className="size-2.5" />
+          Open in Shopify admin
+        </a>
+      ) : null}
     </div>
   );
 }
