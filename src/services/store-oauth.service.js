@@ -6,9 +6,28 @@ const {
   normalizeStoreUrl,
 } = require('./store.service');
 
-const SHOPIFY_SCOPES =
-  process.env.SHOPIFY_SCOPES ||
-  'read_orders,write_orders,read_customers,write_customers,read_products,read_fulfillments,write_fulfillments';
+const SHOPIFY_SCRIPT_TAG_SCOPE = 'write_script_tags';
+
+// Default scopes for custom-distribution Shopify app (includes live chat script tag install).
+const SHOPIFY_BASE_SCOPES =
+  'read_orders,write_orders,read_customers,write_customers,read_products,read_fulfillments,write_fulfillments,write_script_tags';
+
+const SHOPIFY_SCOPES = process.env.SHOPIFY_SCOPES || SHOPIFY_BASE_SCOPES;
+
+function parseScopeList(scopes) {
+  return String(scopes || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function shopifyScopesIncludeScriptTags(scopes) {
+  return parseScopeList(scopes).includes(SHOPIFY_SCRIPT_TAG_SCOPE);
+}
+
+function configuredShopifyScriptTagsScope() {
+  return shopifyScopesIncludeScriptTags(SHOPIFY_SCOPES);
+}
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
@@ -86,7 +105,79 @@ async function readJsonResponse(res) {
 
 // ─── Shopify OAuth ────────────────────────────────────────────────────────────
 
-function buildShopifyInstallUrl({ shopDomain, companyId, subdomain, userId, returnOrigin }) {
+function parseCustomInstallLink(link) {
+  if (!link || typeof link !== 'string') {
+    throw new Error('SHOPIFY_CUSTOM_INSTALL_LINK is not configured');
+  }
+  let url;
+  try {
+    url = new URL(link.trim());
+  } catch {
+    throw new Error('SHOPIFY_CUSTOM_INSTALL_LINK is not a valid URL');
+  }
+
+  const clientId = url.searchParams.get('client_id');
+  let signature = url.searchParams.get('signature');
+  if (!clientId || !signature) {
+    throw new Error('Install link is missing client_id or signature');
+  }
+
+  try {
+    signature = decodeURIComponent(signature);
+  } catch {
+    // keep raw value
+  }
+
+  const [base64Payload] = signature.split('--');
+  if (!base64Payload) {
+    throw new Error('Install link signature is malformed');
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(base64Payload, 'base64').toString('utf8'));
+  } catch {
+    throw new Error('Install link signature could not be decoded');
+  }
+
+  if (!payload?.permanent_domain) {
+    throw new Error('Install link is missing the store domain');
+  }
+  if (payload.expires_at && payload.expires_at * 1000 < Date.now()) {
+    throw new Error('Install link has expired — generate a new one in your Shopify Partner app');
+  }
+
+  return {
+    clientId,
+    signature,
+    storeDomain: normalizeShopDomain(payload.permanent_domain),
+  };
+}
+
+function usesCustomInstallFlow() {
+  return Boolean(process.env.SHOPIFY_CUSTOM_INSTALL_LINK?.trim());
+}
+
+function buildShopifyCustomInstallUrl(shopDomain) {
+  if (!usesCustomInstallFlow()) return null;
+  const parsed = parseCustomInstallLink(process.env.SHOPIFY_CUSTOM_INSTALL_LINK);
+  const domain = normalizeShopDomain(shopDomain);
+  if (parsed.storeDomain !== domain) {
+    throw new Error(
+      `This Shopify install link is for ${parsed.storeDomain}. Generate a new link for ${domain} in your Partner app.`,
+    );
+  }
+  if (parsed.clientId !== process.env.SHOPIFY_API_KEY) {
+    throw new Error('Install link client_id does not match SHOPIFY_API_KEY');
+  }
+
+  const url = new URL(`https://${domain}/admin/oauth/install_custom_app`);
+  url.searchParams.set('client_id', parsed.clientId);
+  url.searchParams.set('signature', parsed.signature);
+  return url.toString();
+}
+
+function buildShopifyAuthorizeUrl({ shopDomain, companyId, subdomain, userId, returnOrigin }) {
   if (!isShopifyOAuthConfigured()) {
     throw new Error(
       'Shopify is not configured on the server. Add SHOPIFY_API_KEY and SHOPIFY_API_SECRET.',
@@ -108,6 +199,39 @@ function buildShopifyInstallUrl({ shopDomain, companyId, subdomain, userId, retu
   url.searchParams.set('redirect_uri', getShopifyRedirectUri());
   url.searchParams.set('state', state);
   return url.toString();
+}
+
+function buildShopifyInstallUrl({ shopDomain, companyId, subdomain, userId, returnOrigin }) {
+  if (!isShopifyOAuthConfigured()) {
+    throw new Error(
+      'Shopify is not configured on the server. Add SHOPIFY_API_KEY and SHOPIFY_API_SECRET.',
+    );
+  }
+  const domain = normalizeShopDomain(shopDomain);
+  const customInstallUrl = buildShopifyCustomInstallUrl(domain);
+  if (customInstallUrl) {
+    return customInstallUrl;
+  }
+
+  return buildShopifyAuthorizeUrl({
+    shopDomain: domain,
+    companyId,
+    subdomain,
+    userId,
+    returnOrigin,
+  });
+}
+
+async function revokeShopifyAppAccess(shopDomain, accessToken) {
+  if (!shopDomain || !accessToken) return { revoked: false };
+  const res = await fetch(`https://${shopDomain}/admin/api_permissions/current.json`, {
+    method: 'DELETE',
+    headers: {
+      'X-Shopify-Access-Token': accessToken,
+      Accept: 'application/json',
+    },
+  });
+  return { revoked: res.ok || res.status === 404 };
 }
 
 // Shopify signs the callback query with the app secret (HMAC over the sorted
@@ -276,9 +400,18 @@ function verifyHmacSignature(rawBody, signatureHeader, secret) {
 
 module.exports = {
   SHOPIFY_SCOPES,
+  SHOPIFY_BASE_SCOPES,
+  SHOPIFY_SCRIPT_TAG_SCOPE,
+  shopifyScopesIncludeScriptTags,
+  configuredShopifyScriptTagsScope,
   isShopifyOAuthConfigured,
   getShopifyRedirectUri,
   getWooCallbackUrl,
+  revokeShopifyAppAccess,
+  usesCustomInstallFlow,
+  parseCustomInstallLink,
+  buildShopifyCustomInstallUrl,
+  buildShopifyAuthorizeUrl,
   buildShopifyInstallUrl,
   verifyShopifyOAuthHmac,
   isValidShopDomain,

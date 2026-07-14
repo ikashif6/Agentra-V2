@@ -163,8 +163,96 @@ export interface StoreIntegration {
     storeName?: string;
     hasApiKey?: boolean;
     webhookSecret?: string;
+    supportedActions?: string[];
+    features?: {
+      conversion?: boolean;
+      edit?: boolean;
+    };
   };
   syncSettings: StoreSyncSettings;
+}
+
+export interface ChatKnowledgeArticle {
+  _id: string;
+  title: string;
+  content: string;
+  category?: string;
+  active?: boolean;
+}
+
+export interface LiveChatAgent {
+  _id: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  avatar?: string;
+  role?: Role;
+  isOnline?: boolean;
+  initials: string;
+  color: string;
+}
+
+export interface LiveChatSettings {
+  enabled: boolean;
+  widgetKey?: string | null;
+  widgetInstalled?: boolean;
+  installMethod?: 'shopify_script' | 'manual' | null;
+  canAutoInstall?: boolean;
+  shopifyAutoInstallPending?: boolean;
+  storeProvider?: string | null;
+  storeConnected?: boolean;
+  allowedOrigins?: string[];
+  appearance: {
+    brandColor: string;
+    backgroundColor?: string;
+    fontFamily: string;
+    logoUrl?: string;
+    faviconUrl?: string;
+    logoSize?: string;
+    logoWidth?: number;
+    logoHeight?: number;
+    position?: string;
+    launcherOffsetX?: number;
+    launcherOffsetY?: number;
+    showBranding?: boolean;
+  };
+  content: {
+    storeDisplayName?: string;
+    agentName?: string;
+    welcomeTitle?: string;
+    welcomeSubtitle?: string;
+    welcomeMessage?: string;
+    emailGateTitle?: string;
+    emailGateSubtitle?: string;
+    offlineMessage?: string;
+    quickReplies?: string[];
+  };
+  behavior: {
+    typingIndicator?: boolean;
+    retrievalIndicator?: boolean;
+    requireEmailBeforeChat?: boolean;
+    requireOrderVerification?: boolean;
+    handoffOnlyInBusinessHours?: boolean;
+  };
+  ai: {
+    enabled?: boolean;
+    instructions?: string;
+    escalationKeywords?: string[];
+    allowedActions: {
+      lookupOrder?: boolean;
+      cancelOrder?: boolean;
+      refundOrder?: boolean;
+      maxRefundAmount?: number;
+      editOrder?: boolean;
+      productRecommendations?: boolean;
+      requestHuman?: boolean;
+    };
+  };
+  /** Human agents for live chat (widget faces + portal assign) */
+  agents?: LiveChatAgent[];
+  connectedAt?: string | null;
+  lastError?: string | null;
+  embedSnippet?: string | null;
 }
 
 export interface StoreOrderLineItem {

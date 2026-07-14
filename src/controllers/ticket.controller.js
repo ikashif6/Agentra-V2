@@ -692,6 +692,20 @@ exports.updateTicket = async (req, res, next) => {
       return response.success(res, { ticket }, 'Ticket self-closed');
     }
 
+    // Live chat: only configured agents can be assigned when an allowlist exists
+    if (
+      req.body.assigned_agent &&
+      ['chatbot', 'chat'].includes(String(ticket.source))
+    ) {
+      const liveAgents = (req.company.liveChat?.agents || []).map((id) => String(id));
+      if (liveAgents.length > 0 && !liveAgents.includes(String(req.body.assigned_agent))) {
+        return response.badRequest(
+          res,
+          'That agent is not on the live chat agents list. Update Live chat settings to add them.',
+        );
+      }
+    }
+
     // Staff / owner update
     const allowedFields = [
       'ticket_title',

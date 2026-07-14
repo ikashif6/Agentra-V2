@@ -254,12 +254,92 @@ const companySchema = new mongoose.Schema(
         apiKey: { type: String, select: false },
         webhookSecret: { type: String, select: false },
         storeName: { type: String },
+        supportedActions: [{ type: String }],
+        features: {
+          conversion: { type: Boolean, default: true },
+          edit: { type: Boolean, default: true },
+        },
       },
       syncSettings: {
         syncOrders: { type: Boolean, default: true },
         syncCustomers: { type: Boolean, default: true },
         syncProducts: { type: Boolean, default: false },
       },
+    },
+
+    // Live chat widget + AI agent (Settings → Channels → Live chat)
+    liveChat: {
+      enabled: { type: Boolean, default: false },
+      widgetKey: { type: String, index: true, sparse: true },
+      widgetInstalled: { type: Boolean, default: false },
+      installMethod: { type: String, enum: ['shopify_script', 'manual', null], default: null },
+      shopifyScriptTagId: { type: String },
+      allowedOrigins: [{ type: String, trim: true }],
+      appearance: {
+        brandColor: { type: String, default: '#2563eb' },
+        backgroundColor: { type: String, default: '#ffffff' },
+        fontFamily: { type: String, default: 'Sora' },
+        logoUrl: { type: String },
+        faviconUrl: { type: String },
+        logoSize: { type: String, enum: ['small', 'medium', 'large'], default: 'medium' },
+        logoWidth: { type: Number, default: 120, min: 24, max: 280 },
+        logoHeight: { type: Number, default: 40, min: 16, max: 120 },
+        position: { type: String, enum: ['bottom-right', 'bottom-left'], default: 'bottom-right' },
+        launcherOffsetX: { type: Number, default: 20 },
+        launcherOffsetY: { type: Number, default: 20 },
+        showBranding: { type: Boolean, default: true },
+      },
+      content: {
+        storeDisplayName: { type: String },
+        agentName: { type: String, default: 'Support Assistant' },
+        welcomeTitle: { type: String, default: 'Hi there 👋\nHow can we help?' },
+        welcomeSubtitle: {
+          type: String,
+          default: 'Ask about orders, products, returns & store support.',
+        },
+        welcomeMessage: {
+          type: String,
+          default: "I'm here to help with orders, products, and store questions.",
+        },
+        emailGateTitle: { type: String, default: 'Start a conversation' },
+        emailGateSubtitle: {
+          type: String,
+          default: 'Enter your email so we can help you with your orders.',
+        },
+        offlineMessage: {
+          type: String,
+          default: 'Our team is currently away. The assistant can still help, or you can leave a message.',
+        },
+        quickReplies: [{ type: String, trim: true }],
+      },
+      behavior: {
+        typingIndicator: { type: Boolean, default: true },
+        retrievalIndicator: { type: Boolean, default: true },
+        requireEmailBeforeChat: { type: Boolean, default: true },
+        requireOrderVerification: { type: Boolean, default: true },
+        handoffOnlyInBusinessHours: { type: Boolean, default: true },
+      },
+      ai: {
+        enabled: { type: Boolean, default: true },
+        instructions: { type: String, default: '' },
+        escalationKeywords: {
+          type: [String],
+          default: ['human', 'agent', 'representative', 'speak to someone', 'manager'],
+        },
+        allowedActions: {
+          lookupOrder: { type: Boolean, default: true },
+          cancelOrder: { type: Boolean, default: false },
+          refundOrder: { type: Boolean, default: true },
+          maxRefundAmount: { type: Number, default: 100 },
+          editOrder: { type: Boolean, default: false },
+          productRecommendations: { type: Boolean, default: true },
+          requestHuman: { type: Boolean, default: true },
+        },
+      },
+      connectedAt: { type: Date },
+      lastError: { type: String },
+      // Human agents allowed to handle live chat (portal assign + widget faces)
+      agents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     },
 
     // Messaging channel connections (Facebook Messenger, etc.)

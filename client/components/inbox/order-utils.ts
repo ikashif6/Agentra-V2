@@ -1,4 +1,4 @@
-import type { StoreOrder, StoreOrderAddress } from "@/lib/types";
+import type { StoreOrder, StoreOrderAddress, StoreProvider } from "@/lib/types";
 
 export function formatMoney(amount?: number, currency?: string) {
   if (amount == null) return "";
@@ -104,6 +104,7 @@ export function formatFinancialLabel(status?: string) {
   const s = (status || "").toLowerCase();
   if (s === "pending") return "Payment pending";
   if (s === "paid") return "Paid";
+  if (s === "partially_refunded") return "Partially refunded";
   if (s === "refunded") return "Refunded";
   if (s === "cancelled") return "Cancelled";
   return status || "Unknown";
@@ -245,4 +246,76 @@ export function formatOrderShippingDetail(order: StoreOrder) {
   if (!grams) return title;
   const kg = (grams / 1000).toFixed(3);
   return `${title} (${kg} kg: Items ${kg} kg, Package 0.0 kg)`;
+}
+
+const SHARED_STORE_ACTIONS = [
+  "cancel",
+  "fulfill",
+  "refund",
+  "hold",
+  "request_fulfillment",
+  "send_invoice",
+  "mark_paid",
+  "resend_order_email",
+  "duplicate",
+  "archive",
+  "remove_customer",
+  "edit",
+] as const;
+
+const PROVIDER_ACTIONS: Record<StoreProvider, Set<string>> = {
+  shopify: new Set(SHARED_STORE_ACTIONS),
+  woocommerce: new Set(SHARED_STORE_ACTIONS),
+  custom: new Set(SHARED_STORE_ACTIONS),
+};
+
+export function storeAdminLabel(provider?: StoreProvider) {
+  switch (provider) {
+    case "woocommerce":
+      return "Open in WooCommerce admin";
+    case "custom":
+      return "Open in store admin";
+    default:
+      return "Open in Shopify admin";
+  }
+}
+
+export function canPerformOrderAction(order: StoreOrder, action: string) {
+  if (!order.provider || !PROVIDER_ACTIONS[order.provider]?.has(action)) return false;
+
+  const cancelled = orderIsCancelled(order);
+  const fulfilled = orderIsFulfilled(order);
+  const fin = (order.financialStatus || "").toLowerCase();
+  const paid = fin === "paid" || fin === "partially_refunded";
+  const pending = fin === "pending";
+
+  switch (action) {
+    case "cancel":
+      return !cancelled;
+    case "fulfill":
+      return !cancelled && !fulfilled;
+    case "refund":
+      return !cancelled && paid;
+    case "hold":
+    case "request_fulfillment":
+      return !cancelled && !fulfilled && !order.onHold;
+    case "send_invoice":
+    case "mark_paid":
+      return !cancelled && pending;
+    case "resend_order_email":
+      return !cancelled && Boolean(order.customer?.email?.trim());
+    case "duplicate":
+    case "archive":
+      return !cancelled;
+    case "remove_customer":
+      return !cancelled && Boolean(order.customer?.externalId || order.customer?.email);
+    case "edit":
+      return !fulfilled || order.provider !== "shopify";
+    default:
+      return true;
+  }
+}
+
+export function canEditOrderContact(order: StoreOrder) {
+  return canPerformOrderAction(order, "edit") && !orderIsFulfilled(order);
 }

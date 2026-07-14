@@ -17,6 +17,7 @@ import InstagramSettingsPanel from "@/components/settings/instagram-settings-pan
 import WhatsAppSettingsPanel from "@/components/settings/whatsapp-settings-panel";
 import EmailSettingsPanel from "@/components/settings/email-settings-panel";
 import BusinessHoursPanel from "@/components/settings/business-hours-panel";
+import LiveChatSettingsPanel from "@/components/settings/live-chat-settings-panel";
 import {
   AccountPlaceholderPanel,
   ChannelPlaceholderPanel,
@@ -84,12 +85,7 @@ export default function SettingsContent() {
       case "email":
         return isStaff ? <EmailSettingsPanel /> : null;
       case "chat":
-        return isStaff ? (
-          <ChannelPlaceholderPanel
-            title="Live chat"
-            description="Add a chat widget to your site and route conversations to your team"
-          />
-        ) : null;
+        return isStaff ? <LiveChatSettingsPanel /> : null;
       case "whatsapp":
         return isStaff ? <WhatsAppSettingsPanel /> : null;
       case "tiktok":

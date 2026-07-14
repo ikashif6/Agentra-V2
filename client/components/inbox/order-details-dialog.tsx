@@ -52,6 +52,8 @@ import {
   formatOrderShippingDetail,
   formatOrderTaxDetail,
   fulfillmentTone,
+  canPerformOrderAction,
+  storeAdminLabel,
   orderAmountPaid,
   orderBalance,
   orderIsCancelled,
@@ -164,12 +166,27 @@ export function OrderDetailsDialog({
       const { data } = await storeApi.runOrderAction(order._id, { action, ...payload });
       if (data.data?.duplicateUrl) {
         window.open(data.data.duplicateUrl, "_blank", "noopener,noreferrer");
-        toast.success("Draft order created in Shopify");
+        toast.success(
+          order.provider === "shopify"
+            ? "Draft order created in Shopify"
+            : order.provider === "woocommerce"
+              ? "Duplicate order opened in WooCommerce"
+              : "Duplicate order opened in store admin",
+        );
+        return;
+      }
+      if (data.data?.archived) {
+        toast.success("Order archived");
+        onOpenChange(false);
         return;
       }
       if (action === "resend_order_email") {
         if (data.data?.order) updateOrder(data.data.order);
-        toast.success("Order email sent to customer");
+        toast.success(
+          order.provider === "woocommerce"
+            ? "Order details added as a customer note (WooCommerce has no REST email API)"
+            : "Order email sent to customer",
+        );
         return;
       }
       if (action === "remove_customer") {
@@ -206,12 +223,17 @@ export function OrderDetailsDialog({
   const taxAmount = orderTaxAmount(order);
   const shippingDetail = formatOrderShippingDetail(order);
   const taxDetail = formatOrderTaxDetail(order);
-  const pendingPayment = (order.financialStatus || "").toLowerCase() === "pending";
-  const paidPayment = (order.financialStatus || "").toLowerCase() === "paid";
-  const customerEmail = order.customer?.email?.trim();
-  const canResendOrderEmail =
-    order.provider === "shopify" && !cancelled && Boolean(customerEmail);
-  const canRefundOrder = order.provider === "shopify" && !cancelled && paidPayment;
+  const canResendOrderEmail = canPerformOrderAction(order, "resend_order_email");
+  const canRefundOrder = canPerformOrderAction(order, "refund");
+  const canHoldOrder = canPerformOrderAction(order, "hold");
+  const canRequestFulfillment = canPerformOrderAction(order, "request_fulfillment");
+  const canFulfillOrder = canPerformOrderAction(order, "fulfill");
+  const canSendInvoice = canPerformOrderAction(order, "send_invoice");
+  const canMarkPaid = canPerformOrderAction(order, "mark_paid");
+  const canEditOrder = canPerformOrderAction(order, "edit");
+  const canDuplicateOrder = canPerformOrderAction(order, "duplicate");
+  const canArchiveOrder = canPerformOrderAction(order, "archive");
+  const adminLabel = storeAdminLabel(order.provider);
 
   const handleFulfill = async () => {
     await runAction("fulfill", {
@@ -269,67 +291,69 @@ export function OrderDetailsDialog({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {!cancelled && !fulfilled ? (
-                <>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs"
-                    disabled={busy !== null}
-                    onClick={() => void runAction("hold")}
-                  >
-                    {busy === "hold" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-                    Mark as on hold
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs"
-                    disabled={busy !== null}
-                    onClick={() => setRequestFulfillmentOpen(true)}
-                  >
-                    Request fulfillment
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs"
-                    disabled={busy !== null}
-                    onClick={() => setShowFulfillForm((v) => !v)}
-                  >
-                    Mark fulfilled
-                  </Button>
-                </>
+              {canHoldOrder ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  disabled={busy !== null}
+                  onClick={() => void runAction("hold")}
+                >
+                  {busy === "hold" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                  Mark as on hold
+                </Button>
+              ) : null}
+              {canRequestFulfillment ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  disabled={busy !== null}
+                  onClick={() => setRequestFulfillmentOpen(true)}
+                >
+                  Request fulfillment
+                </Button>
+              ) : null}
+              {canFulfillOrder ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  disabled={busy !== null}
+                  onClick={() => setShowFulfillForm((v) => !v)}
+                >
+                  Mark fulfilled
+                </Button>
               ) : null}
 
-              {pendingPayment ? (
-                <>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs"
-                    disabled={busy !== null}
-                    onClick={() => void runAction("send_invoice", { message: "Here is your invoice." })}
-                  >
-                    {busy === "send_invoice" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-                    Send invoice
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs"
-                    disabled={busy !== null}
-                    onClick={() => void runAction("mark_paid")}
-                  >
-                    {busy === "mark_paid" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-                    Mark as paid
-                  </Button>
-                </>
+              {canSendInvoice ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  disabled={busy !== null}
+                  onClick={() => void runAction("send_invoice", { message: "Here is your invoice." })}
+                >
+                  {busy === "send_invoice" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                  Send invoice
+                </Button>
+              ) : null}
+              {canMarkPaid ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  disabled={busy !== null}
+                  onClick={() => void runAction("mark_paid")}
+                >
+                  {busy === "mark_paid" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                  Mark as paid
+                </Button>
               ) : null}
               {canRefundOrder ? (
                 <Button
@@ -363,16 +387,18 @@ export function OrderDetailsDialog({
                 </Button>
               ) : null}
 
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs"
-                onClick={() => setEditOpen(true)}
-              >
-                <Pencil className="mr-1 size-3" />
-                Edit
-              </Button>
+              {canEditOrder ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => setEditOpen(true)}
+                >
+                  <Pencil className="mr-1 size-3" />
+                  Edit
+                </Button>
+              ) : null}
 
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -407,10 +433,12 @@ export function OrderDetailsDialog({
                       Resend order email
                     </DropdownMenuItem>
                   ) : null}
-                  <DropdownMenuItem onClick={() => void runAction("duplicate")}>
-                    Duplicate order
-                  </DropdownMenuItem>
-                  {!cancelled ? (
+                  {canDuplicateOrder ? (
+                    <DropdownMenuItem onClick={() => void runAction("duplicate")}>
+                      Duplicate order
+                    </DropdownMenuItem>
+                  ) : null}
+                  {canPerformOrderAction(order, "cancel") ? (
                     <DropdownMenuItem
                       className="text-destructive"
                       onClick={() => {
@@ -434,9 +462,11 @@ export function OrderDetailsDialog({
                       Refund order
                     </DropdownMenuItem>
                   ) : null}
-                  <DropdownMenuItem onClick={() => void runAction("archive")}>
-                    Archive order
-                  </DropdownMenuItem>
+                  {canArchiveOrder ? (
+                    <DropdownMenuItem onClick={() => void runAction("archive")}>
+                      Archive order
+                    </DropdownMenuItem>
+                  ) : null}
                   {order.statusUrl ? (
                     <>
                       <DropdownMenuSeparator />
@@ -451,7 +481,7 @@ export function OrderDetailsDialog({
                     <DropdownMenuItem
                       onClick={() => window.open(order.adminUrl, "_blank", "noopener,noreferrer")}
                     >
-                      Open in Shopify admin
+                      {adminLabel}
                     </DropdownMenuItem>
                   ) : null}
                 </DropdownMenuContent>
@@ -616,29 +646,33 @@ export function OrderDetailsDialog({
                   </div>
                 </div>
               </div>
-              {pendingPayment ? (
+              {canSendInvoice || canMarkPaid ? (
                 <div className="mt-4 flex flex-wrap justify-end gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 text-xs"
-                    disabled={busy !== null}
-                    onClick={() => void runAction("send_invoice", { message: "Here is your invoice." })}
-                  >
-                    {busy === "send_invoice" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-                    Send invoice
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-8 text-xs"
-                    disabled={busy !== null}
-                    onClick={() => void runAction("mark_paid")}
-                  >
-                    {busy === "mark_paid" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-                    Mark as paid
-                  </Button>
+                  {canSendInvoice ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      disabled={busy !== null}
+                      onClick={() => void runAction("send_invoice", { message: "Here is your invoice." })}
+                    >
+                      {busy === "send_invoice" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                      Send invoice
+                    </Button>
+                  ) : null}
+                  {canMarkPaid ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 text-xs"
+                      disabled={busy !== null}
+                      onClick={() => void runAction("mark_paid")}
+                    >
+                      {busy === "mark_paid" ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                      Mark as paid
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
               {canRefundOrder ? (

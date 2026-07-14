@@ -14,6 +14,7 @@ import type { StoreOrder, StoreOrderConversion } from "@/lib/types";
 import {
   addressMapUrl,
   billingMatchesShipping,
+  canEditOrderContact,
   customerAdminUrl,
   formatShippingAddressLines,
   orderIsFulfilled,
@@ -56,13 +57,13 @@ export function OrderCustomerCard({
   const mapUrl = addressMapUrl(order.shippingAddress);
   const sameBilling = billingMatchesShipping(order.shippingAddress, order.billingAddress);
   const shipped = orderIsFulfilled(order);
-  const canEdit = order.provider === "shopify" && !shipped;
+  const canEdit = canEditOrderContact(order);
 
   return (
     <section className="rounded-lg border border-border/60 p-4">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">Customer</h3>
-        {order.provider === "shopify" ? (
+        {canEdit || order.provider === "shopify" ? (
           <DropdownMenu>
             <DropdownMenuTrigger
               className={buttonVariants({ variant: "ghost", size: "icon", className: "size-8" })}
@@ -74,7 +75,7 @@ export function OrderCustomerCard({
               <DropdownMenuItem onClick={onEditShipping} disabled={!canEdit}>
                 Edit shipping address
               </DropdownMenuItem>
-              {customer?.externalId ? (
+              {order.provider === "shopify" && customer?.externalId ? (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem

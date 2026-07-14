@@ -67,6 +67,54 @@ async function fetchCustomOrders({ storeUrl, apiKey, email, limit = 100 }) {
   return list.map((o) => normalizeCustomOrder(o));
 }
 
+function customStoreHeaders(apiKey) {
+  const headers = { Accept: 'application/json', 'Content-Type': 'application/json' };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  return headers;
+}
+
+async function fetchCustomOrder({ storeUrl, apiKey, externalId }) {
+  const base = storeUrl.replace(/\/+$/, '');
+  const res = await fetch(`${base}/agentra/orders/${externalId}`, {
+    headers: customStoreHeaders(apiKey),
+  });
+  const body = await readJsonResponse(res);
+  if (!res.ok) {
+    throw new Error(body?.message || body?.error || `Custom store order fetch failed (${res.status})`);
+  }
+  const raw = body?.order ?? body;
+  return { normalized: normalizeCustomOrder(raw), raw };
+}
+
+async function customStoreOrderAction({ storeUrl, apiKey, externalId, action, payload = {} }) {
+  const base = storeUrl.replace(/\/+$/, '');
+  const res = await fetch(`${base}/agentra/orders/${externalId}/actions`, {
+    method: 'POST',
+    headers: customStoreHeaders(apiKey),
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const body = await readJsonResponse(res);
+  if (!res.ok) {
+    throw new Error(body?.message || body?.error || `Custom store action failed (${res.status})`);
+  }
+  return body;
+}
+
+async function updateCustomOrderRemote({ storeUrl, apiKey, externalId, updates }) {
+  const base = storeUrl.replace(/\/+$/, '');
+  const res = await fetch(`${base}/agentra/orders/${externalId}`, {
+    method: 'PATCH',
+    headers: customStoreHeaders(apiKey),
+    body: JSON.stringify(updates),
+  });
+  const body = await readJsonResponse(res);
+  if (!res.ok) {
+    throw new Error(body?.message || body?.error || `Custom store order update failed (${res.status})`);
+  }
+  const raw = body?.order ?? body;
+  return { normalized: normalizeCustomOrder(raw), raw };
+}
+
 // ─── Upsert ──────────────────────────────────────────────────────────────────
 
 async function upsertOrder(companyId, normalized, raw) {
@@ -169,6 +217,9 @@ module.exports = {
   fetchShopifyOrders,
   fetchWooOrders,
   fetchCustomOrders,
+  fetchCustomOrder,
+  customStoreOrderAction,
+  updateCustomOrderRemote,
   upsertOrder,
   upsertMany,
   syncStoreOrders,

@@ -115,6 +115,19 @@ async function testCustomConnection({ storeUrl, apiKey }) {
       body.name || body.storeName || body.title || body.shop?.name || storeName;
   }
 
+  const ordersUrl = `${url}/agentra/orders?limit=1`;
+  const ordersRes = await fetch(ordersUrl, { headers });
+  if (!ordersRes.ok) {
+    throw new Error(
+      `Custom store must expose GET ${ordersUrl.replace(url, '')} (returned ${ordersRes.status}).`,
+    );
+  }
+  const ordersBody = await readJsonResponse(ordersRes);
+  const list = Array.isArray(ordersBody) ? ordersBody : ordersBody?.orders;
+  if (!Array.isArray(list)) {
+    throw new Error('Custom store /agentra/orders must return { orders: [...] } or an array.');
+  }
+
   return {
     storeUrl: url,
     storeName: String(storeName),
@@ -443,7 +456,15 @@ function normalizeShopifyOrder(o, shopDomain) {
   });
 }
 
-function mapWooFinancialStatus(status) {
+function mapWooFinancialStatus(o) {
+  const status = (typeof o === 'string' ? o : o?.status || '').toLowerCase();
+  const refunds = Array.isArray(o?.refunds) ? o.refunds : [];
+  if (refunds.length) {
+    const refunded = refunds.reduce((sum, r) => sum + (parseFloat(r.total) || 0), 0);
+    const total = parseFloat(o?.total) || 0;
+    if (total > 0 && refunded >= total - 0.01) return 'refunded';
+    if (refunded > 0) return 'partially_refunded';
+  }
   switch (status) {
     case 'completed':
     case 'processing':
@@ -458,10 +479,63 @@ function mapWooFinancialStatus(status) {
   }
 }
 
+function mapWooFulfillmentStatus(o) {
+  const status = (o?.status || '').toLowerCase();
+  if (status === 'completed') return 'fulfilled';
+  if (status === 'cancelled') return 'cancelled';
+  return 'unfulfilled';
+}
+
+function wooMetaMap(metaData) {
+  const map = {};
+  for (const entry of metaData || []) {
+    if (entry?.key) map[entry.key] = entry.value;
+  }
+  return map;
+}
+
+function wooFulfillmentsFromOrder(o) {
+  const meta = wooMetaMap(o.meta_data);
+  const trackingNumber =
+    meta._wc_shipment_tracking_number ||
+    meta._tracking_number ||
+    meta.tracking_number ||
+    meta.TrackingNumber;
+  const trackingCompany =
+    meta._wc_shipment_tracking_provider ||
+    meta._tracking_provider ||
+    meta.tracking_provider ||
+    meta.carrier;
+  const trackingUrl = meta._tracking_url || meta.tracking_url;
+
+  if (!trackingNumber && o.status !== 'completed') return [];
+
+  return [
+    {
+      status: o.status === 'completed' ? 'completed' : o.status,
+      trackingCompany: trackingCompany ? String(trackingCompany) : undefined,
+      trackingNumber: trackingNumber ? String(trackingNumber) : undefined,
+      trackingUrl: trackingUrl ? String(trackingUrl) : undefined,
+      shippedAt: o.date_completed ? new Date(o.date_completed) : undefined,
+    },
+  ];
+}
+
 function normalizeWooOrder(o, storeUrl) {
   const billing = o.billing || {};
   const shipping = o.shipping || {};
   const lineItems = Array.isArray(o.line_items) ? o.line_items : [];
+  const shippingLines = (o.shipping_lines || []).map((line) => ({
+    title: line.method_title || line.method_id || 'Shipping',
+    price: toNumber(line.total) ?? toNumber(line.total_tax) ?? 0,
+  }));
+  const taxLines = (o.tax_lines || []).map((line) => ({
+    title: line.label || 'Tax',
+    rate: line.rate_percent != null ? toNumber(line.rate_percent) / 100 : undefined,
+    price: toNumber(line.tax_total) ?? toNumber(line.total),
+  }));
+  const baseUrl = storeUrl ? storeUrl.replace(/\/+$/, '') : '';
+
   return {
     provider: 'woocommerce',
     externalId: String(o.id),
@@ -469,19 +543,27 @@ function normalizeWooOrder(o, storeUrl) {
     name: `#${o.number || o.id}`,
     currency: o.currency,
     totalPrice: toNumber(o.total),
-    subtotalPrice: toNumber(o.subtotal),
-    totalShipping: toNumber(o.shipping_total),
-    totalTax: toNumber(o.total_tax),
-    financialStatus: mapWooFinancialStatus(o.status),
-    fulfillmentStatus: o.status === 'completed' ? 'fulfilled' : 'unfulfilled',
+    subtotalPrice: toNumber(o.total) != null && toNumber(o.total_tax) != null && toNumber(o.shipping_total) != null
+      ? Math.round((toNumber(o.total) - toNumber(o.total_tax) - toNumber(o.shipping_total)) * 100) / 100
+      : toNumber(o.subtotal),
+    totalShipping: toNumber(o.shipping_total) ?? sumLinePrices(o.shipping_lines),
+    totalTax: toNumber(o.total_tax) ?? sumLinePrices(o.tax_lines),
+    financialStatus: mapWooFinancialStatus(o),
+    fulfillmentStatus: mapWooFulfillmentStatus(o),
     channel: 'WooCommerce',
-    tags: Array.isArray(o.tags) ? o.tags.map((tag) => String(tag)) : [],
+    tags: Array.isArray(o.tags)
+      ? o.tags.map((tag) => (typeof tag === 'string' ? tag : tag?.name || String(tag)))
+      : [],
     note: o.customer_note || undefined,
     itemCount: lineItemCount(lineItems),
+    onHold: (o.status || '').toLowerCase() === 'on-hold',
+    shippingMethod: o.shipping_lines?.[0]?.method_title || undefined,
+    shippingLines,
+    taxLines,
     customer: {
       externalId: o.customer_id ? String(o.customer_id) : undefined,
       name: fullName(billing.first_name, billing.last_name),
-      email: billing.email || undefined,
+      email: billing.email || o.billing?.email || undefined,
       phone: billing.phone || undefined,
     },
     shippingAddress: normalizeAddress({
@@ -505,14 +587,23 @@ function normalizeWooOrder(o, storeUrl) {
       phone: billing.phone,
     }),
     lineItems: lineItems.map((li) => ({
-          title: li.name,
-          sku: li.sku || undefined,
-          quantity: toNumber(li.quantity) ?? 1,
-          price: toNumber(li.price),
-          imageUrl: li.image?.src || undefined,
-        })),
-    fulfillments: [],
-    adminUrl: storeUrl ? `${storeUrl}/wp-admin/post.php?post=${o.id}&action=edit` : undefined,
+      externalId: li.id ? String(li.id) : undefined,
+      title: li.name,
+      variantTitle: li.variation_id ? String(li.variation_id) : undefined,
+      sku: li.sku || undefined,
+      quantity: toNumber(li.quantity) ?? 1,
+      price: toNumber(li.price),
+      imageUrl: li.image?.src || undefined,
+    })),
+    fulfillments: wooFulfillmentsFromOrder(o),
+    statusUrl:
+      o.view_order_url ||
+      (baseUrl && o.order_key
+        ? `${baseUrl}/checkout/order-received/${o.id}/?key=${o.order_key}`
+        : baseUrl
+          ? `${baseUrl}/my-account/view-order/${o.id}/`
+          : undefined),
+    adminUrl: baseUrl ? `${baseUrl}/wp-admin/post.php?post=${o.id}&action=edit` : undefined,
     placedAt: o.date_created ? new Date(o.date_created) : undefined,
     updatedAtStore: o.date_modified ? new Date(o.date_modified) : undefined,
   };
@@ -521,6 +612,27 @@ function normalizeWooOrder(o, storeUrl) {
 // Custom stores implement the documented Agentra order contract.
 function normalizeCustomOrder(o) {
   const customer = o.customer || {};
+  const shipping = o.shippingAddress || o.shipping || {};
+  const billing = o.billingAddress || o.billing || {};
+  const lineItems = Array.isArray(o.lineItems || o.items) ? o.lineItems || o.items : [];
+  const shippingLines = Array.isArray(o.shippingLines)
+    ? o.shippingLines.map((line) => ({
+        title: line.title || line.name || 'Shipping',
+        price: toNumber(line.price),
+      }))
+    : o.shippingMethod || o.totalShipping != null
+      ? [{ title: o.shippingMethod || 'Shipping', price: toNumber(o.totalShipping) }]
+      : [];
+  const taxLines = Array.isArray(o.taxLines)
+    ? o.taxLines.map((line) => ({
+        title: line.title || line.name || 'Tax',
+        rate: toNumber(line.rate),
+        price: toNumber(line.price),
+      }))
+    : o.totalTax != null
+      ? [{ title: 'Taxes', price: toNumber(o.totalTax) }]
+      : [];
+
   return {
     provider: 'custom',
     externalId: String(o.id ?? o.externalId ?? o.number ?? ''),
@@ -528,23 +640,54 @@ function normalizeCustomOrder(o) {
     name: o.name || o.orderNumber || (o.number ? `#${o.number}` : undefined),
     currency: o.currency,
     totalPrice: toNumber(o.total ?? o.totalPrice),
+    subtotalPrice: toNumber(o.subtotal ?? o.subtotalPrice),
+    totalShipping: toNumber(o.totalShipping ?? o.shippingTotal),
+    totalTax: toNumber(o.totalTax ?? o.taxTotal),
     financialStatus: o.financialStatus || o.paymentStatus || undefined,
     fulfillmentStatus: o.fulfillmentStatus || o.shippingStatus || undefined,
+    channel: o.channel || 'Custom store',
+    tags: Array.isArray(o.tags) ? o.tags.map((tag) => String(tag)) : [],
+    note: o.note || o.customerNote || undefined,
+    itemCount: o.itemCount ?? lineItemCount(lineItems),
+    onHold: Boolean(o.onHold),
+    shippingMethod: o.shippingMethod || shippingLines[0]?.title,
+    shippingLines,
+    taxLines,
     customer: {
-      externalId: customer.id ? String(customer.id) : undefined,
+      externalId: customer.id || customer.externalId ? String(customer.id || customer.externalId) : undefined,
       name: customer.name || fullName(customer.firstName, customer.lastName),
       email: customer.email || o.email || undefined,
       phone: customer.phone || o.phone || undefined,
     },
-    lineItems: Array.isArray(o.lineItems || o.items)
-      ? (o.lineItems || o.items).map((li) => ({
-          title: li.title || li.name,
-          sku: li.sku || undefined,
-          quantity: toNumber(li.quantity) ?? 1,
-          price: toNumber(li.price),
-          imageUrl: li.imageUrl || li.image || undefined,
-        }))
-      : [],
+    shippingAddress: normalizeAddress({
+      name: shipping.name || fullName(shipping.firstName, shipping.first_name),
+      address1: shipping.address1 || shipping.address_1 || shipping.line1,
+      address2: shipping.address2 || shipping.address_2 || shipping.line2,
+      city: shipping.city,
+      state: shipping.state || shipping.province,
+      postcode: shipping.zip || shipping.postcode || shipping.postalCode,
+      country: shipping.country,
+      phone: shipping.phone,
+    }),
+    billingAddress: normalizeAddress({
+      name: billing.name || fullName(billing.firstName, billing.first_name),
+      address1: billing.address1 || billing.address_1 || billing.line1,
+      address2: billing.address2 || billing.address_2 || billing.line2,
+      city: billing.city,
+      state: billing.state || billing.province,
+      postcode: billing.zip || billing.postcode || billing.postalCode,
+      country: billing.country,
+      phone: billing.phone,
+    }),
+    lineItems: lineItems.map((li) => ({
+      externalId: li.id || li.externalId ? String(li.id || li.externalId) : undefined,
+      title: li.title || li.name,
+      variantTitle: li.variantTitle || li.variant || undefined,
+      sku: li.sku || undefined,
+      quantity: toNumber(li.quantity) ?? 1,
+      price: toNumber(li.price),
+      imageUrl: li.imageUrl || li.image || undefined,
+    })),
     fulfillments: Array.isArray(o.fulfillments)
       ? o.fulfillments.map((f) => ({
           status: f.status,
@@ -607,6 +750,8 @@ function sanitizeStoreIntegration(integration) {
           storeName: plain.custom.storeName,
           hasApiKey: Boolean(plain.custom.apiKey),
           webhookSecret: plain.custom.webhookSecret || undefined,
+          supportedActions: plain.custom.supportedActions || undefined,
+          features: plain.custom.features || undefined,
         }
       : undefined,
     syncSettings: plain.syncSettings || {

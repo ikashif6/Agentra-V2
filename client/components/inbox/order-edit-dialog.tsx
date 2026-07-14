@@ -35,6 +35,7 @@ export function OrderEditDialog({
   const [tags, setTags] = useState((order.tags ?? []).join(", "));
   const [address, setAddress] = useState<StoreOrderAddress>(order.shippingAddress ?? {});
   const shipped = orderIsFulfilled(order);
+  const isShopify = order.provider === "shopify";
 
   useEffect(() => {
     if (!open) return;
@@ -85,8 +86,9 @@ export function OrderEditDialog({
 
         <div className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            Product quantities can only be changed in Shopify before fulfillment. Shipped orders
-            cannot have their address updated.
+            {isShopify
+              ? "Product quantities can only be changed in Shopify before fulfillment. Shipped orders cannot have their address updated."
+              : `Updates are sent to your ${order.provider === "woocommerce" ? "WooCommerce" : "store"} order in real time. Shipped orders cannot have their address updated.`}
           </p>
 
           <div className="space-y-2">
@@ -94,14 +96,16 @@ export function OrderEditDialog({
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} className="min-h-[72px]" />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Tags</label>
-            <Input
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="vip, wholesale"
-            />
-          </div>
+          {isShopify ? (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tags</label>
+              <Input
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="vip, wholesale"
+              />
+            </div>
+          ) : null}
 
           <div className="space-y-3 rounded-lg border border-border/60 p-3">
             <div className="flex items-center justify-between">

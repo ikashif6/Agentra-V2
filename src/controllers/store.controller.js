@@ -10,16 +10,21 @@ const {
   sanitizeStoreIntegration,
   encryptStoreIntegration,
   getStoreSecrets,
+  normalizeShopDomain,
 } = require('../services/store.service');
+const { fetchCustomCapabilities } = require('../services/custom-store.service');
 const {
   isShopifyOAuthConfigured,
   getShopifyRedirectUri,
   buildShopifyInstallUrl,
+  buildShopifyAuthorizeUrl,
   verifyShopifyOAuthHmac,
   isValidShopDomain,
   exchangeShopifyCode,
   fetchShopifyShopName,
   registerShopifyWebhooks,
+  revokeShopifyAppAccess,
+  usesCustomInstallFlow,
   buildWooAuthUrl,
   registerWooWebhooks,
   buildStoreSettingsRedirect,
@@ -144,11 +149,17 @@ exports.connect = async (req, res, next) => {
         storeUrl: credentials?.storeUrl,
         apiKey: credentials?.apiKey,
       });
+      const capabilities = await fetchCustomCapabilities({
+        storeUrl: verified.storeUrl,
+        apiKey: credentials?.apiKey?.trim(),
+      });
       integration.custom = {
         storeUrl: verified.storeUrl,
         apiKey: credentials?.apiKey?.trim() || undefined,
         webhookSecret: credentials?.webhookSecret?.trim() || generateWebhookSecret(),
         storeName: verified.storeName,
+        supportedActions: capabilities.actions,
+        features: capabilities.features,
       };
     }
 
@@ -191,18 +202,124 @@ exports.shopifyOAuthUrl = async (req, res, next) => {
     if (!shopDomain) {
       return response.badRequest(res, 'shopDomain is required');
     }
+    const returnOrigin = req.query.returnOrigin || req.headers.origin;
     const url = buildShopifyInstallUrl({
       shopDomain,
       companyId: req.company._id,
       subdomain: req.company.subdomain,
       userId: req.user._id,
-      returnOrigin: req.query.returnOrigin || req.headers.origin,
+      returnOrigin,
     });
+
+    if (usesCustomInstallFlow()) {
+      const domain = normalizeShopDomain(shopDomain);
+      req.company.storeIntegration = {
+        provider: 'shopify',
+        status: 'pending',
+        lastError: null,
+        encrypted: false,
+        webhooksRegistered: false,
+        shopify: {
+          shopDomain: domain,
+          pendingUserId: req.user._id,
+          pendingReturnOrigin:
+            typeof returnOrigin === 'string' && returnOrigin.trim() ? returnOrigin.trim() : null,
+        },
+        syncSettings: req.company.storeIntegration?.syncSettings || {
+          syncOrders: true,
+          syncCustomers: true,
+          syncProducts: false,
+        },
+      };
+      req.company.markModified('storeIntegration');
+      await req.company.save();
+    }
+
     return response.success(res, { url });
   } catch (err) {
     if (err.message && !err.statusCode) {
       return response.badRequest(res, err.message);
     }
+    next(err);
+  }
+};
+
+/**
+ * Shopify App URL entry (after custom distribution install).
+ * Partner Dashboard App URL should point here (or to API root which forwards here).
+ * GET /store/shopify/app?shop=...&hmac=...
+ */
+exports.shopifyAppEntry = async (req, res, next) => {
+  try {
+    const shop = req.query.shop;
+    const hmac = req.query.hmac;
+
+    if (!shop || !hmac) {
+      return res
+        .status(400)
+        .type('html')
+        .send(
+          '<html><body style="font-family:system-ui;padding:40px;max-width:520px">' +
+            '<h2>Agentra</h2><p>Missing Shopify install parameters.</p>' +
+            '<p>Open Agentra → Settings → Store and click Connect Shopify.</p>' +
+            '</body></html>',
+        );
+    }
+
+    if (!isValidShopDomain(shop)) {
+      return res.status(400).send('Invalid shop domain');
+    }
+    if (!verifyShopifyOAuthHmac(req.query)) {
+      return res.status(400).send('Invalid Shopify signature');
+    }
+    if (!isShopifyOAuthConfigured()) {
+      return res.status(500).send('Shopify is not configured on this server');
+    }
+
+    const domain = normalizeShopDomain(shop);
+    let company = await Company.findOne({
+      'storeIntegration.provider': 'shopify',
+      'storeIntegration.status': 'pending',
+      'storeIntegration.shopify.shopDomain': domain,
+    }).sort({ updatedAt: -1 });
+
+    if (!company) {
+      return res
+        .status(400)
+        .type('html')
+        .send(
+          '<html><body style="font-family:system-ui;padding:40px;max-width:560px">' +
+            '<h2>Almost there</h2>' +
+            '<p>Shopify installed Agentra, but no pending workspace connection was found for <strong>' +
+            domain +
+            '</strong>.</p>' +
+            '<p>Go back to Agentra → <strong>Settings → Store</strong> → Connect Shopify (same store), then try again.</p>' +
+            '</body></html>',
+        );
+    }
+
+    const pendingUserId =
+      company.storeIntegration?.shopify?.pendingUserId || company.owner || null;
+    const User = require('../models/User');
+    let userId = pendingUserId;
+    if (!userId) {
+      const owner = await User.findOne({ company: company._id, role: 'owner' }).select('_id');
+      userId = owner?._id;
+    }
+    if (!userId) {
+      return res.status(400).send('Could not determine workspace owner for OAuth');
+    }
+
+    const authorizeUrl = buildShopifyAuthorizeUrl({
+      shopDomain: domain,
+      companyId: company._id,
+      subdomain: company.subdomain,
+      userId,
+      returnOrigin: company.storeIntegration?.shopify?.pendingReturnOrigin || null,
+    });
+
+    return res.redirect(authorizeUrl);
+  } catch (err) {
     next(err);
   }
 };
@@ -214,7 +331,9 @@ exports.shopifyOAuthCallback = async (req, res, next) => {
   try {
     const { code, state, shop } = req.query;
 
-    if (!state) return res.status(400).send('Missing OAuth state');
+    if (!code || !shop) {
+      return res.status(400).send('Missing Shopify OAuth parameters');
+    }
     if (!verifyShopifyOAuthHmac(req.query)) {
       return res.status(400).send('Invalid Shopify signature');
     }
@@ -222,17 +341,38 @@ exports.shopifyOAuthCallback = async (req, res, next) => {
       return res.status(400).send('Invalid shop domain');
     }
 
-    let payload;
-    try {
-      payload = verifyOAuthState(String(state));
-    } catch {
-      return res.status(400).send('OAuth session expired');
-    }
-    if (payload.purpose !== 'shopify_oauth' || payload.shopDomain !== shop) {
-      return res.status(400).send('OAuth state mismatch');
-    }
+    let company = null;
+    let subdomain;
+    let returnOrigin = null;
 
-    const { subdomain, returnOrigin } = payload;
+    if (state) {
+      let payload;
+      try {
+        payload = verifyOAuthState(String(state));
+      } catch {
+        return res.status(400).send('OAuth session expired');
+      }
+      if (payload.purpose !== 'shopify_oauth' || payload.shopDomain !== shop) {
+        return res.status(400).send('OAuth state mismatch');
+      }
+      company = await Company.findById(payload.companyId);
+      if (!company) return res.status(400).send('Workspace not found');
+      subdomain = payload.subdomain;
+      returnOrigin = payload.returnOrigin;
+    } else if (usesCustomInstallFlow()) {
+      company = await Company.findOne({
+        'storeIntegration.provider': 'shopify',
+        'storeIntegration.status': 'pending',
+        'storeIntegration.shopify.shopDomain': String(shop),
+      });
+      if (!company) {
+        return res.status(400).send('No pending Shopify connection for this store');
+      }
+      subdomain = company.subdomain;
+      returnOrigin = null;
+    } else {
+      return res.status(400).send('Missing OAuth state');
+    }
 
     try {
       const { accessToken, scope } = await exchangeShopifyCode(String(shop), String(code));
@@ -240,11 +380,8 @@ exports.shopifyOAuthCallback = async (req, res, next) => {
       const webhooksRegistered = await registerShopifyWebhooks({
         shopDomain: String(shop),
         accessToken,
-        companyId: payload.companyId,
+        companyId: company._id,
       });
-
-      const company = await Company.findById(payload.companyId);
-      if (!company) throw new Error('Workspace not found');
 
       const integration = {
         provider: 'shopify',
@@ -445,7 +582,13 @@ exports.testConnection = async (req, res, next) => {
         storeUrl: integration.custom.storeUrl,
         apiKey: secrets.custom.apiKey,
       });
+      const capabilities = await fetchCustomCapabilities({
+        storeUrl: verified.storeUrl,
+        apiKey: secrets.custom.apiKey,
+      });
       integration.custom.storeName = verified.storeName;
+      integration.custom.supportedActions = capabilities.actions;
+      integration.custom.features = capabilities.features;
     }
 
     integration.status = 'connected';
@@ -619,6 +762,10 @@ exports.runOrderAction = async (req, res, next) => {
       return response.success(res, { duplicateUrl: result.duplicateUrl }, 'Draft order created');
     }
 
+    if (result?.archived) {
+      return response.success(res, { archived: true }, 'Order archived');
+    }
+
     return response.success(res, { order: result }, 'Order updated');
   } catch (err) {
     if (err.message && !err.statusCode) return response.badRequest(res, err.message);
@@ -656,7 +803,37 @@ exports.updateOrder = async (req, res, next) => {
  */
 exports.disconnect = async (req, res, next) => {
   try {
-    const company = req.company;
+    const company = await Company.findById(req.company._id).select(
+      '+storeIntegration.shopify.accessToken',
+    );
+    const integration = company.storeIntegration;
+
+    try {
+      const { uninstallShopifyWidget } = require('../services/live-chat-shopify.service');
+      await uninstallShopifyWidget(company);
+      if (company.liveChat) {
+        company.liveChat.widgetInstalled = false;
+        company.liveChat.installMethod = null;
+        company.liveChat.shopifyScriptTagId = undefined;
+        company.markModified('liveChat');
+      }
+    } catch (err) {
+      console.warn('[store disconnect widget]', err.message);
+    }
+
+    if (integration?.provider === 'shopify' && integration?.status === 'connected') {
+      const secrets = getStoreSecrets(integration);
+      const shopDomain = integration.shopify?.shopDomain;
+      const accessToken = secrets.shopify?.accessToken;
+      if (shopDomain && accessToken) {
+        try {
+          await revokeShopifyAppAccess(shopDomain, accessToken);
+        } catch (err) {
+          console.warn('[store disconnect shopify revoke]', err.message);
+        }
+      }
+    }
+
     company.storeIntegration = {
       status: 'disconnected',
       syncSettings: { syncOrders: true, syncCustomers: true, syncProducts: false },

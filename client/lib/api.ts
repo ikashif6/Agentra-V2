@@ -395,6 +395,26 @@ export const storeApi = {
   disconnect: () => api.delete("/store"),
 };
 
+export const liveChatApi = {
+  getSettings: () => api.get("/live-chat"),
+  updateSettings: (data: Record<string, unknown>) => api.put("/live-chat", data),
+  installWidget: () => api.post("/live-chat/install"),
+  uninstallWidget: () => api.post("/live-chat/uninstall"),
+  regenerateWidgetKey: () => api.post("/live-chat/regenerate-key"),
+  syncProducts: () => api.post("/live-chat/sync-products"),
+  listKnowledge: () => api.get("/live-chat/knowledge"),
+  createKnowledge: (data: { title: string; content: string; category?: string }) =>
+    api.post("/live-chat/knowledge", data),
+  uploadKnowledgeDocument: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post("/live-chat/knowledge/upload", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  deleteKnowledge: (id: string) => api.delete(`/live-chat/knowledge/${id}`),
+};
+
 export const helpCenterApi = {
   getSettings: () => api.get("/helpcenter/settings"),
   saveSettings: (data: Record<string, unknown>) => api.post("/helpcenter/settings", data),

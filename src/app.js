@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 
 const routes = require('./routes');
+const { widgetCors } = require('./middleware/widget-cors.middleware');
 const { errorHandler, notFoundHandler } = require('./middleware/error.middleware');
 
 const app = express();
@@ -126,6 +127,8 @@ app.use(
     // Auth routes have their own limiter — don't double-count login attempts here.
     skip: (req) =>
       req.path.startsWith('/api/v1/webhooks/') ||
+      req.path.startsWith('/api/v1/widget/') ||
+      req.path === '/widget.js' ||
       req.path.startsWith('/api/v1/auth') ||
       req.path.startsWith('/api/uploads/') ||
       (!isProduction && req.method === 'OPTIONS'),
@@ -133,7 +136,60 @@ app.use(
 );
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
+app.use('/api/v1/widget', widgetCors);
 app.use('/api/v1', routes);
+
+const Company = require('./models/Company');
+const storeController = require('./controllers/store.controller');
+
+// Dynamic loader injected into Shopify
+app.get('/widget-loader.js', async (req, res, next) => {
+  try {
+    const widgetKey = String(req.query.key || '');
+    if (!widgetKey) {
+      res.status(400).type('application/javascript').send('console.error("[Agentra] missing widget key");');
+      return;
+    }
+    const company = await Company.findOne({ 'liveChat.widgetKey': widgetKey });
+    if (!company?.liveChat?.enabled) {
+      res.type('application/javascript').send('');
+      return;
+    }
+    const apiBase = `${req.protocol}://${req.get('host')}/api/v1/widget`;
+    const widgetJs = `${req.protocol}://${req.get('host')}/widget.js`;
+    const body = `(function(){window.AgentraConfig={widgetKey:${JSON.stringify(widgetKey)},apiBase:${JSON.stringify(apiBase)}};var s=document.createElement("script");s.src=${JSON.stringify(widgetJs)};s.async=true;document.head.appendChild(s);})();`;
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.send(body);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Embeddable chat widget bundle ───────────────────────────────────────────
+app.get('/widget.js', (req, res, next) => {
+  const file = path.join(__dirname, '../widget/dist/widget.js');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.sendFile(file, (err) => {
+    if (err) next(err);
+  });
+});
+
+// ─── Shopify Partner "App URL" entry ──────────────────────────────────────────
+// Custom distribution installs land on App URL (often API root) with shop+hmac.
+app.get('/', (req, res, next) => {
+  if (req.query.shop && req.query.hmac) {
+    return storeController.shopifyAppEntry(req, res, next);
+  }
+  return res.json({
+    success: true,
+    message: 'Agentra API',
+    health: '/api/v1/health',
+  });
+});
 
 // ─── Static: serve uploaded attachments ──────────────────────────────────────
 // Files are stored under /uploads and served at /api/uploads/<filename>

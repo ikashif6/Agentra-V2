@@ -25,6 +25,9 @@ const start = async () => {
     console.log(`   Health check: http://0.0.0.0:${PORT}/api/v1/health\n`);
   });
 
+  const { attachWebSocketServer } = require('./services/live-chat-websocket.service');
+  app.locals.liveChatWs = attachWebSocketServer(server);
+
   // Graceful shutdown
   const shutdown = (signal) => {
     console.log(`\n${signal} received — shutting down gracefully...`);

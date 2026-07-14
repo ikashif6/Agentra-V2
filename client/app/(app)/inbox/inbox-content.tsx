@@ -40,7 +40,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ticketApi, teamApi, usersApi } from "@/lib/api";
+import { ticketApi, teamApi, usersApi, liveChatApi } from "@/lib/api";
 import type {
   Attachment,
   Team,
@@ -51,6 +51,7 @@ import type {
   TicketSource,
   TicketStatus,
   User,
+  LiveChatAgent,
   InboxFolder,
   ConversationScope,
   ConversationView,
@@ -278,23 +279,56 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
 
   useEffect(() => {
     if (!isStaff) return;
-    const loadAgents = role === "agent"
-      ? usersApi.searchMembers("", undefined, 1, 100)
-      : usersApi.searchStaff("", 1, 100);
 
-    loadAgents.then(({ data }) => {
-      const users = (data.data.users ?? []) as User[];
+    const applyStaffList = (users: User[]) => {
       setAgents(
         role === "agent"
           ? users.filter((member) => ["admin", "agent"].includes(member.role))
           : users,
       );
-    }).catch(() => setAgents([]));
+    };
+
+    const loadAgents = async () => {
+      try {
+        if (isLiveChat) {
+          const { data } = await liveChatApi.getSettings();
+          const configured = (data.data.liveChat?.agents ?? []) as LiveChatAgent[];
+          if (configured.length > 0) {
+            setAgents(
+              configured.map((a) => ({
+                _id: a._id,
+                firstName: a.firstName,
+                lastName: a.lastName,
+                fullName: a.fullName,
+                email: "",
+                role: (a.role || "agent") as User["role"],
+                avatar: a.avatar,
+                company: "",
+                isEmailVerified: true,
+                isActive: true,
+                isOnline: a.isOnline,
+              })),
+            );
+            return;
+          }
+        }
+
+        const { data } =
+          role === "agent"
+            ? await usersApi.searchMembers("", undefined, 1, 100)
+            : await usersApi.searchStaff("", 1, 100);
+        applyStaffList((data.data.users ?? []) as User[]);
+      } catch {
+        setAgents([]);
+      }
+    };
+
+    void loadAgents();
 
     teamApi.list({ limit: 100 }).then(({ data }) => {
       setTeams(data.data.teams ?? []);
     }).catch(() => setTeams([]));
-  }, [isStaff, role]);
+  }, [isStaff, role, isLiveChat]);
 
   useEffect(() => {
     fetchTickets();

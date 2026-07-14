@@ -483,12 +483,48 @@ function ProviderConnectForm({
                 placeholder="Optional"
               />
             </Field>
-            <div className="rounded-xl bg-muted/30 p-4 text-xs text-muted-foreground">
-              After connecting, implement{" "}
-              <code className="rounded bg-card px-1 py-0.5 font-mono text-foreground">
-                GET /agentra/orders?email=
-              </code>{" "}
-              on your base URL and push new orders to the webhook shown on the next screen.
+            <div className="rounded-xl bg-muted/30 p-4 text-xs text-muted-foreground space-y-2">
+              <p>
+                After connecting, implement these endpoints on your base URL:
+              </p>
+              <ul className="list-disc space-y-1 pl-4">
+                <li>
+                  <code className="rounded bg-card px-1 py-0.5 font-mono text-foreground">
+                    GET /agentra/orders?email=
+                  </code>{" "}
+                  — list orders for inbox lookup
+                </li>
+                <li>
+                  <code className="rounded bg-card px-1 py-0.5 font-mono text-foreground">
+                    GET /agentra/orders/:id
+                  </code>{" "}
+                  — live order detail refresh
+                </li>
+                <li>
+                  <code className="rounded bg-card px-1 py-0.5 font-mono text-foreground">
+                    PATCH /agentra/orders/:id
+                  </code>{" "}
+                  — edit note or addresses
+                </li>
+                <li>
+                  <code className="rounded bg-card px-1 py-0.5 font-mono text-foreground">
+                    GET /agentra/capabilities
+                  </code>{" "}
+                  — optional; returns supported actions and features
+                </li>
+                <li>
+                  <code className="rounded bg-card px-1 py-0.5 font-mono text-foreground">
+                    POST /agentra/orders/:id/actions
+                  </code>{" "}
+                  — cancel, fulfill, refund, hold, mark_paid, send_invoice, duplicate, archive, and more
+                </li>
+              </ul>
+              <p className="pt-1">
+                Order payloads may include <code className="font-mono">conversion</code>,{" "}
+                <code className="font-mono">attribution</code>, or{" "}
+                <code className="font-mono">sessions</code> for marketing insights in the inbox.
+              </p>
+              <p>Push new or updated orders to the webhook shown after you connect.</p>
             </div>
           </div>
         ) : null}

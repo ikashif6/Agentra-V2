@@ -5,8 +5,10 @@ const {
   normalizeShopifyOrder,
   normalizeWooOrder,
 } = require('./store.service');
-const { upsertOrder } = require('./store-sync.service');
+const { upsertOrder, fetchCustomOrder, customStoreOrderAction, updateCustomOrderRemote } = require('./store-sync.service');
 const { fetchShopifyConversion, shopifyGraphql } = require('./shopify-conversion.service');
+const { fetchWooConversion } = require('./woo-conversion.service');
+const { DEFAULT_CUSTOM_ACTIONS, buildCustomConversion } = require('./custom-store.service');
 
 async function readJsonResponse(res) {
   const text = await res.text();
@@ -55,17 +57,173 @@ function mergePaymentFields(order, normalized) {
   };
 }
 
-async function refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId) {
-  const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
-  const res = await fetch(`${storeUrl.replace(/\/+$/, '')}/wp-json/wc/v3/orders/${externalId}`, {
-    headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
-  });
-  const body = await readJsonResponse(res);
-  if (!res.ok) {
-    throw new Error(body?.message || `Could not refresh order (${res.status})`);
+async function refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId, rawOrder) {
+  let body = rawOrder;
+  if (!body) {
+    body = await wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}`);
   }
   const normalized = normalizeWooOrder(body, storeUrl);
   return upsertOrder(company._id, normalized, body);
+}
+
+async function refreshCustomOrder(company, storeUrl, apiKey, externalId) {
+  const { normalized, raw } = await fetchCustomOrder({ storeUrl, apiKey, externalId });
+  return upsertOrder(company._id, normalized, raw);
+}
+
+function wooAuthHeader(consumerKey, consumerSecret) {
+  return `Basic ${Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64')}`;
+}
+
+async function wooFetch(storeUrl, consumerKey, consumerSecret, path, options = {}) {
+  const base = storeUrl.replace(/\/+$/, '');
+  const res = await fetch(`${base}/wp-json/wc/v3${path}`, {
+    ...options,
+    headers: {
+      Authorization: wooAuthHeader(consumerKey, consumerSecret),
+      Accept: 'application/json',
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  const body = await readJsonResponse(res);
+  if (!res.ok) {
+    throw new Error(body?.message || `WooCommerce request failed (${res.status})`);
+  }
+  return body;
+}
+
+function splitPersonName(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return { first_name: '', last_name: '' };
+  if (parts.length === 1) return { first_name: parts[0], last_name: '' };
+  return { first_name: parts[0], last_name: parts.slice(1).join(' ') };
+}
+
+function mapAddressToWoo(address = {}) {
+  const names = splitPersonName(address.name);
+  return {
+    first_name: names.first_name,
+    last_name: names.last_name,
+    address_1: address.address1 || '',
+    address_2: address.address2 || '',
+    city: address.city || '',
+    state: address.province || address.state || '',
+    postcode: address.zip || address.postcode || '',
+    country: address.country || '',
+    phone: address.phone || '',
+  };
+}
+
+async function wooOrderTimeline(storeUrl, consumerKey, consumerSecret, externalId, order) {
+  const events = [];
+  const push = (id, at, type, message) => {
+    if (!at) return;
+    events.push({ id, at: new Date(at), type, message });
+  };
+
+  push('created', order.date_created, 'created', 'Order placed');
+
+  try {
+    const notes = await wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}/notes`);
+    for (const note of notes || []) {
+      push(
+        `note-${note.id}`,
+        note.date_created,
+        note.customer_note ? 'customer_note' : 'note',
+        note.note,
+      );
+    }
+  } catch {
+    // Notes are optional for timeline.
+  }
+
+  for (const refund of order.refunds || []) {
+    push(
+      `refund-${refund.id}`,
+      refund.date_created,
+      'refund',
+      `Refund ${refund.total}${refund.reason ? `: ${refund.reason}` : ''}`,
+    );
+  }
+
+  if (order.date_paid) push('paid', order.date_paid, 'payment', 'Payment received');
+  if (order.date_completed) push('fulfilled', order.date_completed, 'fulfilled', 'Order completed');
+  if (order.status === 'cancelled') {
+    push('cancelled', order.date_modified, 'cancelled', 'Order cancelled');
+  }
+
+  return events.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+}
+
+async function wooRefundOrder(storeUrl, consumerKey, consumerSecret, externalId, orderTotal) {
+  const order = await wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}`);
+  const lineItems = (order.line_items || []).map((li) => ({
+    id: li.id,
+    quantity: li.quantity,
+    refund_total: String(li.total ?? li.price ?? 0),
+  }));
+
+  return wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}/refunds`, {
+    method: 'POST',
+    body: JSON.stringify({
+      amount: String(orderTotal ?? order.total ?? '0'),
+      reason: 'Refund from Agentra',
+      api_refund: true,
+      api_restock: true,
+      line_items: lineItems,
+    }),
+  });
+}
+
+async function wooUpdateOrder(storeUrl, consumerKey, consumerSecret, externalId, updates = {}) {
+  const payload = {};
+  if (updates.note != null) payload.customer_note = updates.note;
+
+  if (updates.shippingAddress) {
+    payload.shipping = mapAddressToWoo(updates.shippingAddress);
+  }
+
+  if (updates.email || updates.billingAddress) {
+    const order = await wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}`);
+    payload.billing = {
+      ...(order.billing || {}),
+      ...mapAddressToWoo(updates.billingAddress || updates.shippingAddress || order.billing),
+    };
+    if (updates.email) payload.billing.email = updates.email;
+  }
+
+  if (!Object.keys(payload).length) return null;
+
+  return wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+function customOrderTimeline(order) {
+  const events = [];
+  const push = (id, at, type, message) => {
+    if (!at) return;
+    events.push({ id, at: new Date(at), type, message });
+  };
+  push('created', order.placedAt, 'created', 'Order placed');
+  for (const entry of order.timeline || []) {
+    push(entry.id || `${entry.type}-${entry.at}`, entry.at, entry.type, entry.message);
+  }
+  for (const fulfillment of order.fulfillments || []) {
+    if (fulfillment.shippedAt) {
+      push(
+        `fulfillment-${fulfillment.trackingNumber || fulfillment.shippedAt}`,
+        fulfillment.shippedAt,
+        'fulfilled',
+        fulfillment.trackingNumber
+          ? `Shipped via ${fulfillment.trackingCompany || 'carrier'} · ${fulfillment.trackingNumber}`
+          : 'Order fulfilled',
+      );
+    }
+  }
+  return events.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 }
 
 async function shopifyFetch(shopDomain, accessToken, path, options = {}) {
@@ -572,6 +730,117 @@ async function wooFulfillOrder(storeUrl, consumerKey, consumerSecret, externalId
   return body;
 }
 
+async function wooAddOrderNote(
+  storeUrl,
+  consumerKey,
+  consumerSecret,
+  externalId,
+  note,
+  customerNote = false,
+) {
+  if (!note) return null;
+  return wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}/notes`, {
+    method: 'POST',
+    body: JSON.stringify({ note, customer_note: customerNote }),
+  });
+}
+
+async function wooHoldOrder(storeUrl, consumerKey, consumerSecret, externalId) {
+  return wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ status: 'on-hold' }),
+  });
+}
+
+async function wooMarkPaid(storeUrl, consumerKey, consumerSecret, externalId) {
+  return wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ set_paid: true, status: 'processing' }),
+  });
+}
+
+async function wooSendInvoice(storeUrl, consumerKey, consumerSecret, externalId, order, options = {}) {
+  const remote = await wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}`);
+  const paymentUrl = remote.payment_url || order.statusUrl;
+  const orderLabel = order.orderNumber || order.name || `#${externalId}`;
+  const message =
+    options.message ||
+    `Invoice for order ${orderLabel}${paymentUrl ? `: ${paymentUrl}` : '.'}`;
+  await wooAddOrderNote(storeUrl, consumerKey, consumerSecret, externalId, message, true);
+  return remote;
+}
+
+async function wooResendOrderEmail(storeUrl, consumerKey, consumerSecret, externalId, order, options = {}) {
+  const email = options.email || order.customer?.email;
+  if (!email) throw new Error('This order does not have a customer email address');
+
+  const remote = await wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}`);
+  const orderLabel = order.orderNumber || order.name || `#${externalId}`;
+  const statusUrl = remote.payment_url || order.statusUrl || order.adminUrl;
+  const message =
+    options.message ||
+    `Order confirmation for ${orderLabel}${statusUrl ? ` — view your order: ${statusUrl}` : '.'}`;
+
+  await wooAddOrderNote(storeUrl, consumerKey, consumerSecret, externalId, message, true);
+  return remote;
+}
+
+async function wooRequestFulfillment(storeUrl, consumerKey, consumerSecret, externalId, options = {}) {
+  const message = options.message || 'Fulfillment requested from Agentra';
+  return wooAddOrderNote(storeUrl, consumerKey, consumerSecret, externalId, message, false);
+}
+
+async function wooDuplicateOrder(storeUrl, consumerKey, consumerSecret, externalId) {
+  const order = await wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}`);
+  const created = await wooFetch(storeUrl, consumerKey, consumerSecret, '/orders', {
+    method: 'POST',
+    body: JSON.stringify({
+      status: 'pending',
+      customer_id: order.customer_id || 0,
+      billing: order.billing,
+      shipping: order.shipping,
+      line_items: (order.line_items || []).map((li) => ({
+        product_id: li.product_id,
+        variation_id: li.variation_id || 0,
+        quantity: li.quantity,
+      })),
+      customer_note: `Duplicated from order #${order.number || externalId} via Agentra`,
+    }),
+  });
+  const base = storeUrl.replace(/\/+$/, '');
+  return `${base}/wp-admin/post.php?post=${created.id}&action=edit`;
+}
+
+async function wooArchiveOrder(storeUrl, consumerKey, consumerSecret, externalId) {
+  const base = storeUrl.replace(/\/+$/, '');
+  const res = await fetch(`${base}/wp-json/wc/v3/orders/${externalId}?force=false`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: wooAuthHeader(consumerKey, consumerSecret),
+      Accept: 'application/json',
+    },
+  });
+  const body = await readJsonResponse(res);
+  if (!res.ok) {
+    throw new Error(body?.message || `WooCommerce archive failed (${res.status})`);
+  }
+  return body;
+}
+
+async function wooRemoveCustomer(storeUrl, consumerKey, consumerSecret, externalId) {
+  const order = await wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}`);
+  return wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      customer_id: 0,
+      billing: {
+        ...(order.billing || {}),
+        email: '',
+      },
+    }),
+  });
+}
+
 function isCancelled(order) {
   const fin = (order.financialStatus || '').toLowerCase();
   const ful = (order.fulfillmentStatus || '').toLowerCase();
@@ -607,7 +876,20 @@ async function cancelStoreOrder(company, orderId, options = {}) {
     return refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId);
   }
 
-  throw new Error('Order actions are not supported for custom stores yet');
+  if (provider === 'custom') {
+    const { storeUrl, apiKey } = secrets.custom;
+    if (!storeUrl) throw new Error('Custom store URL unavailable');
+    await customStoreOrderAction({
+      storeUrl,
+      apiKey,
+      externalId,
+      action: 'cancel',
+      payload: options,
+    });
+    return refreshCustomOrder(company, storeUrl, apiKey, externalId);
+  }
+
+  throw new Error('Order actions are not supported for this store provider');
 }
 
 async function fulfillStoreOrder(company, orderId, options = {}) {
@@ -635,7 +917,20 @@ async function fulfillStoreOrder(company, orderId, options = {}) {
     return refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId);
   }
 
-  throw new Error('Order actions are not supported for custom stores yet');
+  if (provider === 'custom') {
+    const { storeUrl, apiKey } = secrets.custom;
+    if (!storeUrl) throw new Error('Custom store URL unavailable');
+    await customStoreOrderAction({
+      storeUrl,
+      apiKey,
+      externalId,
+      action: 'fulfill',
+      payload: options,
+    });
+    return refreshCustomOrder(company, storeUrl, apiKey, externalId);
+  }
+
+  throw new Error('Order actions are not supported for this store provider');
 }
 
 async function getStoreOrderDetail(company, orderId) {
@@ -673,12 +968,42 @@ async function getStoreOrderDetail(company, orderId) {
   }
 
   if (provider === 'woocommerce') {
-    const order = storeOrder.toObject();
+    const { storeUrl, consumerKey, consumerSecret } = secrets.woocommerce;
+    if (!storeUrl || !consumerKey || !consumerSecret) {
+      throw new Error('WooCommerce credentials unavailable');
+    }
+    const order = await wooFetch(storeUrl, consumerKey, consumerSecret, `/orders/${externalId}`);
+    const orderDoc = await refreshWooOrder(
+      company,
+      storeUrl,
+      consumerKey,
+      consumerSecret,
+      externalId,
+      order,
+    );
+    const timeline = await wooOrderTimeline(
+      storeUrl,
+      consumerKey,
+      consumerSecret,
+      externalId,
+      order,
+    );
+    const normalized = normalizeWooOrder(order, storeUrl);
+    const plain = orderDoc?.toObject ? orderDoc.toObject() : orderDoc;
+    const conversion = fetchWooConversion(order);
+    return { order: mergePaymentFields(plain, normalized), timeline, conversion };
+  }
+
+  if (provider === 'custom') {
+    const { storeUrl, apiKey } = secrets.custom;
+    if (!storeUrl) throw new Error('Custom store URL unavailable');
+    const { normalized, raw } = await fetchCustomOrder({ storeUrl, apiKey, externalId });
+    const orderDoc = await upsertOrder(company._id, normalized, raw);
+    const order = orderDoc?.toObject ? orderDoc.toObject() : orderDoc;
     return {
       order,
-      timeline: order.placedAt
-        ? [{ id: 'created', at: order.placedAt, type: 'created', message: 'Order placed' }]
-        : [],
+      timeline: customOrderTimeline(order),
+      conversion: buildCustomConversion(raw),
     };
   }
 
@@ -694,9 +1019,102 @@ async function runStoreOrderAction(company, orderId, action, payload = {}) {
   const secrets = getStoreSecrets(integration);
   const { provider, externalId } = storeOrder;
 
+  if (provider === 'woocommerce') {
+    const { storeUrl, consumerKey, consumerSecret } = secrets.woocommerce;
+    if (!storeUrl || !consumerKey || !consumerSecret) {
+      throw new Error('WooCommerce credentials unavailable');
+    }
+    switch (action) {
+      case 'cancel':
+        await wooCancelOrder(storeUrl, consumerKey, consumerSecret, externalId);
+        return refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId);
+      case 'fulfill':
+        await wooFulfillOrder(storeUrl, consumerKey, consumerSecret, externalId, payload);
+        return refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId);
+      case 'refund':
+        await wooRefundOrder(
+          storeUrl,
+          consumerKey,
+          consumerSecret,
+          externalId,
+          storeOrder.totalPrice,
+        );
+        return refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId);
+      case 'hold':
+        await wooHoldOrder(storeUrl, consumerKey, consumerSecret, externalId);
+        return refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId);
+      case 'mark_paid':
+        await wooMarkPaid(storeUrl, consumerKey, consumerSecret, externalId);
+        return refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId);
+      case 'send_invoice':
+        await wooSendInvoice(
+          storeUrl,
+          consumerKey,
+          consumerSecret,
+          externalId,
+          storeOrder,
+          payload,
+        );
+        return refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId);
+      case 'resend_order_email':
+        await wooResendOrderEmail(
+          storeUrl,
+          consumerKey,
+          consumerSecret,
+          externalId,
+          storeOrder,
+          {
+            email: payload.email || storeOrder.customer?.email,
+            message: payload.message,
+          },
+        );
+        return refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId);
+      case 'request_fulfillment':
+        await wooRequestFulfillment(storeUrl, consumerKey, consumerSecret, externalId, payload);
+        return refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId);
+      case 'duplicate': {
+        const duplicateUrl = await wooDuplicateOrder(
+          storeUrl,
+          consumerKey,
+          consumerSecret,
+          externalId,
+        );
+        return { duplicateUrl };
+      }
+      case 'archive':
+        await wooArchiveOrder(storeUrl, consumerKey, consumerSecret, externalId);
+        await StoreOrder.deleteOne({ _id: storeOrder._id });
+        return { archived: true };
+      case 'remove_customer':
+        await wooRemoveCustomer(storeUrl, consumerKey, consumerSecret, externalId);
+        return refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId);
+      default:
+        throw new Error(`Unknown order action: ${action}`);
+    }
+  }
+
+  if (provider === 'custom') {
+    const { storeUrl, apiKey } = secrets.custom;
+    if (!storeUrl) throw new Error('Custom store URL unavailable');
+    const supported =
+      integration.custom?.supportedActions?.length > 0
+        ? integration.custom.supportedActions
+        : DEFAULT_CUSTOM_ACTIONS;
+    if (!supported.includes(action)) {
+      throw new Error('This action is not supported by your custom store integration');
+    }
+    const result = await customStoreOrderAction({ storeUrl, apiKey, externalId, action, payload });
+    if (action === 'duplicate' && result?.duplicateUrl) {
+      return { duplicateUrl: result.duplicateUrl };
+    }
+    if (action === 'archive' && result?.archived) {
+      await StoreOrder.deleteOne({ _id: storeOrder._id });
+      return { archived: true };
+    }
+    return refreshCustomOrder(company, storeUrl, apiKey, externalId);
+  }
+
   if (provider !== 'shopify') {
-    if (action === 'cancel') return cancelStoreOrder(company, orderId, payload);
-    if (action === 'fulfill') return fulfillStoreOrder(company, orderId, payload);
     throw new Error('This action is only supported for Shopify stores right now');
   }
 
@@ -796,6 +1214,22 @@ async function updateStoreOrder(company, orderId, updates = {}) {
     }
     await shopifyUpdateOrder(shopDomain, accessToken, externalId, updates);
     return refreshShopifyOrder(company, shopDomain, accessToken, externalId);
+  }
+
+  if (provider === 'woocommerce') {
+    const { storeUrl, consumerKey, consumerSecret } = secrets.woocommerce;
+    if (!storeUrl || !consumerKey || !consumerSecret) {
+      throw new Error('WooCommerce credentials unavailable');
+    }
+    await wooUpdateOrder(storeUrl, consumerKey, consumerSecret, externalId, updates);
+    return refreshWooOrder(company, storeUrl, consumerKey, consumerSecret, externalId);
+  }
+
+  if (provider === 'custom') {
+    const { storeUrl, apiKey } = secrets.custom;
+    if (!storeUrl) throw new Error('Custom store URL unavailable');
+    await updateCustomOrderRemote({ storeUrl, apiKey, externalId, updates });
+    return refreshCustomOrder(company, storeUrl, apiKey, externalId);
   }
 
   throw new Error('Order editing is only supported for Shopify stores right now');

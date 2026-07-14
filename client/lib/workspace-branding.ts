@@ -153,29 +153,41 @@ export function applyWorkspaceBranding(branding: Partial<WorkspaceBranding>) {
 
 export async function resizeLogoFile(file: File, maxWidth = 320, maxHeight = 96): Promise<File> {
   if (!file.type.startsWith("image/")) return file;
+  // SVG must stay vector — canvas resize fails / rasterizes badly in most browsers.
+  if (
+    file.type === "image/svg+xml" ||
+    file.name.toLowerCase().endsWith(".svg")
+  ) {
+    return file;
+  }
 
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height);
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height);
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
 
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return file;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
 
-  ctx.clearRect(0, 0, width, height);
-  ctx.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close();
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
 
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, file.type === "image/png" ? "image/png" : "image/jpeg", 0.92),
-  );
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, file.type === "image/png" ? "image/png" : "image/jpeg", 0.92),
+    );
 
-  if (!blob) return file;
-  const ext = file.type === "image/png" ? "png" : "jpg";
-  return new File([blob], `workspace-logo.${ext}`, { type: blob.type });
+    if (!blob) return file;
+    const ext = file.type === "image/png" ? "png" : "jpg";
+    return new File([blob], `workspace-logo.${ext}`, { type: blob.type });
+  } catch {
+    // Unsupported decode (some SVGs / exotic formats) — upload original.
+    return file;
+  }
 }
 
 export const THEME_OPTIONS: { id: WorkspaceTheme; label: string; description: string }[] = [

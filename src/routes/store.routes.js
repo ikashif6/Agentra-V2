@@ -28,6 +28,7 @@ router.get(
   authorize('owner', 'admin'),
   storeController.shopifyOAuthUrl,
 );
+router.get('/shopify/app', storeController.shopifyAppEntry);
 router.get('/shopify/oauth/callback', storeController.shopifyOAuthCallback);
 
 // ── OAuth: WooCommerce (wc-auth authorize + key callback) ────────────────────
