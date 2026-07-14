@@ -52,42 +52,55 @@ async function refreshCustomHelpDomains() {
 refreshCustomHelpDomains();
 setInterval(refreshCustomHelpDomains, 5 * 60 * 1000);
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, Postman)
-      if (!origin) return callback(null, true);
+function isPublicWidgetPath(reqPath) {
+  return (
+    reqPath === '/widget.js' ||
+    reqPath.startsWith('/widget-loader.js') ||
+    reqPath.startsWith('/api/v1/widget')
+  );
+}
 
-      // Allow any *.agentraa.com subdomain and the base app URL
-      const allowed = [
-        new RegExp(`^https?://([a-z0-9-]+\\.)?${BASE_DOMAIN.replace('.', '\\.')}(:\\d+)?$`),
-        /^http:\/\/localhost(:\d+)?$/,
-        /^http:\/\/127\.0\.0\.1(:\d+)?$/,
-        /^http:\/\/([a-z0-9-]+\.)?localhost(:\d+)?$/,
-        /^http:\/\/([a-z0-9-]+\.)?localhost(:\d+)?$/,
-      ];
+const dashboardCors = cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
 
-      if (allowed.some((pattern) => pattern.test(origin))) {
+    // Allow any *.agentraa.com subdomain and the base app URL
+    const allowed = [
+      new RegExp(`^https?://([a-z0-9-]+\\.)?${BASE_DOMAIN.replace('.', '\\.')}(:\\d+)?$`),
+      /^http:\/\/localhost(:\d+)?$/,
+      /^http:\/\/127\.0\.0\.1(:\d+)?$/,
+      /^http:\/\/([a-z0-9-]+\.)?localhost(:\d+)?$/,
+      /^http:\/\/([a-z0-9-]+\.)?localhost(:\d+)?$/,
+    ];
+
+    if (allowed.some((pattern) => pattern.test(origin))) {
+      return callback(null, true);
+    }
+
+    // Allow verified custom help domains (e.g. https://help.acme.com)
+    try {
+      const hostname = new URL(origin).hostname;
+      if (customHelpDomains.has(hostname)) {
         return callback(null, true);
       }
+    } catch {
+      // Malformed origin — fall through to deny
+    }
 
-      // Allow verified custom help domains (e.g. https://help.acme.com)
-      try {
-        const hostname = new URL(origin).hostname;
-        if (customHelpDomains.has(hostname)) {
-          return callback(null, true);
-        }
-      } catch {
-        // Malformed origin — fall through to deny
-      }
+    callback(new Error(`CORS: Origin ${origin} not allowed`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant', 'x-helpcenter-subdomain'],
+});
 
-      callback(new Error(`CORS: Origin ${origin} not allowed`));
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant', 'x-helpcenter-subdomain'],
-  })
-);
+// Storefront widget assets/API use dedicated CORS (merchant domains), not dashboard CORS.
+app.use((req, res, next) => {
+  if (isPublicWidgetPath(req.path)) return next();
+  return dashboardCors(req, res, next);
+});
+
 
 // ─── Body parsing ─────────────────────────────────────────────────────────────
 // Keep the raw body so we can verify Meta webhook signatures (X-Hub-Signature-256).
@@ -129,6 +142,7 @@ app.use(
       req.path.startsWith('/api/v1/webhooks/') ||
       req.path.startsWith('/api/v1/widget/') ||
       req.path === '/widget.js' ||
+      req.path.startsWith('/widget-loader.js') ||
       req.path.startsWith('/api/v1/auth') ||
       req.path.startsWith('/api/uploads/') ||
       (!isProduction && req.method === 'OPTIONS'),
@@ -159,6 +173,7 @@ app.get('/widget-loader.js', async (req, res, next) => {
     const widgetJs = `${req.protocol}://${req.get('host')}/widget.js`;
     const body = `(function(){window.AgentraConfig={widgetKey:${JSON.stringify(widgetKey)},apiBase:${JSON.stringify(apiBase)}};var s=document.createElement("script");s.src=${JSON.stringify(widgetJs)};s.async=true;document.head.appendChild(s);})();`;
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.send(body);

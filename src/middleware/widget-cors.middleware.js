@@ -18,6 +18,8 @@ async function widgetCors(req, res, next) {
     'Content-Type, x-widget-key, x-session-token, Authorization',
   );
   res.setHeader('Access-Control-Max-Age', '86400');
+  // Browsers load widget assets/API from merchant domains — allow cross-origin embedding.
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
   if (req.method === 'OPTIONS') {
     return res.sendStatus(204);
