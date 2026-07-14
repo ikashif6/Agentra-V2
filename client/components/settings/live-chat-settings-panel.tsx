@@ -313,10 +313,18 @@ export default function LiveChatSettingsPanel() {
             <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-950">
               <p className="font-semibold">Shopify connected — manual install for now</p>
               <p className="mt-1 text-amber-900">
-                One-click install needs <code className="text-xs">write_script_tags</code> on your
-                Shopify app and a fresh store connection. Add the scope in your Partner app version,
-                reconnect in Settings → Store, then save live chat again.
+                Your store is connected, but Shopify did not grant{" "}
+                <code className="text-xs">write_script_tags</code> on the access token (Partner
+                settings alone are not enough). Release an app version that includes that scope,
+                ensure Railway{" "}
+                <code className="text-xs">SHOPIFY_SCOPES</code> includes it, then disconnect and
+                reconnect the store.
               </p>
+              {settings.shopifyGrantedScope ? (
+                <p className="mt-2 break-all text-xs text-amber-800/90">
+                  Granted now: {settings.shopifyGrantedScope}
+                </p>
+              ) : null}
             </div>
           ) : (
             <div className="rounded-xl border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">

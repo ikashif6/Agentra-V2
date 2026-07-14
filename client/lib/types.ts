@@ -199,6 +199,8 @@ export interface LiveChatSettings {
   installMethod?: 'shopify_script' | 'manual' | null;
   canAutoInstall?: boolean;
   shopifyAutoInstallPending?: boolean;
+  /** Actual scopes on the connected Shopify access token */
+  shopifyGrantedScope?: string | null;
   storeProvider?: string | null;
   storeConnected?: boolean;
   allowedOrigins?: string[];

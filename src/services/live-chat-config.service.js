@@ -147,6 +147,7 @@ function sanitizeLiveChatForSettings(company, apiBase) {
         configuredShopifyScriptTagsScope() &&
         shopifyScopesIncludeScriptTags(company.storeIntegration?.shopify?.scope)
       ),
+    shopifyGrantedScope: company.storeIntegration?.shopify?.scope || null,
     storeProvider: company.storeIntegration?.provider || null,
     storeConnected: company.storeIntegration?.status === 'connected',
     allowedOrigins: config.allowedOrigins || [],
