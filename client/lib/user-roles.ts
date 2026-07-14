@@ -114,7 +114,7 @@ export const PERMISSION_MATRIX: PermissionRow[] = [
   {
     id: "analytics",
     label: "Analytics",
-    levels: { owner: "full", admin: "full", agent: "limited", customer: "none" },
+    levels: { owner: "full", admin: "full", agent: "none", customer: "none" },
   },
 ];
 

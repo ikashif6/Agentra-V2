@@ -535,8 +535,8 @@ export function buildCSS(brand, font, rootId, options) {
     '  padding-bottom: env(safe-area-inset-bottom, 0px);\n' +
     '}\n' +
     prefix + '.agt-tab {\n' +
-    '  flex: 1; padding: 12px 0 18px;\n' +
-    '  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;\n' +
+    '  flex: 1; padding: 10px 0 8px;\n' +
+    '  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;\n' +
     '  cursor: pointer; border: none;\n' +
     '  background: var(--white);\n' +
     '  color: var(--gray-400); transition: color 0.14s;\n' +
@@ -546,7 +546,7 @@ export function buildCSS(brand, font, rootId, options) {
     prefix + '.agt-tab .agt-tab-ico svg { width: 20px; height: 20px; flex-shrink: 0; }\n' +
     prefix + '.agt-tab:hover { color: var(--gray-700); }\n' +
     prefix + '.agt-tab.active { color: var(--brand); font-weight: 600; }\n' +
-    prefix + '.agt-tab > span:last-of-type { font-size: 12px; font-weight: 600; letter-spacing: 0.01em; }\n\n' +
+    prefix + '.agt-tab > span:last-of-type { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; line-height: 1; }\n\n' +
     prefix + '.agt-powered {\n' +
     '  text-align: center; font-size: 11px;\n' +
     '  color: var(--gray-300); padding: 6px 0 4px;\n' +

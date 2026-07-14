@@ -405,6 +405,7 @@ module.exports = {
   shopifyScopesIncludeScriptTags,
   configuredShopifyScriptTagsScope,
   isShopifyOAuthConfigured,
+  getApiBaseUrl,
   getShopifyRedirectUri,
   getWooCallbackUrl,
   revokeShopifyAppAccess,

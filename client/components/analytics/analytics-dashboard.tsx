@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   CheckCircle2,
@@ -150,17 +151,26 @@ function countStaff(users: User[]) {
 }
 
 export default function AnalyticsDashboard() {
+  const router = useRouter();
   const { user, company } = useAuth();
   const [stats, setStats] = useState<DashboardData | null>(null);
   const [staff, setStaff] = useState({ staffTotal: 0, online: 0 });
   const [hoursSummary, setHoursSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const canViewAnalytics = ["owner", "admin"].includes(user?.role ?? "");
   const timezone = getUserTimezone(user, company);
 
   useEffect(() => {
+    if (user && !canViewAnalytics) {
+      router.replace("/dashboard");
+    }
+  }, [user, canViewAnalytics, router]);
+
+  useEffect(() => {
+    if (!canViewAnalytics) return;
+
     let cancelled = false;
-    const isAdmin = ["owner", "admin"].includes(user?.role ?? "");
 
     async function load() {
       setLoading(true);
@@ -170,16 +180,9 @@ export default function AnalyticsDashboard() {
           businessHoursApi.get().catch(() => null),
         ]);
 
-        let staffCounts = {
-          staffTotal: isAdmin ? 0 : 1,
-          online: isAdmin ? 0 : user?.isOnline ? 1 : 0,
-        };
-
-        if (isAdmin) {
-          const membersRes = await usersApi.listWorkspace("", 1, 100).catch(() => null);
-          const members = (membersRes?.data?.data?.users ?? []) as User[];
-          staffCounts = countStaff(members);
-        }
+        const membersRes = await usersApi.listWorkspace("", 1, 100).catch(() => null);
+        const members = (membersRes?.data?.data?.users ?? []) as User[];
+        const staffCounts = countStaff(members);
 
         if (cancelled) return;
 
@@ -219,7 +222,7 @@ export default function AnalyticsDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [timezone, user?.role, user?.isOnline]);
+  }, [canViewAnalytics, timezone]);
 
   const byStatus = stats?.byStatus ?? {};
   const total = useMemo(
@@ -247,6 +250,14 @@ export default function AnalyticsDashboard() {
     month: "long",
     day: "numeric",
   });
+
+  if (!canViewAnalytics) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">

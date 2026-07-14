@@ -413,7 +413,7 @@ export default function LiveChatWidgetPreview({ settings }: { settings: LiveChat
               >
                 <button
                   type="button"
-                  className="flex flex-col items-center gap-1 pb-[18px] pt-3 text-[11px] font-semibold"
+                  className="flex flex-col items-center gap-0.5 pb-2 pt-2.5 text-[11px] font-semibold leading-none"
                   style={{ color: brand, fontFamily: font }}
                 >
                   <HomeTabIcon />
@@ -421,7 +421,7 @@ export default function LiveChatWidgetPreview({ settings }: { settings: LiveChat
                 </button>
                 <button
                   type="button"
-                  className="flex flex-col items-center gap-1 pb-[18px] pt-3 text-[11px] font-medium text-[#9aa1ac]"
+                  className="flex flex-col items-center gap-0.5 pb-2 pt-2.5 text-[11px] font-medium leading-none text-[#9aa1ac]"
                   style={{ fontFamily: font }}
                   onClick={() => startChat()}
                 >

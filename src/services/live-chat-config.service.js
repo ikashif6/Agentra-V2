@@ -79,9 +79,14 @@ function generateWidgetKey() {
 
 const TEAM_AGENT_COLORS = ['#a78bfa', '#f97316', '#22c55e', '#3b82f6', '#ec4899'];
 
+function namePart(value) {
+  const v = String(value || '').trim();
+  return !v || v === '-' ? '' : v;
+}
+
 function agentInitials(user) {
-  const first = String(user?.firstName || '').trim();
-  const last = String(user?.lastName || '').trim();
+  const first = namePart(user?.firstName);
+  const last = namePart(user?.lastName);
   if (first && last) return `${first[0]}${last[0]}`.toUpperCase();
   if (first) return first.slice(0, 2).toUpperCase();
   if (last) return last.slice(0, 2).toUpperCase();
@@ -99,17 +104,21 @@ function mapLiveChatAgents(company, apiOrigin) {
     .filter((u) => u && typeof u === 'object' && u._id && u.firstName)
     .filter((u) => u.isActive !== false)
     .slice(0, 8)
-    .map((u, i) => ({
-      _id: String(u._id),
-      firstName: u.firstName,
-      lastName: u.lastName || '',
-      fullName: `${u.firstName} ${u.lastName || ''}`.trim(),
-      avatar: toAbsolute(u.avatar) || undefined,
-      role: u.role,
-      isOnline: Boolean(u.isOnline),
-      initials: agentInitials(u),
-      color: TEAM_AGENT_COLORS[i % TEAM_AGENT_COLORS.length],
-    }));
+    .map((u, i) => {
+      const firstName = namePart(u.firstName) || u.firstName;
+      const lastName = namePart(u.lastName);
+      return {
+        _id: String(u._id),
+        firstName,
+        lastName,
+        fullName: [firstName, lastName].filter(Boolean).join(' '),
+        avatar: toAbsolute(u.avatar) || undefined,
+        role: u.role,
+        isOnline: Boolean(u.isOnline),
+        initials: agentInitials(u),
+        color: TEAM_AGENT_COLORS[i % TEAM_AGENT_COLORS.length],
+      };
+    });
 }
 
 function mergeLiveChatConfig(company) {

@@ -149,12 +149,12 @@ router.get(
 
 /**
  * GET /tickets/stats/dashboard  — aggregated stats for dashboard
- * Owner / admin / agent only
+ * Owner / admin only
  */
 router.get(
   '/stats/dashboard',
   protect,
-  authorize('owner', 'admin', 'agent'),
+  authorize('owner', 'admin'),
   ticketController.getDashboardStats
 );
 

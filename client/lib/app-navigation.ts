@@ -42,7 +42,7 @@ export const PRIMARY_NAV: AppNavItem[] = [
     label: "Analytics",
     href: "/analytics",
     icon: AnalyticsIcon,
-    roles: ["owner", "admin", "agent"],
+    roles: ["owner", "admin"],
   },
   {
     label: "Settings",

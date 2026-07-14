@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ArrowUpRight, BookOpen, Inbox, LifeBuoy } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { APP_CARD } from "@/lib/app-surfaces";
 import { SITE_LEGAL } from "@/lib/site";
@@ -28,10 +29,15 @@ const RESOURCES = [
     href: "/analytics",
     cta: "View insights",
     icon: BookOpen,
+    adminOnly: true,
   },
 ];
 
 export function HomeResourceCards({ monochrome = false }: { monochrome?: boolean }) {
+  const { user } = useAuth();
+  const isAdmin = ["owner", "admin"].includes(user?.role ?? "");
+  const resources = RESOURCES.filter((item) => !item.adminOnly || isAdmin);
+
   return (
     <section className="space-y-4">
       <div>
@@ -41,8 +47,8 @@ export function HomeResourceCards({ monochrome = false }: { monochrome?: boolean
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {RESOURCES.map((item) => {
+      <div className={cn("grid gap-4", resources.length > 1 ? "md:grid-cols-3" : "md:grid-cols-2")}>
+        {resources.map((item) => {
           const Icon = item.icon;
           const content = (
             <>

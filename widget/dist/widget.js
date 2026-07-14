@@ -269,8 +269,8 @@ How can we help?`:a).replace(/\n/g,"<br>")}function gt(a){const s=(Array.isArray
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 `+t+`.agt-tab {
-  flex: 1; padding: 12px 0 18px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  flex: 1; padding: 10px 0 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   cursor: pointer; border: none;
   background: var(--white);
   color: var(--gray-400); transition: color 0.14s;
@@ -280,7 +280,7 @@ How can we help?`:a).replace(/\n/g,"<br>")}function gt(a){const s=(Array.isArray
 `+t+`.agt-tab .agt-tab-ico svg { width: 20px; height: 20px; flex-shrink: 0; }
 `+t+`.agt-tab:hover { color: var(--gray-700); }
 `+t+`.agt-tab.active { color: var(--brand); font-weight: 600; }
-`+t+`.agt-tab > span:last-of-type { font-size: 12px; font-weight: 600; letter-spacing: 0.01em; }
+`+t+`.agt-tab > span:last-of-type { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; line-height: 1; }
 
 `+t+`.agt-powered {
   text-align: center; font-size: 11px;

@@ -19,13 +19,28 @@ import { resizeLogoFile } from "@/lib/workspace-branding";
 
 const AGENT_COLORS = ["#a78bfa", "#f97316", "#22c55e", "#3b82f6", "#ec4899"];
 
+function namePart(value?: string) {
+  const v = (value || "").trim();
+  return !v || v === "-" ? "" : v;
+}
+
 function userToLiveChatAgent(user: User, index: number): LiveChatAgent {
-  const initials = `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`.toUpperCase() || "A";
+  const firstName = namePart(user.firstName) || user.firstName;
+  const lastName = namePart(user.lastName);
+  const fullName =
+    [firstName, lastName].filter(Boolean).join(" ") ||
+    (user.fullName || "").trim().replace(/\s+-\s*$/, "") ||
+    user.email ||
+    "Agent";
+  const initials =
+    `${firstName[0] || ""}${lastName[0] || ""}`.toUpperCase() ||
+    fullName.slice(0, 2).toUpperCase() ||
+    "A";
   return {
     _id: user._id,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    fullName: user.fullName || `${user.firstName} ${user.lastName}`.trim(),
+    firstName,
+    lastName,
+    fullName,
     avatar: user.avatar,
     role: user.role,
     isOnline: user.isOnline,

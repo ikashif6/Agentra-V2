@@ -1189,7 +1189,7 @@ exports.trackVerify = async (req, res, next) => {
 /**
  * GET /tickets/stats/dashboard
  * Returns ticket counts by status, by department, and by team for the company.
- * Owner / admin / agent only.
+ * Owner / admin only.
  */
 exports.getDashboardStats = async (req, res, next) => {
   try {

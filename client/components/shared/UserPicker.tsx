@@ -24,8 +24,21 @@ interface Props {
   confirmLabel?: string;
 }
 
+function namePart(value?: string) {
+  const v = (value || "").trim();
+  return !v || v === "-" ? "" : v;
+}
+
+function displayName(u: User) {
+  return [namePart(u.firstName), namePart(u.lastName)].filter(Boolean).join(" ") || u.email;
+}
+
 function initials(u: User) {
-  return `${u.firstName[0]}${u.lastName[0]}`.toUpperCase();
+  const first = namePart(u.firstName);
+  const last = namePart(u.lastName);
+  const chars = `${first[0] || ""}${last[0] || ""}`.toUpperCase();
+  if (chars) return chars;
+  return (displayName(u)[0] || "?").toUpperCase();
 }
 
 export default function UserPicker({
@@ -87,7 +100,7 @@ export default function UserPicker({
 
   const ROLE_COLOR: Record<string, string> = {
     admin: "bg-purple-50 text-purple-700 border-purple-100",
-    agent: "bg-blue-50 text-blue-700 border-blue-100",
+    agent: "bg-[#FDEBE4] text-[#D85A30] border-[#F5D4C8]",
     customer: "bg-gray-50 text-gray-600 border-gray-100",
   };
 
@@ -141,7 +154,7 @@ export default function UserPicker({
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">
-                      {u.firstName} {u.lastName}
+                      {displayName(u)}
                     </p>
                     <p className="text-xs text-gray-400 truncate">{u.email}</p>
                   </div>

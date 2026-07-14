@@ -64,9 +64,14 @@ function NavLink({
   );
 }
 
+function namePart(value?: string) {
+  const v = (value || "").trim();
+  return !v || v === "-" ? "" : v;
+}
+
 function userInitials(firstName?: string, lastName?: string) {
-  const first = firstName?.trim()[0] ?? "";
-  const last = lastName?.trim()[0] ?? "";
+  const first = namePart(firstName)[0] ?? "";
+  const last = namePart(lastName)[0] ?? "";
   return `${first}${last}`.toUpperCase() || "?";
 }
 
@@ -135,8 +140,8 @@ function SidebarAccountMenu({
   const panelRef = useRef<HTMLDivElement>(null);
 
   const displayName =
-    user?.fullName?.trim() ||
-    [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+    [namePart(user?.firstName), namePart(user?.lastName)].filter(Boolean).join(" ") ||
+    (user?.fullName || "").trim().replace(/\s+-\s*$/, "") ||
     "Account";
 
   useEffect(() => {
