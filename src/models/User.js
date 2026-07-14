@@ -18,8 +18,8 @@ const userSchema = new mongoose.Schema(
     },
     lastName: {
       type: String,
-      required: [true, 'Last name is required'],
       trim: true,
+      default: '',
       maxlength: [50, 'Last name cannot exceed 50 characters'],
     },
     email: {
@@ -42,7 +42,7 @@ const userSchema = new mongoose.Schema(
     // Role within the company
     role: {
       type: String,
-      enum: ['owner', 'admin', 'agent', 'customer'],
+      enum: ['owner', 'admin', 'manager', 'agent', 'customer'],
       default: 'customer',
     },
 
@@ -143,9 +143,12 @@ userSchema.index({ company: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
 
-// Virtual: full name
+// Virtual: full name (ignore "-" placeholder last names from invites)
 userSchema.virtual('fullName').get(function () {
-  return `${this.firstName} ${this.lastName}`;
+  const first = String(this.firstName || '').trim();
+  const last = String(this.lastName || '').trim();
+  const parts = [first, last && last !== '-' ? last : ''].filter(Boolean);
+  return parts.join(' ') || this.email || '';
 });
 
 // Virtual: account is locked

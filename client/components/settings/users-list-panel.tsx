@@ -25,21 +25,18 @@ import { getApiError } from "@/lib/api-error";
 import { getUserManagePermissions, ROLE_DISPLAY } from "@/lib/user-roles";
 import type { Pagination, User } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { formatUserDisplayName, userInitials } from "@/lib/user-display";
 import { toast } from "sonner";
 import EditUserDialog from "./edit-user-dialog";
 
 const PAGE_SIZE = 15;
 
-function initials(user: User) {
-  const first = user.firstName?.[0] ?? "";
-  const last = user.lastName?.[0] ?? "";
-  return `${first}${last}`.toUpperCase() || "?";
+function displayName(user: User) {
+  return formatUserDisplayName(user, user.email);
 }
 
-function displayName(user: User) {
-  const name = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim();
-  if (!name || name === "-") return user.email;
-  return name;
+function initials(user: User) {
+  return userInitials(user);
 }
 
 type UsersListPanelProps = {
@@ -103,7 +100,7 @@ export default function UsersListPanel({
 
   const pages = pagination?.pages ?? 1;
   const planHint = "Agentra Pro includes unlimited members, tickets, and all features.";
-  const canManageAny = ["owner", "admin"].includes(currentUser?.role ?? "");
+  const canManageAny = ["owner", "admin", "manager"].includes(currentUser?.role ?? "");
 
   return (
     <div className="space-y-5">

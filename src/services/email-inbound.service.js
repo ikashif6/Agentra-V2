@@ -234,6 +234,8 @@ async function processInboundEmail(company, parsed) {
       existing.email.references = `${existing.email.references || ''} ${messageId}`.trim();
     }
     await existing.save();
+    const { scheduleTicketAiReply } = require('./ai-agent-ticket.service');
+    scheduleTicketAiReply(company._id, existing._id, body);
     return existing;
   }
 
@@ -267,6 +269,8 @@ async function processInboundEmail(company, parsed) {
   });
 
   await Counter.increment(`company:${company._id}`, 'totalTickets');
+  const { scheduleTicketAiReply } = require('./ai-agent-ticket.service');
+  scheduleTicketAiReply(company._id, ticket._id, body);
   return ticket;
 }
 

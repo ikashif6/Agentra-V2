@@ -2,8 +2,14 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { User, Company } from "@/lib/types";
-import { authApi } from "@/lib/api";
+import { authApi, workspaceApi } from "@/lib/api";
 import { setTokens, clearTokens, setSubdomain, setUser, getUser, isAuthenticated } from "@/lib/auth";
+import {
+  applyWorkspaceBranding,
+  cacheWorkspaceBranding,
+  normalizeWorkspaceBranding,
+  type WorkspaceBranding,
+} from "@/lib/workspace-branding";
 
 interface AuthContextType {
   user: User | null;
@@ -12,6 +18,8 @@ interface AuthContextType {
   login: (accessToken: string, refreshToken: string, user: User, company: Company) => void;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  applyCompanyBranding: (branding: WorkspaceBranding) => void;
+  syncWorkspaceBranding: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -20,6 +28,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const applyCompanyBranding = useCallback((branding: WorkspaceBranding) => {
+    const normalized = normalizeWorkspaceBranding(branding);
+    applyWorkspaceBranding(normalized);
+    cacheWorkspaceBranding(normalized);
+    setCompany((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        logo: normalized.logo ?? undefined,
+        branding: {
+          ...prev.branding,
+          primaryColor: normalized.primaryColor,
+          theme: normalized.theme,
+          favicon: normalized.favicon,
+          logoDark: normalized.logoDark,
+          browserTitle: normalized.browserTitle,
+          tagline: normalized.tagline,
+          logoWidth: normalized.logoWidth,
+          logoHeight: normalized.logoHeight,
+        },
+      };
+    });
+  }, []);
+
+  const syncWorkspaceBranding = useCallback(async () => {
+    try {
+      const { data } = await workspaceApi.getBranding();
+      const branding = normalizeWorkspaceBranding(data.data.branding);
+      applyCompanyBranding(branding);
+    } catch {
+      // Branding sync is best-effort — auth remains usable without it.
+    }
+  }, [applyCompanyBranding]);
 
   const refreshUser = useCallback(async () => {
     try {
@@ -30,12 +72,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (u.company && typeof u.company === "object") {
         setCompany(u.company as Company);
       }
+      await syncWorkspaceBranding();
     } catch {
       clearTokens();
       setUserState(null);
       setCompany(null);
     }
-  }, []);
+  }, [syncWorkspaceBranding]);
 
   useEffect(() => {
     const init = async () => {
@@ -58,12 +101,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     init();
   }, [refreshUser]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const onFocus = () => {
+      void syncWorkspaceBranding();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [user, syncWorkspaceBranding]);
+
   const login = (accessToken: string, refreshToken: string, u: User, c: Company) => {
     setTokens(accessToken, refreshToken);
     setSubdomain(c.subdomain);
     setUser(u);
     setUserState(u);
     setCompany(c);
+    void syncWorkspaceBranding();
   };
 
   const logout = async () => {
@@ -79,7 +133,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, company, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        company,
+        loading,
+        login,
+        logout,
+        refreshUser,
+        applyCompanyBranding,
+        syncWorkspaceBranding,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

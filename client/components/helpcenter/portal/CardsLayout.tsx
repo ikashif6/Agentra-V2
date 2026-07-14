@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MessageSquare, Ticket, BookOpen, ArrowLeft } from "lucide-react";
+import { MessageSquare, Ticket, BookOpen, ChevronLeft } from "lucide-react";
 import type { PortalProps } from "./types";
 import { ContactForm } from "./ContactForm";
 import { TicketTracker } from "./TicketTracker";
@@ -47,7 +47,7 @@ export function CardsLayout({ hc, subdomain }: PortalProps) {
           <div>
             <button onClick={() => setActive(null)}
               className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-5">
-              <ArrowLeft className="h-4 w-4" /> Back
+              <ChevronLeft className="h-4 w-4" /> Back
             </button>
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
               {active === "contact" && (

@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { storeApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import type { StoreOrder, StoreOrderConversion, StoreOrderConversionSession, StoreOrderTimelineEvent } from "@/lib/types";
 import { ConversionDetailsDialog } from "@/components/inbox/conversion-details-dialog";
 import { ConversionSummaryCard } from "@/components/inbox/conversion-summary-card";
@@ -106,6 +107,7 @@ export function OrderDetailsDialog({
   onOpenChange,
   onUpdated,
 }: OrderDetailsDialogProps) {
+  const confirm = useConfirm();
   const [order, setOrder] = useState(initialOrder);
   const [timeline, setTimeline] = useState<StoreOrderTimelineEvent[]>([]);
   const [conversion, setConversion] = useState<StoreOrderConversion | null>(null);
@@ -442,13 +444,19 @@ export function OrderDetailsDialog({
                     <DropdownMenuItem
                       className="text-destructive"
                       onClick={() => {
-                        if (confirm(`Cancel order ${order.orderNumber || order.name}?`)) {
+                        void (async () => {
+                          const ok = await confirm({
+                            title: "Cancel order?",
+                            description: `Order ${order.orderNumber || order.name} will be cancelled. Inventory can be restocked and the customer notified.`,
+                            confirmLabel: "Cancel order",
+                          });
+                          if (!ok) return;
                           void runAction("cancel", {
                             reason: "customer",
                             restock: true,
                             notifyCustomer: true,
                           });
-                        }
+                        })();
                       }}
                     >
                       Cancel order
@@ -699,9 +707,15 @@ export function OrderDetailsDialog({
               onEditContact={() => setContactEditOpen(true)}
               onEditShipping={() => setShippingEditOpen(true)}
               onRemoveCustomer={() => {
-                if (confirm("Remove customer from this order?")) {
+                void (async () => {
+                  const ok = await confirm({
+                    title: "Remove customer?",
+                    description: "The customer will be unlinked from this order in your store.",
+                    confirmLabel: "Remove",
+                  });
+                  if (!ok) return;
                   void runAction("remove_customer");
-                }
+                })();
               }}
             />
 

@@ -20,7 +20,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
   let emailVerified = false;
   let lastMessageTs = null;
   let messagesEl, inputEl, sendBtnEl, typingEl, badgeEl, processStepsEl;
-  let tabHomeEl, tabChatEl, emailGateEl, emailInputEl, emailBtnEl;
+  let tabHomeEl, tabChatEl, emailGateEl, emailInputEl, emailBtnEl, emailErrorEl;
 
   const STATUS_LABELS = {
     retrieving: 'Searching knowledge base…',
@@ -271,10 +271,23 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     else addAgentMessage(msg);
   }
 
+  function clearEmailError() {
+    if (!emailErrorEl) return;
+    emailErrorEl.textContent = '';
+    emailErrorEl.classList.add('gone');
+  }
+
+  function showEmailError(message) {
+    if (!emailErrorEl) return;
+    emailErrorEl.textContent = message || 'Something went wrong. Please try again.';
+    emailErrorEl.classList.remove('gone');
+  }
+
   function showEmailGate() {
     document.getElementById('agt-home')?.classList.add('gone');
     document.getElementById('agt-chat')?.classList.add('gone');
     emailGateEl?.classList.remove('gone');
+    clearEmailError();
     tabHomeEl?.classList.remove('active');
     tabChatEl?.classList.add('active');
     document.getElementById('agt-chat-header')?.style.setProperty('display', 'flex');
@@ -293,6 +306,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
 
   async function startChatWithEmail(email) {
     emailBtnEl.disabled = true;
+    clearEmailError();
     try {
       const data = await api('/session/start', 'POST', {
         email: email,
@@ -310,7 +324,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       connectWebSocket();
       showChatScreen();
     } catch (err) {
-      alert(err.message || 'Could not start chat');
+      showEmailError(err.message || 'Could not start chat');
     } finally {
       emailBtnEl.disabled = false;
     }
@@ -375,6 +389,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     emailGateEl = document.getElementById('agt-email-gate');
     emailInputEl = document.getElementById('agt-email-input');
     emailBtnEl = document.getElementById('agt-email-btn');
+    emailErrorEl = document.getElementById('agt-email-error');
 
     function openPanel() {
       isOpen = true;
@@ -423,9 +438,12 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       goToChat();
     });
 
+    emailInputEl?.addEventListener('input', clearEmailError);
+
     emailBtnEl?.addEventListener('click', function () {
       const email = emailInputEl?.value?.trim();
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showEmailError('Enter a valid email address to continue.');
         emailInputEl?.focus();
         return;
       }

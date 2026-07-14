@@ -24,7 +24,11 @@ function getManagePermissions(actor, target) {
     return { canEdit: true, canChangeRole: true, canDelete: true };
   }
 
-  if (actor.role === 'admin' && target.role === 'agent') {
+  if (actor.role === 'admin' && ['agent', 'manager'].includes(target.role)) {
+    return { canEdit: true, canChangeRole: true, canDelete: true };
+  }
+
+  if (actor.role === 'manager' && target.role === 'agent') {
     return { canEdit: true, canChangeRole: true, canDelete: true };
   }
 
@@ -41,7 +45,7 @@ exports.listWorkspace = async (req, res, next) => {
 
     const base = {
       company: req.company._id,
-      role: { $in: ['owner', 'admin', 'agent'] },
+      role: { $in: ['owner', 'admin', 'manager', 'agent'] },
       isActive: true,
     };
 
@@ -66,7 +70,7 @@ exports.listWorkspace = async (req, res, next) => {
       User.countDocuments(base),
     ]);
 
-    const roleOrder = { owner: 0, admin: 1, agent: 2 };
+    const roleOrder = { owner: 0, admin: 1, manager: 2, agent: 3 };
     users.sort((a, b) => {
       const diff = (roleOrder[a.role] ?? 9) - (roleOrder[b.role] ?? 9);
       if (diff !== 0) return diff;
@@ -93,9 +97,8 @@ exports.listWorkspace = async (req, res, next) => {
 
 /**
  * GET /users/staff
- * Returns admin + agent users in the caller's company.
+ * Returns admin / manager / agent users in the caller's company.
  * Supports ?search=<name or email> for live search.
- * Owner / Admin only.
  */
 exports.listStaff = async (req, res, next) => {
   try {
@@ -103,7 +106,7 @@ exports.listStaff = async (req, res, next) => {
 
     const base = {
       company: req.company._id,
-      role: { $in: ['admin', 'agent'] },
+      role: { $in: ['admin', 'manager', 'agent'] },
       isActive: true,
     };
 
@@ -144,9 +147,8 @@ exports.listStaff = async (req, res, next) => {
 
 /**
  * GET /users/members
- * Returns ALL non-owner users (admin + agent + customer) in the company.
+ * Returns ALL non-owner users in the company.
  * Useful for ticket people-picker etc.
- * Owner / Admin / Agent.
  */
 exports.listMembers = async (req, res, next) => {
   try {
@@ -154,7 +156,7 @@ exports.listMembers = async (req, res, next) => {
 
     const base = {
       company: req.company._id,
-      role: role ? role : { $in: ['admin', 'agent', 'customer'] },
+      role: role ? role : { $in: ['admin', 'manager', 'agent', 'customer'] },
       isActive: true,
     };
 
@@ -194,8 +196,12 @@ exports.inviteUser = async (req, res, next) => {
     const { email, role, firstName, lastName } = req.body;
     const company = req.company;
 
-    if (!['agent', 'admin'].includes(role)) {
-      return response.badRequest(res, 'Role must be agent or admin');
+    if (!['agent', 'manager', 'admin'].includes(role)) {
+      return response.badRequest(res, 'Role must be agent, manager, or admin');
+    }
+
+    if (req.user.role === 'manager' && role !== 'agent') {
+      return response.forbidden(res, 'Managers can only invite support agents');
     }
 
     // Check if already exists in this company
@@ -231,7 +237,10 @@ exports.inviteUser = async (req, res, next) => {
       console.error('[Invite] Failed to send invite email:', emailErr.message);
     }
 
-    await Company.findByIdAndUpdate(company._id, { $inc: { 'usage.totalUsers': 1 } });
+    await Company.findByIdAndUpdate(company._id, {
+      $inc: { 'usage.totalUsers': 1 },
+      $set: { 'setupChecklist.team': true },
+    });
 
     logUserInvited({ company, actor: req.user, target: user, req });
 
@@ -291,8 +300,11 @@ exports.updateUser = async (req, res, next) => {
       if (!perms.canChangeRole) {
         return response.forbidden(res, 'You cannot change this user\'s role');
       }
-      if (!['agent', 'admin'].includes(role)) {
-        return response.badRequest(res, 'Role must be agent or admin');
+      if (!['agent', 'manager', 'admin'].includes(role)) {
+        return response.badRequest(res, 'Role must be agent, manager, or admin');
+      }
+      if (req.user.role === 'manager' && role !== 'agent') {
+        return response.forbidden(res, 'Managers can only assign the agent role');
       }
       updates.role = role;
     }

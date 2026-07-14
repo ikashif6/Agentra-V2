@@ -16,6 +16,7 @@ const {
 } = require('./live-chat-tools.service');
 const StoreOrder = require('../models/StoreOrder');
 const { isTeamAvailableNow } = require('./live-chat-hours.service');
+const { isChannelAiEnabled, resolveChannelAiConfig } = require('./ai-agent-config.service');
 
 const SUPPORT_PLAYBOOK = `You are Agentra's ecommerce support assistant.
 - Be warm, concise, and professional.
@@ -43,8 +44,29 @@ function buildHistory(session, limit = 12) {
 
 async function processCustomerMessage(company, session, text, { onStatus } = {}) {
   const config = mergeLiveChatConfig(company);
+  const channelAi = resolveChannelAiConfig(company, 'liveChat');
   const trimmed = String(text || '').trim();
   if (!trimmed) throw new Error('Message is required');
+
+  if (!isChannelAiEnabled(company, 'liveChat')) {
+    await appendSessionMessage(session, {
+      role: 'customer',
+      body: trimmed,
+      contentType: 'text',
+      senderName: session.visitorEmail,
+    });
+    session.status = 'waiting_human';
+    session.handoffRequestedAt = new Date();
+    await session.save();
+    const handoffMsg = await appendSessionMessage(session, {
+      role: 'system',
+      body: 'Connecting you with a support agent…',
+      contentType: 'system_event',
+      payload: { type: 'handoff_requested' },
+      senderName: 'System',
+    });
+    return { messages: [handoffMsg], handoff: true };
+  }
 
   await appendSessionMessage(session, {
     role: 'customer',
@@ -53,7 +75,7 @@ async function processCustomerMessage(company, session, text, { onStatus } = {})
     senderName: session.visitorEmail,
   });
 
-  if (wantsHumanHandoff(trimmed, config.ai.escalationKeywords)) {
+  if (wantsHumanHandoff(trimmed, channelAi.escalationKeywords)) {
     const available = await isTeamAvailableNow(company);
     if (!available && config.behavior.handoffOnlyInBusinessHours) {
       const reply =
@@ -132,13 +154,15 @@ async function processCustomerMessage(company, session, text, { onStatus } = {})
       });
       richMessages.push(orderMsg);
 
-      if (intent === 'refund' && config.ai.allowedActions.refundOrder) {
+      if (intent === 'refund' && channelAi.allowedActions.refundOrder) {
         const storeOrder = await StoreOrder.findOne({
           company: company._id,
           externalId: verification.order.externalId,
         });
         if (storeOrder) {
-          const refund = await executeRefundIfAllowed(company, session, storeOrder);
+          const refund = await executeRefundIfAllowed(company, session, storeOrder, {
+            allowedActions: channelAi.allowedActions,
+          });
           const refundMsg = await appendSessionMessage(session, {
             role: 'bot',
             body: refund.message,
@@ -165,7 +189,7 @@ async function processCustomerMessage(company, session, text, { onStatus } = {})
     }
   }
 
-  if (intent === 'product_search' && config.ai.allowedActions.productRecommendations) {
+  if (intent === 'product_search' && channelAi.allowedActions.productRecommendations) {
     if (onStatus) onStatus('searching_products');
     const products = await searchProducts(company._id, trimmed, 4);
     if (products.length) {
@@ -194,8 +218,11 @@ async function processCustomerMessage(company, session, text, { onStatus } = {})
   }
 
   if (onStatus) onStatus('thinking');
-  const customInstructions = config.ai.instructions ? `\nStore instructions:\n${config.ai.instructions}` : '';
-  const systemPrompt = `${SUPPORT_PLAYBOOK}${customInstructions}\n\nKnowledge:\n${knowledgeBlock}\n\nTool data:\n${toolContext || 'None'}`;
+  const customInstructions = channelAi.instructions
+    ? `\nStore instructions:\n${channelAi.instructions}`
+    : '';
+  const channelStyle = channelAi.styleGuidance ? `\n${channelAi.styleGuidance}` : '';
+  const systemPrompt = `${SUPPORT_PLAYBOOK}${channelStyle}${customInstructions}\n\nKnowledge:\n${knowledgeBlock}\n\nTool data:\n${toolContext || 'None'}`;
 
   const replyText = await groqChat({
     messages: [{ role: 'system', content: systemPrompt }, ...buildHistory(session), { role: 'user', content: trimmed }],

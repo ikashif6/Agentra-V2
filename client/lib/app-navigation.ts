@@ -23,32 +23,32 @@ export const PRIMARY_NAV: AppNavItem[] = [
     label: "Home",
     href: "/dashboard",
     icon: Home,
-    roles: ["owner", "admin", "agent", "customer"],
+    roles: ["owner", "admin", "manager", "agent", "customer"],
   },
   {
     label: "Inbox",
     href: "/inbox",
     icon: Inbox,
-    roles: ["owner", "admin", "agent", "customer"],
+    roles: ["owner", "admin", "manager", "agent", "customer"],
     customerLabel: "My tickets",
   },
   {
     label: "AI Agent",
     href: "/ai-agent",
     icon: AiAgentIcon,
-    roles: ["owner", "admin", "agent"],
+    roles: ["owner", "admin", "manager"],
   },
   {
     label: "Analytics",
     href: "/analytics",
     icon: AnalyticsIcon,
-    roles: ["owner", "admin"],
+    roles: ["owner", "admin", "manager"],
   },
   {
     label: "Settings",
     href: "/settings",
     icon: Settings,
-    roles: ["owner", "admin", "agent", "customer"],
+    roles: ["owner", "admin", "manager", "agent", "customer"],
   },
 ];
 

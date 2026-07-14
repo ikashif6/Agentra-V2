@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowRight,
+  ChevronRight,
   CheckCircle2,
   Clock,
   Inbox,
@@ -14,6 +14,8 @@ import {
   UsersRound,
 } from "lucide-react";
 import { AnalyticsIcon } from "@/components/icons/analytics-icon";
+import ManagerAiPanel from "@/components/analytics/manager-ai-panel";
+import KnowledgeAiPanel from "@/components/analytics/knowledge-ai-panel";
 import { useAuth } from "@/contexts/AuthContext";
 import { businessHoursApi, ticketApi, usersApi } from "@/lib/api";
 import { formatScheduleSummary } from "@/lib/business-hours";
@@ -145,7 +147,9 @@ function BreakdownPanel({
 }
 
 function countStaff(users: User[]) {
-  const staff = users.filter((user) => ["owner", "admin", "agent"].includes(user.role));
+  const staff = users.filter((user) =>
+    ["owner", "admin", "manager", "agent"].includes(user.role),
+  );
   const online = staff.filter((user) => user.isOnline).length;
   return { staffTotal: staff.length, online };
 }
@@ -158,7 +162,7 @@ export default function AnalyticsDashboard() {
   const [hoursSummary, setHoursSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const canViewAnalytics = ["owner", "admin"].includes(user?.role ?? "");
+  const canViewAnalytics = ["owner", "admin", "manager"].includes(user?.role ?? "");
   const timezone = getUserTimezone(user, company);
 
   useEffect(() => {
@@ -276,7 +280,7 @@ export default function AnalyticsDashboard() {
           className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
         >
           Open inbox
-          <ArrowRight className="size-3.5" />
+          <ChevronRight className="size-3.5" />
         </Link>
       </div>
 
@@ -424,7 +428,7 @@ export default function AnalyticsDashboard() {
               className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
             >
               Manage team
-              <ArrowRight className="size-3.5" />
+              <ChevronRight className="size-3.5" />
             </Link>
           </div>
         </section>
@@ -449,6 +453,10 @@ export default function AnalyticsDashboard() {
           loading={loading}
         />
       </div>
+
+      <ManagerAiPanel />
+
+      <KnowledgeAiPanel />
     </div>
   );
 }

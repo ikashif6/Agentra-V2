@@ -17,6 +17,7 @@ export const TICKET_SOURCE_META: Record<TicketSource, SourceMeta> = {
   instagram: { label: "Instagram", channel: "instagram" },
   facebook: { label: "Facebook", channel: "facebook" },
   whatsapp: { label: "WhatsApp", channel: "whatsapp" },
+  tiktok: { label: "TikTok", channel: "tiktok" },
 };
 
 /** Analytics labels — chat + chatbot merge into Live chat (AI Agent is the workspace, not the channel). */
@@ -26,6 +27,7 @@ export const ANALYTICS_SOURCE_LABELS: Record<string, string> = {
   instagram: "Instagram",
   facebook: "Facebook",
   whatsapp: "WhatsApp",
+  tiktok: "TikTok",
   chat: "Live chat",
   chatbot: "Live chat",
   live_chat: "Live chat",

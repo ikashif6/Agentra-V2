@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, MessageSquare, Ticket, BookOpen, ArrowRight } from "lucide-react";
+import { Search, MessageSquare, Ticket, BookOpen, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { PortalProps, Section } from "./types";
@@ -49,7 +49,7 @@ export function ClassicLayout({ hc, subdomain }: PortalProps) {
               <Icon className="h-6 w-6 mb-3" style={{ color: hc.primaryColor }} />
               <h3 className={cn("font-semibold", active === id ? "text-[#D85A30]" : "text-gray-900")}>{label}</h3>
               <p className="text-sm text-gray-500 mt-1">{desc}</p>
-              <ArrowRight className="h-4 w-4 mt-3 text-gray-400" />
+              <ChevronRight className="h-4 w-4 mt-3 text-gray-400" />
             </button>
           ))}
         </div>

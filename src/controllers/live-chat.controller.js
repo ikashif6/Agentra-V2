@@ -94,7 +94,7 @@ exports.updateSettings = async (req, res, next) => {
         const valid = await User.find({
           _id: { $in: requested },
           company: company._id,
-          role: { $in: ['owner', 'admin', 'agent'] },
+          role: { $in: ['owner', 'admin', 'manager', 'agent'] },
           isActive: true,
         }).select('_id');
         const allowed = new Set(valid.map((u) => String(u._id)));
@@ -280,6 +280,7 @@ exports.updateKnowledge = async (req, res, next) => {
     if (!article) return response.notFound(res, 'Article not found');
     return response.success(res, { article }, 'Knowledge article updated');
   } catch (err) {
+    if (err.statusCode === 400) return response.badRequest(res, err.message);
     next(err);
   }
 };

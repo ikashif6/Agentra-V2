@@ -9,7 +9,7 @@ const router = express.Router();
 
 router.use(resolveTenant);
 router.use(protect);
-router.use(authorize('owner', 'admin', 'agent'));
+router.use(authorize('owner', 'admin', 'manager', 'agent'));
 
 // ─── Validation rules ─────────────────────────────────────────────────────────
 

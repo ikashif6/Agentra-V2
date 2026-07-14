@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Crown, Loader2, UserMinus, UserPlus } from "lucide-react";
+import { ChevronLeft, Crown, Loader2, UserMinus, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { teamApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
 import type { Team, User } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 
 function initials(u: { firstName: string; lastName: string }) {
   return `${u.firstName[0]}${u.lastName[0]}`.toUpperCase();
@@ -23,6 +24,7 @@ type TeamDetailPanelProps = {
 
 export default function TeamDetailPanel({ teamId, onBack }: TeamDetailPanelProps) {
   const { user } = useAuth();
+  const confirm = useConfirm();
   const [team, setTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -45,7 +47,7 @@ export default function TeamDetailPanel({ teamId, onBack }: TeamDetailPanelProps
     load();
   }, [load]);
 
-  const isOwnerAdmin = ["owner", "admin"].includes(user?.role ?? "");
+  const isOwnerAdmin = ["owner", "admin", "manager"].includes(user?.role ?? "");
   const isLead = team?.teamLead._id === user?._id;
   const canManage = isOwnerAdmin || isLead;
 
@@ -61,7 +63,12 @@ export default function TeamDetailPanel({ teamId, onBack }: TeamDetailPanelProps
   };
 
   const handleRemove = async (userId: string) => {
-    if (!confirm("Remove this member from the team?")) return;
+    const ok = await confirm({
+      title: "Remove team member?",
+      description: "They will lose access to conversations routed to this team.",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
     setRemoving(userId);
     try {
       await teamApi.removeMember(teamId, userId);
@@ -96,7 +103,7 @@ export default function TeamDetailPanel({ teamId, onBack }: TeamDetailPanelProps
           className="flex size-9 items-center justify-center rounded-lg border border-border/80 text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label="Back to teams"
         >
-          <ArrowLeft className="size-4" />
+          <ChevronLeft className="size-4" />
         </button>
         <div className="min-w-0">
           <h2 className="truncate text-xl font-bold text-foreground">{team.name}</h2>

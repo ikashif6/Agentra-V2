@@ -97,7 +97,7 @@ async function installShopifyWidget(company) {
         : body?.errors?.[0] || body?.error || `Shopify script tag install failed (${res.status})`;
     if (String(message).toLowerCase().includes('script_tags')) {
       throw new Error(
-        'Shopify needs the write_script_tags scope. Disconnect and reconnect your store in Settings → Store.',
+        'Shopify needs the write_script_tags scope. Disconnect and reconnect your store in Settings › Store.',
       );
     }
     throw new Error(message);

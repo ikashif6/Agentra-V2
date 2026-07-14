@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowRight,
+  ChevronRight,
   CheckCircle2,
   ExternalLink,
   Inbox,
@@ -65,7 +65,11 @@ function formatConnectedAt(value?: string | null) {
   });
 }
 
-export default function FacebookSettingsPanel() {
+type FacebookSettingsPanelProps = {
+  returnTo?: string;
+};
+
+export default function FacebookSettingsPanel({ returnTo }: FacebookSettingsPanelProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -78,12 +82,16 @@ export default function FacebookSettingsPanel() {
   const [disconnecting, setDisconnecting] = useState(false);
 
   const clearOAuthParams = useCallback(() => {
+    if (returnTo) {
+      router.replace(returnTo, { scroll: false });
+      return;
+    }
     const params = new URLSearchParams(searchParams.toString());
     params.delete("facebook");
     params.delete("message");
     params.delete("page");
     router.replace(`/settings?${params.toString()}`, { scroll: false });
-  }, [router, searchParams]);
+  }, [router, searchParams, returnTo]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,7 +141,10 @@ export default function FacebookSettingsPanel() {
   const startConnect = async () => {
     setConnecting(true);
     try {
-      const { data } = await facebookChannelApi.getOAuthUrl(window.location.origin);
+      const { data } = await facebookChannelApi.getOAuthUrl(
+        window.location.origin,
+        returnTo,
+      );
       window.location.assign(data.data.url);
     } catch (err: unknown) {
       const { message } = getApiError(err, "Could not start Facebook connection");
@@ -350,7 +361,7 @@ export default function FacebookSettingsPanel() {
                 {selectingPageId === page.id ? (
                   <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
                 ) : (
-                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
                 )}
               </button>
             ))}

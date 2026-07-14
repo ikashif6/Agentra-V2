@@ -238,6 +238,7 @@ export function buildHTML(c) {
     '<h3 id="agt-email-title">' + esc(c.emailGateTitle || 'Start a conversation') + '</h3>' +
     '<p id="agt-email-sub">' + esc(c.emailGateSubtitle || 'Enter your email so we can help with your orders.') + '</p>' +
     '<input type="email" class="agt-email-input" id="agt-email-input" placeholder="you@example.com" autocomplete="email" />' +
+    '<div class="agt-email-error gone" id="agt-email-error" role="alert"></div>' +
     '<button class="agt-email-btn" id="agt-email-btn" type="button">Continue to chat</button>' +
     '</div>' +
     '</div>' +
@@ -745,6 +746,7 @@ export function buildCSS(brand, font, rootId, options) {
     prefix + '.agt-email-gate { padding: 28px 22px; display:flex; flex-direction:column; gap:14px; }\n' +
     prefix + '.agt-email-gate h3 { font-size:18px; font-weight:700; color:var(--ink); }\n' +
     prefix + '.agt-email-gate p { font-size:13px; color:var(--gray-500); line-height:1.45; }\n' +
+    prefix + '.agt-email-error { font-size:12px; line-height:1.4; color:#b42318; background:rgba(180,35,24,0.08); border:1px solid rgba(180,35,24,0.2); border-radius:10px; padding:10px 12px; }\n' +
     prefix + '.agt-email-input { width:100%; border:1.5px solid var(--gray-200); border-radius:12px; padding:12px 14px; font-size:14px; font-family:inherit; }\n' +
     prefix + '.agt-email-btn { width:100%; border:none; border-radius:12px; padding:12px 14px; background:var(--brand); color:#fff; font-weight:700; font-size:14px; cursor:pointer; }\n' +
     prefix + '.agt-email-btn:disabled { opacity:0.6; cursor:not-allowed; }\n' +

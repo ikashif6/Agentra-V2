@@ -21,7 +21,7 @@ export function HomeMetrics({
   const [stats, setStats] = useState<StatusMap | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const isStaff = ["owner", "admin", "agent"].includes(user?.role ?? "");
+  const isStaff = ["owner", "admin", "manager", "agent"].includes(user?.role ?? "");
 
   useEffect(() => {
     if (!isStaff) {

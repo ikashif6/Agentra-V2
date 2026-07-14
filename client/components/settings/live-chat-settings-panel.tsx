@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Copy, ImagePlus, Loader2, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
+import { Copy, ImagePlus, Loader2, Plus, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,9 +11,10 @@ import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { liveChatApi, uploadApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
-import type { ChatKnowledgeArticle, LiveChatAgent, LiveChatSettings, User } from "@/lib/types";
+import type { LiveChatAgent, LiveChatSettings, User } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import LiveChatWidgetPreview from "@/components/settings/live-chat-widget-preview";
+import KnowledgeArticlesSection from "@/components/settings/knowledge-articles-section";
 import UserPicker from "@/components/shared/UserPicker";
 import { resizeLogoFile } from "@/lib/workspace-branding";
 
@@ -112,23 +113,15 @@ export default function LiveChatSettingsPanel() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
   const [settings, setSettings] = useState<LiveChatSettings | null>(null);
-  const [articles, setArticles] = useState<ChatKnowledgeArticle[]>([]);
-  const [newArticle, setNewArticle] = useState({ title: "", content: "" });
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
-  const [uploadingKnowledge, setUploadingKnowledge] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
-  const knowledgeFileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: settingsRes }, { data: knowledgeRes }] = await Promise.all([
-        liveChatApi.getSettings(),
-        liveChatApi.listKnowledge(),
-      ]);
+      const { data: settingsRes } = await liveChatApi.getSettings();
       setSettings(settingsRes.data.liveChat);
-      setArticles(knowledgeRes.data.articles ?? []);
     } catch (err: unknown) {
       const { message } = getApiError(err, "Failed to load live chat settings");
       toast.error(message);
@@ -212,52 +205,6 @@ export default function LiveChatSettingsPanel() {
       toast.error(message);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const addArticle = async () => {
-    if (!newArticle.title.trim() || !newArticle.content.trim()) return;
-    try {
-      const { data } = await liveChatApi.createKnowledge(newArticle);
-      setArticles((prev) => [...prev, data.data.article]);
-      setNewArticle({ title: "", content: "" });
-      toast.success("Article added");
-    } catch (err: unknown) {
-      const { message } = getApiError(err, "Failed to add article");
-      toast.error(message);
-    }
-  };
-
-  const uploadKnowledgeDocument = async (file: File) => {
-    setUploadingKnowledge(true);
-    try {
-      const { data } = await liveChatApi.uploadKnowledgeDocument(file);
-      const created = (data.data.articles ?? []) as ChatKnowledgeArticle[];
-      if (created.length) {
-        setArticles((prev) => [...created, ...prev]);
-      }
-      const count = data.data.chunkCount ?? created.length;
-      toast.success(
-        count > 1
-          ? `Imported ${count} articles from ${file.name}`
-          : `Imported knowledge from ${file.name}`,
-      );
-    } catch (err: unknown) {
-      const { message } = getApiError(err, "Failed to upload document");
-      toast.error(message);
-    } finally {
-      setUploadingKnowledge(false);
-    }
-  };
-
-  const deleteArticle = async (id: string) => {
-    try {
-      await liveChatApi.deleteKnowledge(id);
-      setArticles((prev) => prev.filter((a) => a._id !== id));
-      toast.success("Article removed");
-    } catch (err: unknown) {
-      const { message } = getApiError(err, "Failed to delete article");
-      toast.error(message);
     }
   };
 
@@ -836,75 +783,8 @@ export default function LiveChatSettingsPanel() {
       ) : null}
 
       {tab === "knowledge" ? (
-        <div className="max-w-2xl space-y-4">
-          <div className="rounded-xl border border-border/60 p-4 space-y-3">
-            <p className="text-sm font-semibold">Add article</p>
-            <Input
-              placeholder="Title (e.g. Return policy)"
-              value={newArticle.title}
-              onChange={(e) => setNewArticle({ ...newArticle, title: e.target.value })}
-            />
-            <Textarea
-              rows={4}
-              placeholder="Content the AI can retrieve when customers ask..."
-              value={newArticle.content}
-              onChange={(e) => setNewArticle({ ...newArticle, content: e.target.value })}
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => void addArticle()}>
-                <Plus className="mr-2 size-4" />
-                Add article
-              </Button>
-              <input
-                ref={knowledgeFileRef}
-                type="file"
-                accept=".pdf,.txt,.md,.markdown,.csv,application/pdf,text/plain,text/markdown,text/csv"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void uploadKnowledgeDocument(file);
-                  e.target.value = "";
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                disabled={uploadingKnowledge}
-                onClick={() => knowledgeFileRef.current?.click()}
-              >
-                {uploadingKnowledge ? (
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                ) : (
-                  <Upload className="mr-2 size-4" />
-                )}
-                Upload document
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Upload PDF, TXT, MD, or CSV. Large files may be split into multiple articles.
-            </p>
-          </div>
-          <ul className="space-y-2">
-            {articles.map((article) => (
-              <li
-                key={article._id}
-                className="flex items-start justify-between gap-3 rounded-xl border border-border/60 p-4"
-              >
-                <div>
-                  <p className="text-sm font-semibold">{article.title}</p>
-                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{article.content}</p>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => void deleteArticle(article._id)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </li>
-            ))}
-          </ul>
+        <div className="max-w-2xl">
+          <KnowledgeArticlesSection description="Shared with Workspace › AI Agent. Changes in either place update the same documents." />
         </div>
       ) : null}
 

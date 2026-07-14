@@ -6,28 +6,32 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import {
   type SettingsItemId,
-  type SettingsNavSection,
   visibleSettingsSections,
 } from "@/lib/settings-navigation";
+import type { Role } from "@/lib/types";
 
 type SettingsSidebarProps = {
   activeItem: SettingsItemId;
   onSelect: (id: SettingsItemId) => void;
-  isStaff: boolean;
-  isOwner: boolean;
+  role?: Role | null;
+  /** @deprecated use role */
+  isStaff?: boolean;
+  /** @deprecated use role */
+  isOwner?: boolean;
   onCollapse?: () => void;
 };
 
 export default function SettingsSidebar({
   activeItem,
   onSelect,
+  role,
   isStaff,
   isOwner,
   onCollapse,
 }: SettingsSidebarProps) {
   const sections = useMemo(
-    () => visibleSettingsSections({ isStaff, isOwner }),
-    [isStaff, isOwner],
+    () => visibleSettingsSections({ role, isStaff, isOwner }),
+    [role, isStaff, isOwner],
   );
 
   const [search, setSearch] = useState("");

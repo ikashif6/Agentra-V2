@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PanelLeftOpen } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
+  canConfigureWorkspace,
+  canManagePeople,
   findSettingsItem,
   resolveSettingsItem,
   type SettingsItemId,
@@ -18,6 +20,8 @@ import WhatsAppSettingsPanel from "@/components/settings/whatsapp-settings-panel
 import EmailSettingsPanel from "@/components/settings/email-settings-panel";
 import BusinessHoursPanel from "@/components/settings/business-hours-panel";
 import LiveChatSettingsPanel from "@/components/settings/live-chat-settings-panel";
+import AiAgentSettingsPanel from "@/components/settings/ai-agent-settings-panel";
+import HelpdeskAiSettingsPanel from "@/components/settings/helpdesk-ai-settings-panel";
 import {
   AccountPlaceholderPanel,
   ChannelPlaceholderPanel,
@@ -43,8 +47,10 @@ export default function SettingsContent() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
 
-  const isStaff = ["owner", "admin"].includes(user?.role ?? "");
-  const isOwner = user?.role === "owner";
+  const role = user?.role ?? "customer";
+  const canConfig = canConfigureWorkspace(role);
+  const canPeople = canManagePeople(role);
+  const isOwner = role === "owner";
 
   const activeItem = resolveSettingsItem(
     searchParams.get("item"),
@@ -77,44 +83,48 @@ export default function SettingsContent() {
       case "password-security":
         return <PasswordSecurityPanel />;
       case "store":
-        return isStaff ? <StoreSettingsPanel /> : <PasswordSecurityPanel />;
+        return canConfig ? <StoreSettingsPanel /> : <PasswordSecurityPanel />;
       case "customize-workspace":
-        return isStaff ? <CustomizeWorkspacePanel /> : null;
+        return canConfig ? <CustomizeWorkspacePanel /> : null;
       case "business-hours":
-        return isStaff ? <BusinessHoursPanel /> : null;
+        return canConfig ? <BusinessHoursPanel /> : null;
+      case "ai-agent":
+        return canConfig ? <AiAgentSettingsPanel /> : null;
+      case "helpdesk-ai":
+        return canConfig ? <HelpdeskAiSettingsPanel /> : null;
       case "email":
-        return isStaff ? <EmailSettingsPanel /> : null;
+        return canConfig ? <EmailSettingsPanel /> : null;
       case "chat":
-        return isStaff ? <LiveChatSettingsPanel /> : null;
+        return canConfig ? <LiveChatSettingsPanel /> : null;
       case "whatsapp":
-        return isStaff ? <WhatsAppSettingsPanel /> : null;
+        return canConfig ? <WhatsAppSettingsPanel /> : null;
       case "tiktok":
-        return isStaff ? (
+        return canConfig ? (
           <ChannelPlaceholderPanel
             title="TikTok"
             description="Reply to TikTok direct messages alongside other channels"
           />
         ) : null;
       case "instagram":
-        return isStaff ? <InstagramSettingsPanel /> : null;
+        return canConfig ? <InstagramSettingsPanel /> : null;
       case "facebook":
-        return isStaff ? <FacebookSettingsPanel /> : null;
+        return canConfig ? <FacebookSettingsPanel /> : null;
       case "users":
-        return isStaff ? <UsersSettingsPanel /> : null;
+        return canPeople ? <UsersSettingsPanel /> : null;
       case "teams":
-        return isStaff ? <TeamsSettingsPanel /> : null;
+        return canPeople ? <TeamsSettingsPanel /> : null;
       case "access":
         return isOwner ? <AccessPermissionsPanel /> : null;
       case "billing":
         return isOwner ? <BillingPanel /> : null;
       case "audit-logs":
-        return isStaff ? <ActivityLogPanel /> : null;
+        return canConfig ? <ActivityLogPanel /> : null;
       case "notifications":
         return <NotificationsPanel />;
       default:
         return <PasswordSecurityPanel />;
     }
-  }, [activeItem, isStaff, isOwner]);
+  }, [activeItem, canConfig, canPeople, isOwner]);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] min-h-0 flex-col bg-background">
@@ -123,8 +133,7 @@ export default function SettingsContent() {
           <SettingsSidebar
             activeItem={activeItem}
             onSelect={selectItem}
-            isStaff={isStaff}
-            isOwner={isOwner}
+            role={role}
             onCollapse={() => setSidebarOpen(false)}
           />
         ) : null}

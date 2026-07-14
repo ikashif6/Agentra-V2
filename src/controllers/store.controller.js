@@ -203,12 +203,14 @@ exports.shopifyOAuthUrl = async (req, res, next) => {
       return response.badRequest(res, 'shopDomain is required');
     }
     const returnOrigin = req.query.returnOrigin || req.headers.origin;
+    const returnPath = typeof req.query.returnPath === 'string' ? req.query.returnPath : null;
     const url = buildShopifyInstallUrl({
       shopDomain,
       companyId: req.company._id,
       subdomain: req.company.subdomain,
       userId: req.user._id,
       returnOrigin,
+      returnPath,
     });
 
     if (usesCustomInstallFlow()) {
@@ -224,6 +226,7 @@ exports.shopifyOAuthUrl = async (req, res, next) => {
           pendingUserId: req.user._id,
           pendingReturnOrigin:
             typeof returnOrigin === 'string' && returnOrigin.trim() ? returnOrigin.trim() : null,
+          pendingReturnPath: returnPath,
         },
         syncSettings: req.company.storeIntegration?.syncSettings || {
           syncOrders: true,
@@ -261,7 +264,7 @@ exports.shopifyAppEntry = async (req, res, next) => {
         .send(
           '<html><body style="font-family:system-ui;padding:40px;max-width:520px">' +
             '<h2>Agentra</h2><p>Missing Shopify install parameters.</p>' +
-            '<p>Open Agentra → Settings → Store and click Connect Shopify.</p>' +
+            '<p>Open Agentra › Settings › Store and click Connect Shopify.</p>' +
             '</body></html>',
         );
     }
@@ -293,7 +296,7 @@ exports.shopifyAppEntry = async (req, res, next) => {
             '<p>Shopify installed Agentra, but no pending workspace connection was found for <strong>' +
             domain +
             '</strong>.</p>' +
-            '<p>Go back to Agentra → <strong>Settings → Store</strong> → Connect Shopify (same store), then try again.</p>' +
+            '<p>Go back to Agentra › <strong>Settings › Store</strong> › Connect Shopify (same store), then try again.</p>' +
             '</body></html>',
         );
     }
@@ -344,6 +347,7 @@ exports.shopifyOAuthCallback = async (req, res, next) => {
     let company = null;
     let subdomain;
     let returnOrigin = null;
+    let returnPath = null;
 
     if (state) {
       let payload;
@@ -359,6 +363,7 @@ exports.shopifyOAuthCallback = async (req, res, next) => {
       if (!company) return res.status(400).send('Workspace not found');
       subdomain = payload.subdomain;
       returnOrigin = payload.returnOrigin;
+      returnPath = payload.returnPath || null;
     } else if (usesCustomInstallFlow()) {
       company = await Company.findOne({
         'storeIntegration.provider': 'shopify',
@@ -369,7 +374,8 @@ exports.shopifyOAuthCallback = async (req, res, next) => {
         return res.status(400).send('No pending Shopify connection for this store');
       }
       subdomain = company.subdomain;
-      returnOrigin = null;
+      returnOrigin = company.storeIntegration?.shopify?.pendingReturnOrigin || null;
+      returnPath = company.storeIntegration?.shopify?.pendingReturnPath || null;
     } else {
       return res.status(400).send('Missing OAuth state');
     }
@@ -406,7 +412,12 @@ exports.shopifyOAuthCallback = async (req, res, next) => {
       runBackgroundSync(company._id);
 
       return res.redirect(
-        buildStoreSettingsRedirect(subdomain, { store: 'connected', name: shopName }, returnOrigin),
+        buildStoreSettingsRedirect(
+          subdomain,
+          { store: 'connected', name: shopName },
+          returnOrigin,
+          returnPath,
+        ),
       );
     } catch (connectErr) {
       console.error('[shopify oauth callback]', connectErr);
@@ -415,6 +426,7 @@ exports.shopifyOAuthCallback = async (req, res, next) => {
           subdomain,
           { store: 'error', message: connectErr.message || 'Could not connect Shopify' },
           returnOrigin,
+          returnPath,
         ),
       );
     }
@@ -436,6 +448,7 @@ exports.wooOAuthUrl = async (req, res, next) => {
       subdomain: req.company.subdomain,
       userId: req.user._id,
       returnOrigin: req.query.returnOrigin || req.headers.origin,
+      returnPath: typeof req.query.returnPath === 'string' ? req.query.returnPath : null,
     });
     return response.success(res, { url });
   } catch (err) {

@@ -19,8 +19,13 @@ async function loadCompanyWithSecrets(companyId) {
   );
 }
 
-function igRedirect(subdomain, params, returnOrigin) {
-  return buildSettingsRedirect(subdomain, { item: 'instagram', ...params }, returnOrigin);
+function igRedirect(subdomain, params, returnOrigin, returnPath) {
+  return buildSettingsRedirect(
+    subdomain,
+    { item: 'instagram', ...params },
+    returnOrigin,
+    returnPath,
+  );
 }
 
 exports.getStatus = async (req, res, next) => {
@@ -46,11 +51,13 @@ exports.getOAuthUrl = async (req, res, next) => {
     }
 
     const returnOrigin = req.query.returnOrigin || req.headers.origin;
+    const returnPath = typeof req.query.returnPath === 'string' ? req.query.returnPath : null;
     const url = buildInstagramOAuthUrl({
       companyId: req.company._id,
       subdomain: req.company.subdomain,
       userId: req.user._id,
       returnOrigin,
+      returnPath,
     });
 
     return response.success(res, { url });
@@ -74,23 +81,34 @@ exports.oauthCallback = async (req, res, next) => {
 
     const subdomain = payload.subdomain;
     const returnOrigin = payload.returnOrigin;
+    const returnPath = payload.returnPath || null;
 
     if (error) {
       return res.redirect(
-        igRedirect(subdomain, { instagram: 'error', message: errorDescription || error }, returnOrigin),
+        igRedirect(
+          subdomain,
+          { instagram: 'error', message: errorDescription || error },
+          returnOrigin,
+          returnPath,
+        ),
       );
     }
 
     if (!code) {
       return res.redirect(
-        igRedirect(subdomain, { instagram: 'error', message: 'Instagram did not return an authorization code' }, returnOrigin),
+        igRedirect(
+          subdomain,
+          { instagram: 'error', message: 'Instagram did not return an authorization code' },
+          returnOrigin,
+          returnPath,
+        ),
       );
     }
 
     const company = await loadCompanyWithSecrets(payload.companyId);
     if (!company) {
       return res.redirect(
-        igRedirect(subdomain, { instagram: 'error', message: 'Workspace not found' }, returnOrigin),
+        igRedirect(subdomain, { instagram: 'error', message: 'Workspace not found' }, returnOrigin, returnPath),
       );
     }
 
@@ -100,22 +118,39 @@ exports.oauthCallback = async (req, res, next) => {
     } catch (connectErr) {
       console.error('[instagram oauth callback]', connectErr);
       return res.redirect(
-        igRedirect(subdomain, { instagram: 'error', message: connectErr.message || 'Could not connect Instagram' }, returnOrigin),
+        igRedirect(
+          subdomain,
+          { instagram: 'error', message: connectErr.message || 'Could not connect Instagram' },
+          returnOrigin,
+          returnPath,
+        ),
       );
     }
 
     if (result.kind === 'connected') {
       return res.redirect(
-        igRedirect(subdomain, { instagram: 'connected', account: result.username || '' }, returnOrigin),
+        igRedirect(
+          subdomain,
+          { instagram: 'connected', account: result.username || '' },
+          returnOrigin,
+          returnPath,
+        ),
       );
     }
 
     if (result.kind === 'select_account') {
-      return res.redirect(igRedirect(subdomain, { instagram: 'select_account' }, returnOrigin));
+      return res.redirect(
+        igRedirect(subdomain, { instagram: 'select_account' }, returnOrigin, returnPath),
+      );
     }
 
     return res.redirect(
-      igRedirect(subdomain, { instagram: 'error', message: result.message || 'Could not connect Instagram' }, returnOrigin),
+      igRedirect(
+        subdomain,
+        { instagram: 'error', message: result.message || 'Could not connect Instagram' },
+        returnOrigin,
+        returnPath,
+      ),
     );
   } catch (err) {
     next(err);

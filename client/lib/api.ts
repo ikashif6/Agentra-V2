@@ -210,7 +210,7 @@ export const usersApi = {
       firstName?: string;
       lastName?: string;
       email?: string;
-      role?: "agent" | "admin";
+      role?: "agent" | "manager" | "admin";
       jobTitle?: string;
     },
   ) => api.patch(`/users/${id}`, data),
@@ -240,6 +240,12 @@ export const workspaceApi = {
     primaryColor?: string;
     theme?: "light" | "dark" | "system";
     logo?: string | null;
+    logoDark?: string | null;
+    favicon?: string | null;
+    browserTitle?: string | null;
+    tagline?: string | null;
+    logoWidth?: number;
+    logoHeight?: number;
   }) => api.patch("/workspace/branding", data),
 };
 
@@ -278,10 +284,13 @@ export const businessHoursApi = {
 
 export const facebookChannelApi = {
   getStatus: () => api.get("/channels/facebook", { baseURL: FACEBOOK_API_BASE }),
-  getOAuthUrl: (returnOrigin?: string) =>
+  getOAuthUrl: (returnOrigin?: string, returnPath?: string) =>
     api.get("/channels/facebook/oauth/url", {
       baseURL: FACEBOOK_API_BASE,
-      params: returnOrigin ? { returnOrigin } : undefined,
+      params: {
+        ...(returnOrigin ? { returnOrigin } : {}),
+        ...(returnPath ? { returnPath } : {}),
+      },
     }),
   connectPage: (pageId: string) =>
     api.post("/channels/facebook/connect", { pageId }, { baseURL: FACEBOOK_API_BASE }),
@@ -290,10 +299,13 @@ export const facebookChannelApi = {
 
 export const instagramChannelApi = {
   getStatus: () => api.get("/channels/instagram", { baseURL: FACEBOOK_API_BASE }),
-  getOAuthUrl: (returnOrigin?: string) =>
+  getOAuthUrl: (returnOrigin?: string, returnPath?: string) =>
     api.get("/channels/instagram/oauth/url", {
       baseURL: FACEBOOK_API_BASE,
-      params: returnOrigin ? { returnOrigin } : undefined,
+      params: {
+        ...(returnOrigin ? { returnOrigin } : {}),
+        ...(returnPath ? { returnPath } : {}),
+      },
     }),
   connectAccount: (igUserId: string) =>
     api.post("/channels/instagram/connect", { igUserId }, { baseURL: FACEBOOK_API_BASE }),
@@ -333,18 +345,20 @@ export const storeApi = {
     credentials: Record<string, string | undefined>;
     syncSettings?: Partial<StoreSyncSettings>;
   }) => api.post("/store/connect", data),
-  shopifyOAuthUrl: (shopDomain: string) =>
+  shopifyOAuthUrl: (shopDomain: string, returnPath?: string) =>
     api.get("/store/shopify/oauth/url", {
       params: {
         shopDomain,
         returnOrigin: typeof window !== "undefined" ? window.location.origin : undefined,
+        ...(returnPath ? { returnPath } : {}),
       },
     }),
-  wooOAuthUrl: (storeUrl: string) =>
+  wooOAuthUrl: (storeUrl: string, returnPath?: string) =>
     api.get("/store/woocommerce/oauth/url", {
       params: {
         storeUrl,
         returnOrigin: typeof window !== "undefined" ? window.location.origin : undefined,
+        ...(returnPath ? { returnPath } : {}),
       },
     }),
   updateSettings: (data: { syncSettings: StoreSyncSettings }) =>
@@ -395,6 +409,40 @@ export const storeApi = {
   disconnect: () => api.delete("/store"),
 };
 
+export const aiAgentApi = {
+  getSettings: () => api.get("/ai-agent/settings"),
+  updateSettings: (data: Record<string, unknown>) => api.patch("/ai-agent/settings", data),
+};
+
+export const helpdeskAiApi = {
+  getSettings: () => api.get("/helpdesk-ai/settings"),
+  updateSettings: (data: Record<string, unknown>) => api.patch("/helpdesk-ai/settings", data),
+  listTransforms: () => api.get("/helpdesk-ai/transforms"),
+  getManagerIntelligence: () => api.get("/helpdesk-ai/manager"),
+  getKnowledgeIntelligence: (generate = false) =>
+    api.get(`/helpdesk-ai/knowledge${generate ? "?generate=1" : ""}`),
+  generateKnowledgeDrafts: (limit?: number) =>
+    api.post("/helpdesk-ai/knowledge/drafts/generate", limit != null ? { limit } : {}),
+  publishKnowledgeDraft: (id: string) => api.post(`/helpdesk-ai/knowledge/drafts/${id}/publish`),
+  dismissKnowledgeDraft: (id: string) => api.delete(`/helpdesk-ai/knowledge/drafts/${id}`),
+};
+
+export const ticketAiApi = {
+  getIntelligence: (code: string) => api.get(`/tickets/${code}/ai-intelligence`),
+  refreshIntelligence: (code: string) => api.post(`/tickets/${code}/ai-intelligence`),
+  getCustomerIntelligence: (code: string) => api.get(`/tickets/${code}/customer-intelligence`),
+  getOpsIntelligence: (code: string) => api.get(`/tickets/${code}/ops-intelligence`),
+  checkResolution: (code: string, data?: { draftReply?: string }) =>
+    api.post(`/tickets/${code}/resolution-check`, data ?? {}),
+  mergeTicket: (code: string, sourceCode: string) =>
+    api.post(`/tickets/${code}/merge`, { sourceCode }),
+  scoreQa: (code: string) => api.post(`/tickets/${code}/ai-qa`),
+  copilot: (
+    code: string,
+    data: { mode: "suggest" | "transform"; draft?: string; transform?: string },
+  ) => api.post(`/tickets/${code}/ai-copilot`, data),
+};
+
 export const liveChatApi = {
   getSettings: () => api.get("/live-chat"),
   updateSettings: (data: Record<string, unknown>) => api.put("/live-chat", data),
@@ -405,6 +453,10 @@ export const liveChatApi = {
   listKnowledge: () => api.get("/live-chat/knowledge"),
   createKnowledge: (data: { title: string; content: string; category?: string }) =>
     api.post("/live-chat/knowledge", data),
+  updateKnowledge: (
+    id: string,
+    data: { title?: string; content?: string; category?: string; active?: boolean },
+  ) => api.patch(`/live-chat/knowledge/${id}`, data),
   uploadKnowledgeDocument: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);

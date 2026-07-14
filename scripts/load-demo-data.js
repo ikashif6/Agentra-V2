@@ -6,32 +6,55 @@ const User = require('../src/models/User');
 const Ticket = require('../src/models/Ticket');
 const ticketController = require('../src/controllers/ticket.controller');
 
-const AI_AGENT_SOURCES = ['chatbot', 'chat'];
 const ACTIVE_STATUSES = ['open', 'in_progress', 'on_hold'];
+const LIVE_CHAT_SOURCES = ['chatbot', 'chat'];
+
+function aiAgentOwnedClause() {
+  return {
+    assigned_agent: null,
+    $and: [
+      {
+        $or: [
+          { 'aiIntelligence.handoffReason': { $exists: false } },
+          { 'aiIntelligence.handoffReason': null },
+          { 'aiIntelligence.handoffReason': '' },
+        ],
+      },
+      {
+        $or: [
+          { source: { $in: LIVE_CHAT_SOURCES } },
+          { messages: { $elemMatch: { isAi: true } } },
+          { messages: { $elemMatch: { senderEmail: 'bot@agentra.local' } } },
+        ],
+      },
+    ],
+  };
+}
 
 async function countForCompany(companyId) {
   const base = { company: companyId, inboxFolder: 'inbox' };
+  const aiOwned = aiAgentOwnedClause();
 
   const [inboxActive, aiActive, inboxTotal, aiTotal] = await Promise.all([
     Ticket.countDocuments({
       ...base,
-      source: { $nin: AI_AGENT_SOURCES },
       status: { $in: ACTIVE_STATUSES },
+      $nor: [aiOwned],
     }),
     Ticket.countDocuments({
       ...base,
-      source: { $in: AI_AGENT_SOURCES },
       status: { $in: ACTIVE_STATUSES },
+      ...aiOwned,
     }),
     Ticket.countDocuments({
       company: companyId,
-      source: { $nin: AI_AGENT_SOURCES },
       inboxFolder: { $nin: ['trash', 'spam'] },
+      $nor: [aiOwned],
     }),
     Ticket.countDocuments({
       company: companyId,
-      source: { $in: AI_AGENT_SOURCES },
       inboxFolder: { $nin: ['trash', 'spam'] },
+      ...aiOwned,
     }),
   ]);
 

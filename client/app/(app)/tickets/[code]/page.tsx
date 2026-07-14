@@ -53,7 +53,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
   const [agentPickerOpen,setAgentPickerOpen]= useState(false);
   const [assigningAgent, setAssigningAgent] = useState(false);
 
-  const isStaff    = ["owner", "admin", "agent"].includes(user?.role ?? "");
+  const isStaff    = ["owner", "admin", "manager", "agent"].includes(user?.role ?? "");
   const isCustomer = user?.role === "customer";
 
   const fetchTicket = async () => {

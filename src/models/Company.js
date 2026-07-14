@@ -118,6 +118,14 @@ const companySchema = new mongoose.Schema(
         enum: ['light', 'dark', 'system'],
         default: 'light',
       },
+      favicon: { type: String },
+      logoDark: { type: String },
+      /** Browser tab title — defaults to company name when empty */
+      browserTitle: { type: String, trim: true, maxlength: 80 },
+      /** Short workspace tagline shown in the app header */
+      tagline: { type: String, trim: true, maxlength: 160 },
+      logoWidth: { type: Number, default: 148, min: 24, max: 280 },
+      logoHeight: { type: Number, default: 28, min: 16, max: 120 },
     },
     industry: { type: String },
     size: {
@@ -136,6 +144,12 @@ const companySchema = new mongoose.Schema(
       state: String,
       postalCode: String,
       country: String,
+    },
+
+    // Home setup checklist — steps only count done after intentional setup actions
+    setupChecklist: {
+      workspace: { type: Boolean, default: false },
+      team: { type: Boolean, default: false },
     },
 
     // Plan & billing
@@ -340,6 +354,125 @@ const companySchema = new mongoose.Schema(
       lastError: { type: String },
       // Human agents allowed to handle live chat (portal assign + widget faces)
       agents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    },
+
+    // Multi-channel AI Agent — shared defaults (liveChat.ai) + optional per-channel overrides
+    aiAgent: {
+      enabledChannels: {
+        liveChat: { type: Boolean, default: true },
+        email: { type: Boolean, default: false },
+        facebook: { type: Boolean, default: false },
+        instagram: { type: Boolean, default: false },
+        whatsapp: { type: Boolean, default: false },
+        tiktok: { type: Boolean, default: false },
+      },
+      channelOverrides: {
+        liveChat: {
+          instructions: { type: String },
+          escalationKeywords: [{ type: String }],
+          allowedActions: {
+            lookupOrder: { type: Boolean },
+            cancelOrder: { type: Boolean },
+            refundOrder: { type: Boolean },
+            maxRefundAmount: { type: Number },
+            editOrder: { type: Boolean },
+            productRecommendations: { type: Boolean },
+            requestHuman: { type: Boolean },
+          },
+        },
+        email: {
+          instructions: { type: String },
+          escalationKeywords: [{ type: String }],
+          allowedActions: {
+            lookupOrder: { type: Boolean },
+            cancelOrder: { type: Boolean },
+            refundOrder: { type: Boolean },
+            maxRefundAmount: { type: Number },
+            editOrder: { type: Boolean },
+            productRecommendations: { type: Boolean },
+            requestHuman: { type: Boolean },
+          },
+        },
+        facebook: {
+          instructions: { type: String },
+          escalationKeywords: [{ type: String }],
+          allowedActions: {
+            lookupOrder: { type: Boolean },
+            cancelOrder: { type: Boolean },
+            refundOrder: { type: Boolean },
+            maxRefundAmount: { type: Number },
+            editOrder: { type: Boolean },
+            productRecommendations: { type: Boolean },
+            requestHuman: { type: Boolean },
+          },
+        },
+        instagram: {
+          instructions: { type: String },
+          escalationKeywords: [{ type: String }],
+          allowedActions: {
+            lookupOrder: { type: Boolean },
+            cancelOrder: { type: Boolean },
+            refundOrder: { type: Boolean },
+            maxRefundAmount: { type: Number },
+            editOrder: { type: Boolean },
+            productRecommendations: { type: Boolean },
+            requestHuman: { type: Boolean },
+          },
+        },
+        whatsapp: {
+          instructions: { type: String },
+          escalationKeywords: [{ type: String }],
+          allowedActions: {
+            lookupOrder: { type: Boolean },
+            cancelOrder: { type: Boolean },
+            refundOrder: { type: Boolean },
+            maxRefundAmount: { type: Number },
+            editOrder: { type: Boolean },
+            productRecommendations: { type: Boolean },
+            requestHuman: { type: Boolean },
+          },
+        },
+        tiktok: {
+          instructions: { type: String },
+          escalationKeywords: [{ type: String }],
+          allowedActions: {
+            lookupOrder: { type: Boolean },
+            cancelOrder: { type: Boolean },
+            refundOrder: { type: Boolean },
+            maxRefundAmount: { type: Number },
+            editOrder: { type: Boolean },
+            productRecommendations: { type: Boolean },
+            requestHuman: { type: Boolean },
+          },
+        },
+      },
+    },
+
+    // Helpdesk AI (inbox overview, copilot, routing) — Settings → Helpdesk AI
+    helpdeskAi: {
+      overview: { type: Boolean, default: true },
+      suggestedReply: { type: Boolean, default: true },
+      replyTools: { type: Boolean, default: true },
+      recommendedAction: { type: Boolean, default: true },
+      riskDetection: { type: Boolean, default: true },
+      autoTag: { type: Boolean, default: true },
+      autoRouting: { type: Boolean, default: false },
+      similarTickets: { type: Boolean, default: true },
+      customerProfile: { type: Boolean, default: true },
+      customerTimeline: { type: Boolean, default: true },
+      contradictions: { type: Boolean, default: true },
+      incidentDetection: { type: Boolean, default: true },
+      mergeSuggestions: { type: Boolean, default: true },
+      slaPrediction: { type: Boolean, default: true },
+      resolutionCheck: { type: Boolean, default: true },
+      qualityAssurance: { type: Boolean, default: true },
+      agentCoaching: { type: Boolean, default: true },
+      managerFeed: { type: Boolean, default: true },
+      rootCauseAnalysis: { type: Boolean, default: true },
+      churnRecovery: { type: Boolean, default: true },
+      knowledgeGaps: { type: Boolean, default: true },
+      draftArticles: { type: Boolean, default: true },
+      outdatedKnowledge: { type: Boolean, default: true },
     },
 
     // Messaging channel connections (Facebook Messenger, etc.)

@@ -56,7 +56,7 @@ export default function TicketsPage() {
 
   const isOwner    = user?.role === "owner";
   const isCustomer = user?.role === "customer";
-  const isStaff    = ["owner", "admin", "agent"].includes(user?.role ?? "");
+  const isStaff    = ["owner", "admin", "manager", "agent"].includes(user?.role ?? "");
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<CreateForm>({
     resolver: zodResolver(createSchema),

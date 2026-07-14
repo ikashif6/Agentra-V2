@@ -52,10 +52,35 @@ function normalizeReturnOrigin(origin) {
   return null;
 }
 
-function buildSettingsRedirect(subdomain, params = {}, returnOrigin = null) {
-  const query = new URLSearchParams({ item: 'facebook', ...params });
+function normalizeReturnPath(path) {
+  if (!path || typeof path !== 'string') return null;
+  const trimmed = path.trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return null;
+  const withoutHash = trimmed.split('#')[0];
+  if (withoutHash.length > 512) return null;
+  try {
+    const url = new URL(withoutHash, 'http://local.invalid');
+    if (url.pathname !== '/settings' && url.pathname !== '/setup') return null;
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
+}
+
+function buildSettingsRedirect(subdomain, params = {}, returnOrigin = null, returnPath = null) {
   const origin = normalizeReturnOrigin(returnOrigin) || getFrontendOrigin(subdomain);
-  return `${origin}/settings?${query.toString()}`;
+  const path = normalizeReturnPath(returnPath) || '/settings';
+  const url = new URL(path, origin);
+  if (url.pathname === '/settings' && !url.searchParams.get('item')) {
+    url.searchParams.set('item', params.item || 'facebook');
+  }
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'item') continue;
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, String(value));
+    }
+  }
+  return url.toString();
 }
 
 async function readJsonResponse(res) {
@@ -88,7 +113,7 @@ async function graphGet(path, accessToken, params = {}) {
   return body;
 }
 
-function buildFacebookOAuthUrl({ companyId, subdomain, userId, returnOrigin }) {
+function buildFacebookOAuthUrl({ companyId, subdomain, userId, returnOrigin, returnPath }) {
   if (!isFacebookConfigured()) {
     throw new Error('Facebook integration is not configured on the server');
   }
@@ -99,6 +124,7 @@ function buildFacebookOAuthUrl({ companyId, subdomain, userId, returnOrigin }) {
     subdomain,
     userId: userId.toString(),
     returnOrigin: normalizeReturnOrigin(returnOrigin) || undefined,
+    returnPath: normalizeReturnPath(returnPath) || undefined,
   });
 
   const url = new URL(`https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`);
@@ -432,6 +458,7 @@ module.exports = {
   disconnectFacebook,
   verifyWebhookRequest,
   normalizeReturnOrigin,
+  normalizeReturnPath,
   getMessengerUserProfile,
   sendMessengerMessage,
   sendReplyForTicket,

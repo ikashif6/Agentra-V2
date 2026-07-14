@@ -153,6 +153,12 @@ button:disabled,
   --auth-panel-deep: #0a0302;
 }
 
+/* Auth hero with static mock — keep wash/grid/logo, freeze motion */
+.login-visual-panel--static .login-visual-mesh,
+.login-visual-panel--static .login-visual-blob {
+  animation: none !important;
+}
+
 .login-visual-base {
   background:
     linear-gradient(155deg, #e8734a 0%, var(--auth-brand) 18%, var(--auth-brand-mid) 42%, #8a3d22 78%, #6b2f1a 100%);
@@ -356,48 +362,32 @@ button:disabled,
   background: hsl(var(--background));
 }
 
-/* Sonner toasts — neutral surfaces, no success/warning tint */
-[data-sonner-toast] {
-  background: hsl(var(--card)) !important;
-  color: hsl(var(--card-foreground)) !important;
-  border-color: hsl(var(--border) / 0.7) !important;
-  border-radius: 10px !important;
-}
-
-[data-sonner-toast] [data-icon] {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  color: hsl(var(--muted-foreground)) !important;
-  background: hsl(var(--muted) / 0.55) !important;
-  border: 1px solid hsl(var(--border) / 0.65) !important;
-  border-radius: 8px !important;
-  width: 1.75rem !important;
-  height: 1.75rem !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
-[data-sonner-toast] [data-icon] svg {
-  display: block !important;
-  width: 0.875rem !important;
-  height: 0.875rem !important;
-  margin: 0 !important;
-}
-
-[data-sonner-toast][data-type="error"] [data-icon] {
-  color: hsl(var(--destructive)) !important;
-  background: hsl(var(--destructive) / 0.08) !important;
-  border-color: hsl(var(--destructive) / 0.2) !important;
-}
-
-[data-sonner-toast] [data-close-button] {
-  color: hsl(var(--muted-foreground)) !important;
+/* Toasts — plain icons for every type (no tinted circles / richColors wash) */
+[data-sonner-toast] [data-icon],
+[data-sonner-toast] [data-icon].toast-icon {
   background: transparent !important;
-  border: none !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
-[data-sonner-toast] [data-close-button]:hover {
-  color: hsl(var(--foreground)) !important;
-  background: hsl(var(--muted)) !important;
+[data-sonner-toast][data-type="success"],
+[data-sonner-toast][data-type="error"],
+[data-sonner-toast][data-type="warning"],
+[data-sonner-toast][data-type="info"],
+[data-sonner-toast][data-type="loading"] {
+  background: hsl(var(--card)) !important;
+  border-color: hsl(var(--border) / 0.8) !important;
+  color: hsl(var(--card-foreground)) !important;
+}
+
+[data-sonner-toast] [data-close-button],
+[data-sonner-toast] [data-close-button].toast-close {
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  transform: none !important;
+  border-radius: 0.5rem !important;
+  background: transparent !important;
 }

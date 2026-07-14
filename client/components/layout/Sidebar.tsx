@@ -12,11 +12,12 @@ import { Role } from "@/lib/types";
 import { PRIMARY_NAV, isNavActive, type AppNavItem } from "@/lib/app-navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Switch } from "@/components/ui/switch";
-import { api } from "@/lib/api";
+import { api, ticketApi } from "@/lib/api";
 import { WorkspaceLogoImg } from "@/components/app/workspace-logo-img";
 import {
   applyWorkspaceBranding,
   effectiveWorkspaceBranding,
+  resolveWorkspaceLogoSrc,
   resolveWorkspaceTheme,
 } from "@/lib/workspace-branding";
 import { SITE_LEGAL } from "@/lib/site";
@@ -30,20 +31,24 @@ function NavLink({
   role,
   pathname,
   collapsed,
+  badgeCount,
 }: {
   item: AppNavItem;
   role: Role;
   pathname: string;
   collapsed: boolean;
+  badgeCount?: number;
 }) {
   const active = isNavActive(pathname, item.href);
   const label = role === "customer" && item.customerLabel ? item.customerLabel : item.label;
   const Icon = item.icon;
+  const showBadge = typeof badgeCount === "number" && badgeCount > 0;
+  const badgeLabel = badgeCount && badgeCount > 99 ? "99+" : String(badgeCount ?? 0);
 
   return (
     <Link
       href={item.href}
-      title={collapsed ? label : undefined}
+      title={collapsed ? (showBadge ? `${label} (${badgeLabel})` : label) : undefined}
       className={cn(
         "group flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-medium transition-colors",
         active
@@ -52,14 +57,30 @@ function NavLink({
         collapsed && "justify-center px-2",
       )}
     >
-      <Icon
-        className={cn(
-          "size-[18px] shrink-0",
-          active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
-        )}
-        aria-hidden="true"
-      />
-      {!collapsed ? <span className="truncate">{label}</span> : null}
+      <span className="relative shrink-0">
+        <Icon
+          className={cn(
+            "size-[18px]",
+            active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
+          )}
+          aria-hidden="true"
+        />
+        {collapsed && showBadge ? (
+          <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
+            {badgeLabel}
+          </span>
+        ) : null}
+      </span>
+      {!collapsed ? (
+        <>
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          {showBadge ? (
+            <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold tabular-nums text-primary-foreground shadow-sm">
+              {badgeLabel}
+            </span>
+          ) : null}
+        </>
+      ) : null}
     </Link>
   );
 }
@@ -405,8 +426,53 @@ export default function Sidebar({ embedded = false }: SidebarProps) {
   const pathname = usePathname();
   const { user, company } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const [appearance, setAppearance] = useState<"light" | "dark">("light");
+  const [assignedCount, setAssignedCount] = useState(0);
   const role = (user?.role ?? "customer") as Role;
+  const isAgent = role === "agent";
   const isCollapsed = embedded ? false : collapsed;
+
+  const branding = effectiveWorkspaceBranding(user, company);
+  const logoSrc = resolveWorkspaceLogoSrc(branding, appearance);
+  const collapsedSrc = branding?.favicon || logoSrc;
+
+  useEffect(() => {
+    const readAppearance = () => {
+      const fromDom = document.documentElement.classList.contains("dark") ? "dark" : "light";
+      setAppearance(fromDom);
+    };
+    readAppearance();
+
+    const observer = new MutationObserver(readAppearance);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isAgent) {
+      setAssignedCount(0);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadAssigned = async () => {
+      try {
+        const { data } = await ticketApi.inboxCounts("inbox");
+        const count = Number(data.data.counts?.assigned ?? 0);
+        if (!cancelled) setAssignedCount(Number.isFinite(count) ? count : 0);
+      } catch {
+        if (!cancelled) setAssignedCount(0);
+      }
+    };
+
+    void loadAssigned();
+    const timer = window.setInterval(() => void loadAssigned(), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isAgent, pathname]);
 
   const primaryNav = PRIMARY_NAV.filter((item) => item.roles.includes(role));
 
@@ -428,19 +494,31 @@ export default function Sidebar({ embedded = false }: SidebarProps) {
           href="/dashboard"
           className={cn("inline-flex min-w-0 items-center", isCollapsed && "justify-center")}
         >
-          {company?.logo ? (
+          {isCollapsed ? (
+            collapsedSrc ? (
+              <WorkspaceLogoImg
+                src={collapsedSrc}
+                alt={company?.name ?? "Workspace"}
+                fallbackSrc="/icon.svg"
+                className="size-8 rounded-lg object-cover"
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src="/icon.svg" alt="Agentra" width={28} height={28} className="size-7 rounded-lg" />
+            )
+          ) : logoSrc ? (
             <WorkspaceLogoImg
-              src={company.logo}
-              alt={company.name ?? "Workspace"}
-              fallbackSrc={isCollapsed ? "/icon.svg" : "/agentraa-logo.svg"}
-              className={cn(
-                "object-contain",
-                isCollapsed ? "size-8 rounded-lg" : "h-7 max-w-[148px]",
-              )}
+              src={logoSrc}
+              alt={company?.name ?? "Workspace"}
+              fallbackSrc="/agentraa-logo.svg"
+              className="object-contain"
+              style={{
+                maxWidth: company?.branding?.logoWidth ?? 148,
+                maxHeight: company?.branding?.logoHeight ?? 28,
+                width: "auto",
+                height: "auto",
+              }}
             />
-          ) : isCollapsed ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src="/icon.svg" alt="Agentra" width={28} height={28} className="size-7 rounded-lg" />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img src="/agentraa-logo.svg" alt="Agentra" width={108} height={26} className="h-6 w-auto" />
@@ -477,6 +555,7 @@ export default function Sidebar({ embedded = false }: SidebarProps) {
             role={role}
             pathname={pathname}
             collapsed={isCollapsed}
+            badgeCount={isAgent && item.href === "/inbox" ? assignedCount : undefined}
           />
         ))}
       </nav>

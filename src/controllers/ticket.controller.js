@@ -19,13 +19,58 @@ const ACTIVE_STATUSES = ['open', 'in_progress', 'on_hold'];
 const CLOSED_STATUSES = ['closed', 'self_closed', 'resolved'];
 const INBOX_VIEWS = ['assigned', 'all', 'snoozed', 'closed', 'trash', 'spam'];
 const LIVE_CHAT_SOURCES = ['chatbot', 'chat'];
+/** AI Agent workspace views — ownership-based, not source-based */
+const AI_AGENT_VIEWS = ['queue', 'closed', 'trash'];
+/** @deprecated alias — kept for older clients sending assigned */
 const LIVE_CHAT_VIEWS = ['queue', 'assigned', 'closed', 'trash'];
-// Selectable channels for the inbox channel filter (live chat is excluded — it
-// lives in its own AI Agent surface).
-const INBOX_CHANNELS = ['email', 'facebook', 'instagram', 'whatsapp', 'portal'];
+// Inbox channel filter (includes live chat once a human owns the thread)
+const INBOX_CHANNELS = ['email', 'facebook', 'instagram', 'whatsapp', 'tiktok', 'portal', 'chatbot', 'chat'];
+const AI_AGENT_CHANNELS = ['email', 'facebook', 'instagram', 'whatsapp', 'tiktok', 'portal', 'chatbot', 'chat'];
 
 function isLiveChatScope(scope) {
   return scope === 'live_chat' || scope === 'ai_agents';
+}
+
+/**
+ * Tickets currently owned by the AI Agent (any channel):
+ * unassigned, not yet handed to a human, and AI has been handling the thread
+ * (live chat source and/or AI/bot messages).
+ */
+function aiAgentOwnedClause() {
+  return {
+    assigned_agent: null,
+    $and: [
+      {
+        $or: [
+          { 'aiIntelligence.handoffReason': { $exists: false } },
+          { 'aiIntelligence.handoffReason': null },
+          { 'aiIntelligence.handoffReason': '' },
+        ],
+      },
+      {
+        $or: [
+          { source: { $in: LIVE_CHAT_SOURCES } },
+          { messages: { $elemMatch: { isAi: true } } },
+          { messages: { $elemMatch: { senderEmail: 'bot@agentra.local' } } },
+        ],
+      },
+    ],
+  };
+}
+
+function mergeAnd(query, clause) {
+  if (!query.$and) query.$and = [];
+  query.$and.push(clause);
+  return query;
+}
+
+function applyAiAgentOwnership(query) {
+  return mergeAnd(query, aiAgentOwnedClause());
+}
+
+/** Human inbox — everything except AI-owned active threads */
+function excludeAiAgentOwned(query) {
+  return mergeAnd(query, { $nor: [aiAgentOwnedClause()] });
 }
 const DEMO_STATS_MATCH = (companyId) => ({
   company: companyId,
@@ -108,13 +153,8 @@ function canAccessTicket(ticket, req) {
   const user = req.user;
   const company = req.company;
 
-  // Owner and Admin can access every ticket in their company
-  if (user.role === 'owner' || user.role === 'admin') {
-    return ticket.company.toString() === company._id.toString();
-  }
-
-  // Agent can access every ticket in their company
-  if (user.role === 'agent') {
+  // Owner, admin, manager, and agent can access every ticket in their company
+  if (['owner', 'admin', 'manager', 'agent'].includes(user.role)) {
     return ticket.company.toString() === company._id.toString();
   }
 
@@ -132,7 +172,7 @@ function canAccessTicket(ticket, req) {
  */
 function isStaff(req) {
   if (!req.user) return false;
-  return ['owner', 'admin', 'agent'].includes(req.user.role);
+  return ['owner', 'admin', 'manager', 'agent'].includes(req.user.role);
 }
 
 /**
@@ -143,7 +183,7 @@ function buildListQuery(req) {
   const user = req.user;
   const base = { company: company._id };
 
-  if (user.role === 'owner' || user.role === 'admin' || user.role === 'agent') {
+  if (['owner', 'admin', 'manager', 'agent'].includes(user.role)) {
     return base; // all tickets in company
   }
 
@@ -200,25 +240,16 @@ function applyInboxView(query, view, user) {
   return query;
 }
 
-function excludeLiveChatSources(query) {
-  if (query.source && typeof query.source === 'object' && query.source.$in) {
-    query.source.$in = query.source.$in.filter((s) => !LIVE_CHAT_SOURCES.includes(s));
-    return query;
-  }
+function applyAiAgentView(query, view, user) {
+  applyAiAgentOwnership(query);
 
-  query.source = { $nin: LIVE_CHAT_SOURCES };
-  return query;
-}
+  const normalized = AI_AGENT_VIEWS.includes(view)
+    ? view
+    : view === 'assigned'
+      ? 'queue'
+      : 'queue';
 
-function applyLiveChatView(query, view, user) {
-  query.source = { $in: LIVE_CHAT_SOURCES };
-
-  switch (view) {
-    case 'assigned':
-      query.assigned_agent = user._id;
-      query.inboxFolder = 'inbox';
-      query.status = { $in: ACTIVE_STATUSES };
-      break;
+  switch (normalized) {
     case 'queue':
       query.inboxFolder = 'inbox';
       query.status = { $in: ACTIVE_STATUSES };
@@ -241,11 +272,11 @@ function applyLiveChatView(query, view, user) {
 
 function inboxCountQuery(base, view, user) {
   const query = applyInboxView({ ...base }, view, user);
-  return excludeLiveChatSources(query);
+  return excludeAiAgentOwned(query);
 }
 
 function liveChatCountQuery(base, view, user) {
-  return applyLiveChatView({ ...base }, view, user);
+  return applyAiAgentView({ ...base }, view, user);
 }
 
 // ─── CRUD ─────────────────────────────────────────────────────────────────────
@@ -503,25 +534,34 @@ exports.listTickets = async (req, res, next) => {
     const query = buildListQuery(req);
 
     if (isLiveChatScope(scope)) {
+      if (req.user.role === 'agent') {
+        return response.forbidden(res, 'AI Agent is only available to workspace owners, admins, and managers');
+      }
       const liveChatView = LIVE_CHAT_VIEWS.includes(view) ? view : 'queue';
-      applyLiveChatView(query, liveChatView, req.user);
+      applyAiAgentView(query, liveChatView, req.user);
     } else if (scope === 'dashboard') {
       query.inboxFolder = { $nin: ['trash', 'spam'] };
-      excludeLiveChatSources(query);
+      excludeAiAgentOwned(query);
     } else if (scope === 'inbox' || view) {
       applyInboxView(query, view, req.user);
-      excludeLiveChatSources(query);
+      excludeAiAgentOwned(query);
     } else if (status) {
       query.status = status;
-      excludeLiveChatSources(query);
-    } else if (['owner', 'admin', 'agent'].includes(req.user.role)) {
+      excludeAiAgentOwned(query);
+    } else if (['owner', 'admin', 'manager', 'agent'].includes(req.user.role)) {
       applyInboxView(query, req.user.role === 'agent' ? 'assigned' : 'all', req.user);
-      excludeLiveChatSources(query);
+      excludeAiAgentOwned(query);
     }
 
-    // Channel filter (inbox only) — narrows the async inbox to one source.
-    if (!isLiveChatScope(scope) && INBOX_CHANNELS.includes(channel)) {
-      query.source = channel;
+    // Channel filter — inbox + AI Agent
+    if (isLiveChatScope(scope) && AI_AGENT_CHANNELS.includes(channel)) {
+      query.source = channel === 'chat' || channel === 'chatbot'
+        ? { $in: LIVE_CHAT_SOURCES }
+        : channel;
+    } else if (!isLiveChatScope(scope) && INBOX_CHANNELS.includes(channel)) {
+      query.source = channel === 'chat' || channel === 'chatbot'
+        ? { $in: LIVE_CHAT_SOURCES }
+        : channel;
     }
 
     if (priority) query.priority = priority;
@@ -627,9 +667,10 @@ exports.getInboxCounts = async (req, res, next) => {
     const scope = isLiveChatScope(req.query.scope) ? 'live_chat' : 'inbox';
 
     if (scope === 'live_chat') {
-      const views = LIVE_CHAT_VIEWS.filter(
-        (view) => view !== 'assigned' || req.user.role === 'agent',
-      );
+      if (req.user.role === 'agent') {
+        return response.forbidden(res, 'AI Agent is only available to workspace owners, admins, and managers');
+      }
+      const views = AI_AGENT_VIEWS;
 
       const entries = await Promise.all(
         views.map(async (view) => {
@@ -707,6 +748,7 @@ exports.updateTicket = async (req, res, next) => {
     }
 
     // Staff / owner update
+    const previousAssignee = ticket.assigned_agent ? String(ticket.assigned_agent) : null;
     const allowedFields = [
       'ticket_title',
       'ticket_description',
@@ -755,7 +797,9 @@ exports.updateTicket = async (req, res, next) => {
     }
 
     // Track close metadata
-    if (['closed', 'resolved'].includes(ticket.status) && !ticket.closedAt) {
+    const justClosed =
+      ['closed', 'resolved'].includes(ticket.status) && !ticket.closedAt;
+    if (justClosed) {
       ticket.closedAt = new Date();
       ticket.closedBy = user._id;
     }
@@ -774,8 +818,70 @@ exports.updateTicket = async (req, res, next) => {
       }
     }
 
+    const nextAssignee = ticket.assigned_agent ? String(ticket.assigned_agent) : null;
+    if (nextAssignee && nextAssignee !== previousAssignee) {
+      try {
+        const { pushAgentJoinedEvent } = require('../services/ticket-system-events.service');
+        const assigneeUser = await User.findById(nextAssignee).select('firstName lastName email');
+        if (assigneeUser) {
+          await pushAgentJoinedEvent(ticket, assigneeUser, company);
+        }
+        if (['chatbot', 'chat'].includes(String(ticket.source))) {
+          const ChatSession = require('../models/ChatSession');
+          const { agentDisplayName } = require('../services/ticket-system-events.service');
+          const { broadcastToSession } = require('../services/live-chat-websocket.service');
+          const sessions = await ChatSession.find({
+            company: company._id,
+            ticket: ticket._id,
+            status: { $in: ['active', 'waiting_human'] },
+          });
+          const joinBody = `${agentDisplayName(assigneeUser)} has joined the conversation`;
+          for (const session of sessions) {
+            session.status = 'with_human';
+            session.assignedAgent = nextAssignee;
+            const systemMsg = {
+              role: 'system',
+              body: joinBody,
+              contentType: 'system_event',
+              payload: { type: 'agent_joined', agentId: nextAssignee },
+              senderName: 'System',
+              sentAt: new Date(),
+            };
+            session.messages.push(systemMsg);
+            session.lastActivityAt = new Date();
+            await session.save();
+            broadcastToSession(String(company._id), session.sessionToken, {
+              type: 'system_event',
+              data: {
+                event: 'agent_joined',
+                agentName: agentDisplayName(assigneeUser),
+              },
+            });
+            broadcastToSession(String(company._id), session.sessionToken, {
+              type: 'message',
+              data: systemMsg,
+            });
+          }
+        }
+      } catch (_) {
+        /* non-blocking */
+      }
+    }
+
     ticket.lastActivity = new Date();
     await ticket.save();
+
+    if (justClosed) {
+      try {
+        const { getHelpdeskAiConfig } = require('../services/helpdesk-ai-config.service');
+        const { scheduleTicketQa } = require('../services/manager-ai.service');
+        if (getHelpdeskAiConfig(req.company).qualityAssurance) {
+          scheduleTicketQa(req.company._id, ticket._id);
+        }
+      } catch (_) {
+        /* non-blocking */
+      }
+    }
 
     return response.success(res, { ticket }, 'Ticket updated');
   } catch (err) {
@@ -837,6 +943,18 @@ exports.closeTicket = async (req, res, next) => {
     ticket.closedBy = isGuest ? null : req.user._id;
     ticket.lastActivity = new Date();
     await ticket.save();
+
+    if (!isGuest && !isCustomerRole) {
+      try {
+        const { getHelpdeskAiConfig } = require('../services/helpdesk-ai-config.service');
+        const { scheduleTicketQa } = require('../services/manager-ai.service');
+        if (getHelpdeskAiConfig(company).qualityAssurance) {
+          scheduleTicketQa(company._id, ticket._id);
+        }
+      } catch (_) {
+        /* non-blocking */
+      }
+    }
 
     return response.success(res, { ticket }, `Ticket ${newStatus.replace('_', ' ')}`);
   } catch (err) {

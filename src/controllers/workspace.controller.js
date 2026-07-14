@@ -8,6 +8,10 @@ exports.getBranding = async (req, res, next) => {
   try {
     return response.success(res, {
       branding: getWorkspaceBranding(req.company),
+      setupChecklist: {
+        workspace: Boolean(req.company.setupChecklist?.workspace),
+        team: Boolean(req.company.setupChecklist?.team),
+      },
     });
   } catch (err) {
     next(err);

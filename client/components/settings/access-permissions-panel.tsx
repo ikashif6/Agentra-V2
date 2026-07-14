@@ -10,7 +10,7 @@ import {
 } from "@/lib/user-roles";
 import type { Role } from "@/lib/types";
 
-const MATRIX_ROLES: Role[] = ["owner", "admin", "agent", "customer"];
+const MATRIX_ROLES: Role[] = ["owner", "admin", "manager", "agent", "customer"];
 
 const ROLE_COLUMN: Record<Role, string> = {
   owner: "Owner",

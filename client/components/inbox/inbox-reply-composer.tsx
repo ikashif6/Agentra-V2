@@ -10,6 +10,7 @@ import {
   Loader2,
   Paperclip,
   Smile,
+  Sparkles,
   Underline,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -17,14 +18,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { uploadApi } from "@/lib/api";
-import { sanitizeMessageHtml, editorHasContent } from "@/lib/sanitize-message-html";
+import { uploadApi, ticketAiApi } from "@/lib/api";
+import { getApiError } from "@/lib/api-error";
+import { sanitizeMessageHtml, editorHasContent, messageHtmlToPlain } from "@/lib/sanitize-message-html";
 import type { Attachment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { EmojiPickerMenu } from "@/components/inbox/emoji-picker-menu";
 import { buildEmojiHtml } from "@/lib/emoji-picker";
+
+const REPLY_TRANSFORMS: { id: string; label: string }[] = [
+  { id: "professional", label: "More professional" },
+  { id: "friendlier", label: "Friendlier" },
+  { id: "empathy", label: "More empathy" },
+  { id: "shorter", label: "Shorter" },
+  { id: "simplify", label: "Simplify" },
+  { id: "grammar", label: "Fix grammar" },
+  { id: "steps", label: "Step-by-step" },
+  { id: "brand", label: "Brand tone" },
+  { id: "no_promises", label: "Remove promises" },
+];
 
 type InboxReplyComposerProps = {
   value: string;
@@ -32,6 +48,7 @@ type InboxReplyComposerProps = {
   onSend: (payload: { body: string; attachments: Attachment[] }) => void;
   sending?: boolean;
   placeholder?: string;
+  ticketCode?: string;
 };
 
 export function InboxReplyComposer({
@@ -40,6 +57,7 @@ export function InboxReplyComposer({
   onSend,
   sending = false,
   placeholder = "Write a reply…",
+  ticketCode,
 }: InboxReplyComposerProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const editorWrapRef = useRef<HTMLDivElement>(null);
@@ -51,6 +69,7 @@ export function InboxReplyComposer({
 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [linkPopoverPos, setLinkPopoverPos] = useState({ top: 8, left: 8 });
@@ -248,6 +267,54 @@ export function InboxReplyComposer({
     event.preventDefault();
   };
 
+  const applyAiText = (text: string) => {
+    const html = text
+      .split(/\n+/)
+      .filter(Boolean)
+      .map((line) => `<p>${line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`)
+      .join("");
+    onChange(html || `<p>${text}</p>`);
+  };
+
+  const runSuggestReply = async () => {
+    if (!ticketCode || aiBusy) return;
+    setAiBusy(true);
+    try {
+      const { data } = await ticketAiApi.copilot(ticketCode, { mode: "suggest" });
+      applyAiText(String(data.data.reply || ""));
+      toast.success(data.data.cached ? "Loaded suggested reply" : "Suggested reply ready");
+    } catch (err: unknown) {
+      const { message } = getApiError(err, "Could not suggest a reply");
+      toast.error(message);
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const runTransform = async (transform: string) => {
+    if (!ticketCode || aiBusy) return;
+    const draft = messageHtmlToPlain(value).trim();
+    if (!draft) {
+      toast.error("Write or insert a reply first");
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const { data } = await ticketAiApi.copilot(ticketCode, {
+        mode: "transform",
+        draft,
+        transform,
+      });
+      applyAiText(String(data.data.reply || ""));
+      toast.success("Reply updated");
+    } catch (err: unknown) {
+      const { message } = getApiError(err, "Could not improve reply");
+      toast.error(message);
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
   const openLinkPopover = () => {
     saveSelection();
     setLinkUrl(getLinkUrlFromSelection());
@@ -349,6 +416,55 @@ export function InboxReplyComposer({
         >
           <Underline className="size-4 shrink-0" />
         </button>
+
+        {ticketCode ? (
+          <>
+            <span className="mx-1 h-5 w-px bg-border/70" aria-hidden />
+            <button
+              type="button"
+              className={cn(toolbarBtnClass(), "gap-1 px-2")}
+              style={{ width: "auto" }}
+              aria-label="Suggest reply"
+              disabled={aiBusy || sending}
+              onMouseDown={keepFocus}
+              onClick={() => void runSuggestReply()}
+            >
+              {aiBusy ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5 shrink-0" />
+              )}
+              <span className="text-xs font-medium">Suggest</span>
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    type="button"
+                    className={cn(toolbarBtnClass(), "px-2")}
+                    style={{ width: "auto" }}
+                    aria-label="Improve reply"
+                    disabled={aiBusy || sending}
+                    onMouseDown={keepFocus}
+                  />
+                }
+              >
+                <span className="text-xs font-medium">Improve</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-44">
+                {REPLY_TRANSFORMS.map((item) => (
+                  <DropdownMenuItem
+                    key={item.id}
+                    onClick={() => void runTransform(item.id)}
+                  >
+                    {item.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        ) : null}
+
         <button
           type="button"
           className={toolbarBtnClass()}

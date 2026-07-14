@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { teamApi } from "@/lib/api";
 import { Team, User } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { toast } from "sonner";
 import UserPicker from "@/components/shared/UserPicker";
 
@@ -20,12 +21,13 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const router = useRouter();
   const { user } = useAuth();
+  const confirm = useConfirm();
   const [team, setTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
 
-  const isOwnerAdmin = ["owner", "admin"].includes(user?.role ?? "");
+  const isOwnerAdmin = ["owner", "admin", "manager"].includes(user?.role ?? "");
   const isLead = team?.teamLead._id === user?._id;
   const canManage = isOwnerAdmin || isLead;
 
@@ -52,7 +54,12 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   };
 
   const handleRemove = async (userId: string) => {
-    if (!confirm("Remove this member?")) return;
+    const ok = await confirm({
+      title: "Remove team member?",
+      description: "They will lose access to conversations routed to this team.",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
     setRemoving(userId);
     try {
       await teamApi.removeMember(id, userId);

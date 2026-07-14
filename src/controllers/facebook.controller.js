@@ -47,12 +47,14 @@ exports.getOAuthUrl = async (req, res, next) => {
     }
 
     const returnOrigin = req.query.returnOrigin || req.headers.origin;
+    const returnPath = typeof req.query.returnPath === 'string' ? req.query.returnPath : null;
 
     const url = buildFacebookOAuthUrl({
       companyId: req.company._id,
       subdomain: req.company.subdomain,
       userId: req.user._id,
       returnOrigin,
+      returnPath,
     });
 
     return response.success(res, { url });
@@ -78,13 +80,14 @@ exports.oauthCallback = async (req, res, next) => {
 
     const subdomain = payload.subdomain;
     const returnOrigin = payload.returnOrigin;
+    const returnPath = payload.returnPath || null;
 
     if (error) {
       return res.redirect(
         buildSettingsRedirect(subdomain, {
           facebook: 'error',
           message: errorDescription || error,
-        }, returnOrigin),
+        }, returnOrigin, returnPath),
       );
     }
 
@@ -93,7 +96,7 @@ exports.oauthCallback = async (req, res, next) => {
         buildSettingsRedirect(subdomain, {
           facebook: 'error',
           message: 'Facebook did not return an authorization code',
-        }, returnOrigin),
+        }, returnOrigin, returnPath),
       );
     }
 
@@ -103,7 +106,7 @@ exports.oauthCallback = async (req, res, next) => {
         buildSettingsRedirect(subdomain, {
           facebook: 'error',
           message: 'Workspace not found',
-        }, returnOrigin),
+        }, returnOrigin, returnPath),
       );
     }
 
@@ -116,7 +119,7 @@ exports.oauthCallback = async (req, res, next) => {
         buildSettingsRedirect(subdomain, {
           facebook: 'error',
           message: connectErr.message || 'Could not connect Facebook',
-        }, returnOrigin),
+        }, returnOrigin, returnPath),
       );
     }
 
@@ -125,7 +128,7 @@ exports.oauthCallback = async (req, res, next) => {
         buildSettingsRedirect(subdomain, {
           facebook: 'connected',
           page: result.pageName || '',
-        }, returnOrigin),
+        }, returnOrigin, returnPath),
       );
     }
 
@@ -133,7 +136,7 @@ exports.oauthCallback = async (req, res, next) => {
       return res.redirect(
         buildSettingsRedirect(subdomain, {
           facebook: 'select_page',
-        }, returnOrigin),
+        }, returnOrigin, returnPath),
       );
     }
 
@@ -141,7 +144,7 @@ exports.oauthCallback = async (req, res, next) => {
       buildSettingsRedirect(subdomain, {
         facebook: 'error',
         message: result.message || 'Could not connect Facebook',
-      }, returnOrigin),
+      }, returnOrigin, returnPath),
     );
   } catch (err) {
     next(err);

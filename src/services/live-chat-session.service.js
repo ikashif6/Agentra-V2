@@ -71,10 +71,14 @@ async function appendSessionMessage(session, message) {
   return session.messages[session.messages.length - 1];
 }
 
-async function syncMessageToTicket(ticket, { role, body, senderName, customerUser, agentUser }) {
+async function syncMessageToTicket(ticket, { role, body, senderName, customerUser, agentUser, eventType }) {
   if (!ticket || !body) return;
   let senderId;
   let senderEmail;
+  let isAi = false;
+  let isSystem = false;
+  let contentType = 'text';
+
   if (role === 'customer') {
     senderId = customerUser._id;
     senderEmail = customerUser.email;
@@ -84,6 +88,13 @@ async function syncMessageToTicket(ticket, { role, body, senderName, customerUse
   } else if (role === 'bot') {
     senderId = customerUser._id;
     senderEmail = 'bot@agentra.local';
+    isAi = true;
+  } else if (role === 'system') {
+    senderId = customerUser?._id || agentUser?._id;
+    if (!senderId) return;
+    senderEmail = 'system@agentra.local';
+    isSystem = true;
+    contentType = 'system_event';
   } else {
     return;
   }
@@ -91,9 +102,13 @@ async function syncMessageToTicket(ticket, { role, body, senderName, customerUse
   ticket.messages.push({
     sender: senderId,
     senderEmail,
-    body: `[${senderName || role}] ${body}`,
+    body: isSystem ? String(body) : `[${senderName || role}] ${body}`,
     sentAt: new Date(),
     isInternal: false,
+    isAi,
+    isSystem,
+    contentType,
+    eventType: isSystem ? eventType || 'notice' : undefined,
   });
   ticket.lastActivity = new Date();
   if (ticket.status === 'closed' || ticket.status === 'resolved') {

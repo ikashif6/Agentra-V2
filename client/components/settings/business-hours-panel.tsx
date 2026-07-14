@@ -26,11 +26,13 @@ import {
 } from "@/lib/business-hours";
 import { getUserTimezone } from "@/lib/user-timezone";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { cn } from "@/lib/utils";
 import ScheduleEditor, { BusinessHoursDialogFrame } from "./schedule-editor";
 
 export default function BusinessHoursPanel() {
   const { user, company } = useAuth();
+  const confirm = useConfirm();
   const [config, setConfig] = useState<BusinessHoursConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [defaultDialogOpen, setDefaultDialogOpen] = useState(false);
@@ -132,7 +134,12 @@ export default function BusinessHoursPanel() {
                 timezone={entry.timezone}
                 onEdit={() => openEditCustom(entry)}
                 onDelete={async () => {
-                  if (!confirm(`Remove "${entry.name}"?`)) return;
+                  const ok = await confirm({
+                    title: "Remove custom hours?",
+                    description: `"${entry.name}" will be deleted. Channels using these hours fall back to the default schedule.`,
+                    confirmLabel: "Remove",
+                  });
+                  if (!ok) return;
                   try {
                     await businessHoursApi.deleteCustom(entry.id);
                     toast.success("Custom hours removed");

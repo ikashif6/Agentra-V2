@@ -1,4 +1,4 @@
-export type Role = "owner" | "admin" | "agent" | "customer";
+export type Role = "owner" | "admin" | "manager" | "agent" | "customer";
 export type TicketStatus = "open" | "in_progress" | "on_hold" | "resolved" | "closed" | "self_closed";
 export type TicketPriority = "low" | "medium" | "high" | "urgent";
 export type TicketSource =
@@ -8,7 +8,8 @@ export type TicketSource =
   | "chatbot"
   | "instagram"
   | "facebook"
-  | "whatsapp";
+  | "whatsapp"
+  | "tiktok";
 export type InboxFolder = "inbox" | "snoozed" | "trash" | "spam";
 export type InboxView = "assigned" | "all" | "snoozed" | "closed" | "trash" | "spam";
 export type LiveChatView = "queue" | "assigned" | "closed" | "trash";
@@ -178,6 +179,60 @@ export interface ChatKnowledgeArticle {
   content: string;
   category?: string;
   active?: boolean;
+  kind?: "article" | "macro" | "guide" | "policy" | "troubleshooting";
+  status?: "draft" | "published";
+  source?: "manual" | "ai_draft" | "document";
+  draftMeta?: {
+    topic?: string;
+    ticketCodes?: string[];
+    reason?: string;
+    generatedAt?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface KnowledgeAiGap {
+  topic?: string;
+  ticketCount?: number;
+  painScore?: number;
+  coverageScore?: number;
+  covered?: boolean;
+  message?: string;
+  reasons?: string[];
+  sampleTitles?: string[];
+  ticketCodes?: string[];
+  relatedArticles?: { id: string; title: string }[];
+}
+
+export interface KnowledgeAiOutdated {
+  articleId?: string;
+  title?: string;
+  category?: string;
+  kind?: string;
+  updatedAt?: string;
+  reasons?: string[];
+  severity?: string;
+  aiNote?: string;
+}
+
+export interface KnowledgeAiDraft {
+  id: string;
+  title: string;
+  content: string;
+  kind?: string;
+  category?: string;
+  topic?: string;
+  reason?: string;
+  ticketCodes?: string[];
+  createdAt?: string;
+}
+
+export interface KnowledgeIntelligence {
+  gaps?: KnowledgeAiGap[];
+  outdated?: KnowledgeAiOutdated[];
+  drafts?: KnowledgeAiDraft[];
+  createdCount?: number;
 }
 
 export interface LiveChatAgent {
@@ -381,8 +436,21 @@ export interface Company {
   branding?: {
     primaryColor?: string;
     theme?: "light" | "dark" | "system";
+    favicon?: string | null;
+    logoDark?: string | null;
+    browserTitle?: string | null;
+    tagline?: string | null;
+    logoWidth?: number;
+    logoHeight?: number;
   };
-  plan: { name: string; status: string; trialEndsAt?: string };
+  plan: {
+    name: string;
+    status: string;
+    trialEndsAt?: string;
+    currentPeriodEnd?: string;
+    cancelAtPeriodEnd?: boolean;
+    canceledAt?: string;
+  };
   settings?: {
     ticketPrefix?: string;
     defaultTicketPriority?: TicketPriority;
@@ -434,6 +502,10 @@ export interface TicketMessage {
   body: string;
   attachments: Attachment[];
   isInternal: boolean;
+  isAi?: boolean;
+  isSystem?: boolean;
+  contentType?: "text" | "system_event";
+  eventType?: string;
   sentAt: string;
 }
 
@@ -453,6 +525,222 @@ export interface TicketDetails {
   customerEmail?: string;
 }
 
+export interface TicketAiRisk {
+  type?: string;
+  severity?: "low" | "medium" | "high" | "critical";
+  message?: string;
+}
+
+export interface TicketAiRecommendedAction {
+  type?: string;
+  label?: string;
+  reason?: string;
+  confidence?: number;
+}
+
+export interface TicketAiSimilarTicket {
+  ticketCode?: string;
+  title?: string;
+  status?: string;
+  similarity?: number;
+  outcome?: string;
+  responseThatWorked?: string;
+  resolvedBy?: string;
+  closedAt?: string | null;
+}
+
+export interface TicketAiContradiction {
+  type?: string;
+  severity?: "low" | "medium" | "high" | "critical";
+  message?: string;
+}
+
+export interface TicketAiIntelligence {
+  summary?: string;
+  customerWant?: string;
+  sentiment?: "positive" | "neutral" | "frustrated" | "angry" | "unknown";
+  urgency?: "low" | "medium" | "high" | "critical" | "unknown";
+  intent?: string;
+  language?: string;
+  handoffReason?: string;
+  actionsAlreadyTried?: string[];
+  recommendedAction?: TicketAiRecommendedAction;
+  risks?: TicketAiRisk[];
+  suggestedReply?: string;
+  suggestedTags?: string[];
+  suggestedPriority?: TicketPriority | "";
+  sources?: string[];
+  contradictions?: TicketAiContradiction[];
+  similarTickets?: TicketAiSimilarTicket[];
+  waitingOn?: string;
+  generatedAt?: string;
+  model?: string;
+}
+
+export interface CustomerAiProfile {
+  email?: string;
+  available?: boolean;
+  name?: string;
+  totalOrders?: number;
+  totalSpend?: number;
+  currency?: string;
+  loyaltyLevel?: string;
+  openTickets?: number;
+  closedTickets?: number;
+  refundLikeTags?: number;
+  preferredLanguage?: string;
+  productsPurchased?: string[];
+  previousProblems?: Array<{
+    ticketCode?: string;
+    title?: string;
+    summary?: string;
+    status?: string;
+    at?: string;
+  }>;
+  unresolvedIssues?: Array<{
+    ticketCode?: string;
+    title?: string;
+    priority?: string;
+    source?: string;
+    at?: string;
+  }>;
+}
+
+export interface CustomerTimelineEvent {
+  at?: string;
+  type?: string;
+  title?: string;
+  detail?: string;
+  ref?: string;
+}
+
+export interface HelpdeskAiSettings {
+  overview: boolean;
+  suggestedReply: boolean;
+  replyTools: boolean;
+  recommendedAction: boolean;
+  riskDetection: boolean;
+  autoTag: boolean;
+  autoRouting: boolean;
+  similarTickets: boolean;
+  customerProfile: boolean;
+  customerTimeline: boolean;
+  contradictions: boolean;
+  incidentDetection: boolean;
+  mergeSuggestions: boolean;
+  slaPrediction: boolean;
+  resolutionCheck: boolean;
+  qualityAssurance: boolean;
+  agentCoaching: boolean;
+  managerFeed: boolean;
+  rootCauseAnalysis: boolean;
+  churnRecovery: boolean;
+  knowledgeGaps: boolean;
+  draftArticles: boolean;
+  outdatedKnowledge: boolean;
+}
+
+export interface ManagerAiFinding {
+  type?: string;
+  severity?: string;
+  title?: string;
+  body?: string;
+  ticketCode?: string;
+}
+
+export interface ManagerAiCoachingRow {
+  agentId?: string | null;
+  agentName?: string;
+  scoredTickets?: number;
+  overallAvg?: number | null;
+  empathyAvg?: number | null;
+  accuracyAvg?: number | null;
+  needsReviewCount?: number;
+  topFlags?: { flag: string; count: number }[];
+  recommendation?: string;
+}
+
+export interface ManagerAiRootCause {
+  days?: number;
+  narrative?: string;
+  likelyCause?: string;
+  recommendedFocus?: string;
+  topics?: { topic: string; count: number; share: number; sampleTitles?: string[] }[];
+}
+
+export interface ManagerAiChurnRow {
+  email?: string;
+  name?: string;
+  loyaltyLevel?: string;
+  totalSpend?: number;
+  openTickets?: number;
+  action?: string;
+  reason?: string;
+  ticketCodes?: string[];
+}
+
+export interface ManagerAiQaRow {
+  ticketCode?: string;
+  title?: string;
+  overall?: number;
+  needsManagerReview?: boolean;
+  summary?: string;
+  coachingTip?: string;
+  flags?: string[];
+  agentName?: string;
+  scoredAt?: string;
+}
+
+export interface ManagerIntelligence {
+  feed?: {
+    days?: number;
+    createdNow?: number;
+    createdPrev?: number;
+    volumeDelta?: number;
+    handoffs?: number;
+    bySource?: { source: string; count: number }[];
+    findings?: ManagerAiFinding[];
+  } | null;
+  coaching?: ManagerAiCoachingRow[];
+  rootCause?: ManagerAiRootCause | null;
+  churn?: ManagerAiChurnRow[];
+  recentQa?: ManagerAiQaRow[];
+}
+
+export interface TicketOpsSla {
+  probability?: number;
+  targetHours?: number;
+  ageHours?: number;
+  remainingHours?: number;
+  openQueue?: number;
+  message?: string;
+}
+
+export interface TicketMergeCandidate {
+  ticketCode?: string;
+  title?: string;
+  source?: string;
+  confidence?: number;
+  reason?: string;
+}
+
+export interface SupportIncidentSummary {
+  id?: string;
+  key?: string;
+  title?: string;
+  summary?: string;
+  ticketCount?: number;
+  ticketCodes?: string[];
+  windowMinutes?: number;
+  lastSeenAt?: string;
+}
+
+export interface ResolutionCheckIssue {
+  code?: string;
+  severity?: "low" | "medium" | "high";
+  message?: string;
+}
+
 export interface Ticket {
   _id: string;
   ticket_code: string;
@@ -467,6 +755,10 @@ export interface Ticket {
   tags?: string[];
   isUnread?: boolean;
   details?: TicketDetails;
+  aiIntelligence?: TicketAiIntelligence | null;
+  mergedInto?: string;
+  mergedIntoCode?: string;
+  mergedFromCodes?: string[];
   department?: Department | string;
   teams?: Array<Team | string>;
   attachments: Attachment[];

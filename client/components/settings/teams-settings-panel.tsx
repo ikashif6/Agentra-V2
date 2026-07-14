@@ -14,7 +14,7 @@ export default function TeamsSettingsPanel() {
 
   const view = searchParams.get("view");
   const teamId = searchParams.get("team");
-  const canManage = ["owner", "admin"].includes(user?.role ?? "");
+  const canManage = ["owner", "admin", "manager"].includes(user?.role ?? "");
 
   const goToList = useCallback(() => {
     router.replace("/settings?item=teams", { scroll: false });

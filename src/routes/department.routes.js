@@ -13,7 +13,7 @@ router.use(resolveTenant);
 router.use(protect);
 
 // Only staff (owner/admin/agent) can access department routes — no customers
-router.use(authorize('owner', 'admin', 'agent'));
+router.use(authorize('owner', 'admin', 'manager', 'agent'));
 
 // ─── Validation rules ─────────────────────────────────────────────────────────
 

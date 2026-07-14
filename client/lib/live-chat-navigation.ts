@@ -3,7 +3,6 @@ import {
   Archive,
   Inbox,
   Trash2,
-  UserCheck,
 } from "lucide-react";
 import type { LiveChatView } from "@/lib/types";
 
@@ -16,17 +15,15 @@ export type LiveChatNavItem = {
 
 export const LIVE_CHAT_VIEWS: LiveChatNavItem[] = [
   { id: "queue", label: "Queue", icon: Inbox },
-  { id: "assigned", label: "Assigned to me", icon: UserCheck, agentOnly: true },
   { id: "closed", label: "Resolved", icon: Archive },
   { id: "trash", label: "Trash", icon: Trash2 },
 ];
 
 export function liveChatViewsForRole(role: string): LiveChatNavItem[] {
-  return LIVE_CHAT_VIEWS.filter((view) => !view.agentOnly || role === "agent");
+  return LIVE_CHAT_VIEWS;
 }
 
-export function defaultLiveChatViewForRole(role: string): LiveChatView {
-  if (role === "agent") return "assigned";
+export function defaultLiveChatViewForRole(_role: string): LiveChatView {
   return "queue";
 }
 

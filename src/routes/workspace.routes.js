@@ -12,7 +12,7 @@ router.use(protect);
 
 router.get(
   '/branding',
-  authorize('owner', 'admin', 'agent'),
+  authorize('owner', 'admin', 'manager', 'agent'),
   workspaceController.getBranding,
 );
 
@@ -23,6 +23,12 @@ router.patch(
     body('primaryColor').optional().matches(/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/),
     body('theme').optional().isIn(['light', 'dark', 'system']),
     body('logo').optional({ nullable: true }).isString(),
+    body('logoDark').optional({ nullable: true }).isString(),
+    body('favicon').optional({ nullable: true }).isString(),
+    body('browserTitle').optional({ nullable: true }).isString().isLength({ max: 80 }),
+    body('tagline').optional({ nullable: true }).isString().isLength({ max: 160 }),
+    body('logoWidth').optional().isInt({ min: 24, max: 280 }),
+    body('logoHeight').optional().isInt({ min: 16, max: 120 }),
   ],
   validate,
   workspaceController.updateBranding,

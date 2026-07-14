@@ -8,7 +8,7 @@ const { logTeamCreated } = require('../services/activity.service');
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function isStaff(role) {
-  return ['owner', 'admin'].includes(role);
+  return ['owner', 'admin', 'manager'].includes(role);
 }
 
 function isTeamLead(team, userId) {
@@ -63,12 +63,12 @@ exports.createTeam = async (req, res, next) => {
     const leadUser = await User.findOne({
       _id: teamLead,
       company: company._id,
-      role: { $in: ['admin', 'agent'] },
+      role: { $in: ['admin', 'manager', 'agent'] },
       isActive: true,
     });
 
     if (!leadUser) {
-      return response.badRequest(res, 'Team lead must be an active admin or agent in this workspace');
+      return response.badRequest(res, 'Team lead must be an active admin, manager, or agent in this workspace');
     }
 
     const team = await Team.create({
@@ -209,7 +209,7 @@ exports.updateTeam = async (req, res, next) => {
       const newLead = await User.findOne({
         _id: teamLead,
         company: req.company._id,
-        role: { $in: ['admin', 'agent'] },
+        role: { $in: ['admin', 'manager', 'agent'] },
         isActive: true,
       });
 
@@ -242,7 +242,7 @@ exports.updateTeam = async (req, res, next) => {
  */
 exports.deleteTeam = async (req, res, next) => {
   try {
-    if (!isStaff(req.user.role)) return response.forbidden(res, 'Only owner or admin can delete teams');
+    if (!isStaff(req.user.role)) return response.forbidden(res, 'Only owner, admin, or manager can delete teams');
 
     const team = await Team.findOne({ _id: req.params.id, company: req.company._id });
     if (!team) return response.notFound(res, 'Team not found');
@@ -282,7 +282,7 @@ exports.addMember = async (req, res, next) => {
     const targetUser = await User.findOne({
       _id: userId,
       company: req.company._id,
-      role: { $in: ['admin', 'agent'] },
+      role: { $in: ['admin', 'manager', 'agent'] },
       isActive: true,
     });
 

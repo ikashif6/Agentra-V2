@@ -22,14 +22,14 @@ export function HomeSetupPrompt({ onDefer, monochrome = false }: HomeSetupPrompt
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">
         <Button
-          render={<Link href="/onboarding" />}
+          render={<Link href="/setup" />}
           className={cn(
             "font-semibold",
             authRadiusClass,
             monochrome && "bg-neutral-900 text-white hover:bg-neutral-800",
           )}
         >
-          Continue setup
+          Start onboarding
         </Button>
         <Button type="button" variant="outline" className={cn(authRadiusClass, monochrome && "border-neutral-300 text-neutral-900 hover:bg-neutral-100")} onClick={onDefer}>
           Not right now

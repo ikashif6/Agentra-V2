@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Calendar, MessageCircle, MousePointerClick } from "lucide-react";
+import { ChevronLeft, Calendar, MessageCircle, MousePointerClick } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -55,7 +55,7 @@ export function SessionDetailsDialog({
                 className="size-8 shrink-0"
                 onClick={onBack}
               >
-                <ArrowLeft className="size-4" />
+                <ChevronLeft className="size-4" />
               </Button>
             ) : null}
             <DialogTitle className="text-lg font-semibold">Session details</DialogTitle>

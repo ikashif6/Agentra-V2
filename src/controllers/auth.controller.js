@@ -4,6 +4,7 @@ const emailService = require('../services/email.service');
 const tokenUtil = require('../utils/token');
 const response = require('../utils/apiResponse');
 const { logUserLogin, logProfileUpdated, logPasswordChanged } = require('../services/activity.service');
+const { publicCompanyBranding } = require('../services/workspace-branding.service');
 
 const MAGIC_LINK_TTL_MS = (parseInt(process.env.MAGIC_LINK_EXPIRES_MINUTES) || 15) * 60 * 1000;
 const OTP_TTL_MS = (parseInt(process.env.OTP_EXPIRES_MINUTES) || 10) * 60 * 1000;
@@ -213,7 +214,7 @@ exports.login = async (req, res, next) => {
       accessToken,
       refreshToken,
       user: user.toSafeObject(),
-      company: { id: company._id, name: company.name, subdomain: company.subdomain, timezone: company.timezone },
+      company: publicCompanyBranding(company),
     }, 'Login successful');
   } catch (err) {
     next(err);
@@ -301,7 +302,7 @@ exports.verifyMagicLink = async (req, res, next) => {
       accessToken,
       refreshToken,
       user: user.toSafeObject(),
-      company: { id: company._id, name: company.name, subdomain: company.subdomain, timezone: company.timezone },
+      company: publicCompanyBranding(company),
     }, 'Magic link verified successfully');
   } catch (err) {
     next(err);
@@ -361,7 +362,7 @@ exports.acceptInvite = async (req, res, next) => {
       accessToken,
       refreshToken,
       user: user.toSafeObject(),
-      company: { id: company._id, name: company.name, subdomain: company.subdomain, timezone: company.timezone },
+      company: publicCompanyBranding(company),
     }, `Welcome to ${company.name}! You're now signed in.`);
   } catch (err) {
     next(err);
@@ -463,7 +464,7 @@ exports.verifyOtp = async (req, res, next) => {
       accessToken,
       refreshToken,
       user: user.toSafeObject(),
-      company: { id: company._id, name: company.name, subdomain: company.subdomain, timezone: company.timezone },
+      company: publicCompanyBranding(company),
     }, 'OTP verified successfully');
   } catch (err) {
     next(err);
@@ -517,18 +518,7 @@ exports.verifyEmail = async (req, res, next) => {
         accessToken,
         refreshToken,
         user: user.toSafeObject(),
-        company: {
-          _id: company._id,
-          name: company.name,
-          subdomain: company.subdomain,
-          website: company.website,
-          timezone: company.timezone,
-          plan: {
-            name: company.plan?.name || 'pro',
-            status: company.plan?.status || 'trialing',
-            trialEndsAt: company.plan?.trialEndsAt,
-          },
-        },
+        company: publicCompanyBranding(company),
       },
       'Email verified successfully'
     );
@@ -744,10 +734,15 @@ exports.getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id).populate(
       'company',
-      'name subdomain logo timezone branding plan.name plan.status',
+      'name subdomain logo timezone branding plan.name plan.status plan.trialEndsAt plan.currentPeriodEnd plan.cancelAtPeriodEnd plan.canceledAt',
     );
 
-    return response.success(res, { user: user.toSafeObject() });
+    const safe = user.toSafeObject();
+    if (safe.company && typeof safe.company === 'object') {
+      safe.company = publicCompanyBranding(safe.company);
+    }
+
+    return response.success(res, { user: safe });
   } catch (err) {
     next(err);
   }

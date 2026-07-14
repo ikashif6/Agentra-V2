@@ -1,31 +1,36 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import Image from "next/image";
 import { LoginVisualBackground } from "@/components/auth/login-visual/login-visual-background";
-import { ConversationalDemoScene } from "@/components/auth/login-visual/conversational-demo/conversational-demo-scene";
-import { WorkspaceScene } from "@/components/auth/login-visual/workspace/workspace-scene";
 
+/**
+ * Static product visual for all full-bleed auth screens.
+ * Panel wash = original auth background (mesh, grid, logo watermark).
+ * Overlay = transparent dashboard PNG (no baked background).
+ */
 export function AuthHeroRouter() {
-  const pathname = usePathname();
-  const isSignup = pathname?.startsWith("/auth/signup");
-
   return (
-    <div className="login-visual-panel relative hidden h-full min-h-0 lg:block">
+    <aside
+      className="login-visual-panel login-visual-panel--static relative hidden h-full min-h-0 overflow-hidden lg:block"
+      aria-label="Product preview"
+    >
       <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
         <LoginVisualBackground />
       </div>
 
-      <div className="relative z-10 box-border flex h-full min-h-0 items-center justify-center overflow-visible px-6 py-6 lg:px-8 lg:py-7 xl:px-10 xl:py-8">
-        <div
-          className={
-            isSignup
-              ? "login-visual-workspace-scroll mx-auto w-full max-w-[min(100%,600px)] overflow-x-hidden"
-              : "login-visual-workspace-fit mx-auto w-full max-w-[min(100%,660px)]"
-          }
-        >
-          {isSignup ? <ConversationalDemoScene /> : <WorkspaceScene />}
+      <div className="relative z-10 flex h-full min-h-0 items-center justify-center px-3 py-4 sm:px-4 lg:px-5 lg:py-5">
+        <div className="relative h-[min(100%,920px)] w-full max-w-[760px]">
+          <Image
+            src="/auth/hero-ui.png"
+            alt="Agentra inbox and support overview"
+            fill
+            priority
+            quality={95}
+            sizes="(min-width: 1024px) 48vw, 0px"
+            className="object-contain object-center drop-shadow-[0_28px_60px_rgba(40,12,4,0.35)]"
+          />
         </div>
       </div>
-    </div>
+    </aside>
   );
 }

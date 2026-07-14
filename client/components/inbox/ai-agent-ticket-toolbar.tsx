@@ -32,19 +32,15 @@ import { STATUS_LABELS } from "@/lib/constants";
 import { PriorityIcon, TICKET_PRIORITY_OPTIONS } from "@/lib/ticket-priority";
 import { TicketSourceBadge } from "@/lib/ticket-source";
 import { cn } from "@/lib/utils";
+import { formatUserDisplayName, userInitials } from "@/lib/user-display";
 
 function agentName(user?: User | null) {
   if (!user) return "Unassigned";
-  return `${user.firstName} ${user.lastName}`;
+  return formatUserDisplayName(user, "Unassigned");
 }
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+function initials(user?: User | null) {
+  return userInitials(user);
 }
 
 type AiAgentTicketToolbarProps = {
@@ -178,7 +174,7 @@ export function LiveChatTicketToolbar({
             >
               <Avatar className="size-6">
                 <AvatarFallback className="bg-primary/10 text-[10px] text-primary">
-                  {initials(`${currentUser.firstName} ${currentUser.lastName}`)}
+                  {initials(currentUser)}
                 </AvatarFallback>
               </Avatar>
               Take conversation
@@ -197,12 +193,12 @@ export function LiveChatTicketToolbar({
               >
                 <Avatar className="size-6">
                   <AvatarFallback className="bg-muted text-[10px]">
-                    {initials(`${agent.firstName} ${agent.lastName}`)}
+                    {initials(agent)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
                   <p className="truncate text-sm">
-                    {agent.firstName} {agent.lastName}
+                    {agentName(agent)}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">{agent.email}</p>
                 </div>
@@ -339,7 +335,7 @@ export function LiveChatTicketToolbar({
                 className="gap-2 px-3 py-2"
                 onClick={() => onTransfer(agent)}
               >
-                {agent.firstName} {agent.lastName}
+                {agentName(agent)}
               </DropdownMenuItem>
             ))}
           </div>

@@ -37,7 +37,7 @@ exports.createDepartment = async (req, res, next) => {
       const headUsers = await User.find({
         _id: { $in: heads },
         company: company._id,
-        role: { $in: ['admin', 'agent'] },
+        role: { $in: ['admin', 'manager', 'agent'] },
         isActive: true,
       });
 
@@ -197,7 +197,7 @@ exports.addHead = async (req, res, next) => {
     const targetUser = await User.findOne({
       _id: userId,
       company: req.company._id,
-      role: { $in: ['admin', 'agent'] },
+      role: { $in: ['admin', 'manager', 'agent'] },
       isActive: true,
     });
 

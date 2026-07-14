@@ -13,11 +13,14 @@ import {
   Palette,
   Store,
 } from "lucide-react";
+import type { Role } from "@/lib/types";
 
 export type SettingsItemId =
   | "store"
   | "customize-workspace"
   | "business-hours"
+  | "ai-agent"
+  | "helpdesk-ai"
   | "email"
   | "chat"
   | "whatsapp"
@@ -38,14 +41,19 @@ export type SettingsNavItem = {
   id: SettingsItemId;
   label: string;
   description?: string;
+  /** owner + admin only (workspace config / channels) */
+  configOnly?: boolean;
   staffOnly?: boolean;
   ownerOnly?: boolean;
+  /** users/teams — also managers */
+  peopleOk?: boolean;
 };
 
 export type SettingsNavSection = {
   id: SettingsSectionId;
   label: string;
   icon: LucideIcon;
+  configOnly?: boolean;
   staffOnly?: boolean;
   items: SettingsNavItem[];
 };
@@ -55,25 +63,37 @@ export const SETTINGS_SECTIONS: SettingsNavSection[] = [
     id: "workspace",
     label: "Workspace",
     icon: Building2,
-    staffOnly: true,
+    configOnly: true,
     items: [
-      { id: "store", label: "Store", description: "Connect Shopify, WooCommerce, or custom storefront" },
-      { id: "customize-workspace", label: "Customize workspace", description: "Logo, brand color, and theme" },
-      { id: "business-hours", label: "Business hours", description: "When your team is available" },
+      { id: "store", label: "Store", description: "Connect Shopify, WooCommerce, or custom storefront", configOnly: true },
+      { id: "customize-workspace", label: "Customize workspace", description: "Name, logos, favicon, colors, and theme", configOnly: true },
+      { id: "business-hours", label: "Business hours", description: "When your team is available", configOnly: true },
+      {
+        id: "ai-agent",
+        label: "AI Agent",
+        description: "Deploy AI across email, chat, and social channels",
+        configOnly: true,
+      },
+      {
+        id: "helpdesk-ai",
+        label: "Helpdesk AI",
+        description: "Inbox copilot, manager QA, and knowledge intelligence",
+        configOnly: true,
+      },
     ],
   },
   {
     id: "channels",
     label: "Channels",
     icon: MessageCircle,
-    staffOnly: true,
+    configOnly: true,
     items: [
-      { id: "email", label: "Email", description: "Inbound and outbound mail" },
-      { id: "chat", label: "Live chat", description: "Website widget conversations" },
-      { id: "whatsapp", label: "WhatsApp", description: "Connect WhatsApp Business" },
-      { id: "tiktok", label: "TikTok", description: "Social messaging on TikTok" },
-      { id: "instagram", label: "Instagram", description: "Direct messages on Instagram" },
-      { id: "facebook", label: "Facebook", description: "Messenger and page inbox" },
+      { id: "email", label: "Email", description: "Inbound and outbound mail", configOnly: true },
+      { id: "chat", label: "Live chat", description: "Website widget conversations", configOnly: true },
+      { id: "whatsapp", label: "WhatsApp", description: "Connect WhatsApp Business", configOnly: true },
+      { id: "tiktok", label: "TikTok", description: "Social messaging on TikTok", configOnly: true },
+      { id: "instagram", label: "Instagram", description: "Direct messages on Instagram", configOnly: true },
+      { id: "facebook", label: "Facebook", description: "Messenger and page inbox", configOnly: true },
     ],
   },
   {
@@ -82,11 +102,11 @@ export const SETTINGS_SECTIONS: SettingsNavSection[] = [
     icon: UsersRound,
     items: [
       { id: "password-security", label: "Password & security" },
-      { id: "users", label: "Users", description: "Invite and manage workspace members", staffOnly: true },
-      { id: "teams", label: "Teams", description: "Groups and routing", staffOnly: true },
-      { id: "access", label: "Roles & permissions", description: "Who can do what", staffOnly: true, ownerOnly: true },
-      { id: "billing", label: "Plan & billing", description: "Subscription and usage", staffOnly: true, ownerOnly: true },
-      { id: "audit-logs", label: "Activity log", description: "Recent workspace events", staffOnly: true },
+      { id: "users", label: "Users", description: "Invite and manage workspace members", peopleOk: true },
+      { id: "teams", label: "Teams", description: "Groups and routing", peopleOk: true },
+      { id: "access", label: "Roles & permissions", description: "Who can do what", ownerOnly: true },
+      { id: "billing", label: "Plan & billing", description: "Subscription and usage", ownerOnly: true },
+      { id: "audit-logs", label: "Activity log", description: "Recent workspace events", configOnly: true },
       { id: "notifications", label: "Notifications", description: "Sounds and browser alerts" },
     ],
   },
@@ -118,16 +138,34 @@ export function findSettingsItem(id: SettingsItemId) {
   return null;
 }
 
+export function canConfigureWorkspace(role?: Role | null) {
+  return role === "owner" || role === "admin";
+}
+
+export function canManagePeople(role?: Role | null) {
+  return role === "owner" || role === "admin" || role === "manager";
+}
+
 export function visibleSettingsSections(options: {
-  isStaff: boolean;
-  isOwner: boolean;
+  role?: Role | null;
+  /** @deprecated use role */
+  isStaff?: boolean;
+  isOwner?: boolean;
 }): SettingsNavSection[] {
-  const { isStaff, isOwner } = options;
+  const role = options.role
+    ?? (options.isOwner ? "owner" : options.isStaff ? "admin" : "agent");
+  const isOwner = role === "owner";
+  const canConfig = canConfigureWorkspace(role);
+  const canPeople = canManagePeople(role);
+
   return SETTINGS_SECTIONS.map((section) => {
-    if (section.staffOnly && !isStaff) return null;
+    if (section.configOnly && !canConfig) return null;
+
     const items = section.items.filter((item) => {
       if (item.ownerOnly && !isOwner) return false;
-      if (item.staffOnly && !isStaff) return false;
+      if (item.peopleOk) return canPeople;
+      if (item.configOnly && !canConfig) return false;
+      if (item.staffOnly && !canConfig) return false;
       return true;
     });
     if (items.length === 0) return null;

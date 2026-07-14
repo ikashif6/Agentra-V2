@@ -51,8 +51,8 @@ async function lookupOrderForEmail(companyId, email, orderNumber) {
   return StoreOrder.find(baseQuery).sort({ placedAt: -1 }).limit(5).lean();
 }
 
-async function executeRefundIfAllowed(company, session, storeOrder) {
-  const config = company.liveChat?.ai?.allowedActions || {};
+async function executeRefundIfAllowed(company, session, storeOrder, options = {}) {
+  const config = options.allowedActions || company.liveChat?.ai?.allowedActions || {};
   if (!config.refundOrder) {
     return { ok: false, message: 'Refunds must be handled by a human agent for this store.' };
   }

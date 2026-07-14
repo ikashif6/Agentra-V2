@@ -1,7 +1,7 @@
 import type { Role, User } from "@/lib/types";
 
 /** Roles that can be assigned when inviting a new workspace member. */
-export type InvitableRole = "agent" | "admin";
+export type InvitableRole = "agent" | "manager" | "admin";
 
 export type InviteRoleOption = {
   id: InvitableRole;
@@ -14,13 +14,19 @@ export const INVITE_ROLE_OPTIONS: InviteRoleOption[] = [
     id: "agent",
     label: "Support agent",
     description:
-      "Works in the inbox, replies to customers, and updates tickets across connected channels.",
+      "Works handed-off conversations in the inbox. No AI Agent queue, analytics, or team management.",
+  },
+  {
+    id: "manager",
+    label: "Manager",
+    description:
+      "Inbox, AI Agent, analytics, and users/teams. Cannot connect channels or change workspace config.",
   },
   {
     id: "admin",
     label: "Workspace admin",
     description:
-      "Everything a support agent can do, plus user invites, workspace settings, and channel configuration.",
+      "Full workspace setup: channels, store, AI configuration, users, and teams.",
   },
 ];
 
@@ -31,6 +37,10 @@ export const ROLE_DISPLAY: Record<Role, { label: string; badgeClass: string }> =
   },
   admin: {
     label: "Workspace admin",
+    badgeClass: "border-border bg-muted/50 text-foreground",
+  },
+  manager: {
+    label: "Manager",
     badgeClass: "border-border bg-muted/50 text-foreground",
   },
   agent: {
@@ -69,9 +79,14 @@ export const WORKSPACE_ROLES: WorkspaceRoleDefinition[] = [
     summary: "Users, channels, and settings. No billing or ownership transfer.",
   },
   {
+    id: "manager",
+    label: "Manager",
+    summary: "Inbox, AI Agent, analytics, and team management. No channel or workspace config.",
+  },
+  {
     id: "agent",
     label: "Support agent",
-    summary: "Inbox, tickets, and day-to-day customer replies.",
+    summary: "Inbox and day-to-day customer replies after AI handoff. No AI Agent queue or analytics.",
   },
   {
     id: "customer",
@@ -84,37 +99,42 @@ export const PERMISSION_MATRIX: PermissionRow[] = [
   {
     id: "inbox",
     label: "Inbox & tickets",
-    levels: { owner: "full", admin: "full", agent: "full", customer: "limited" },
+    levels: { owner: "full", admin: "full", manager: "full", agent: "full", customer: "limited" },
   },
   {
     id: "teams",
     label: "Teams",
-    levels: { owner: "full", admin: "full", agent: "limited", customer: "none" },
+    levels: { owner: "full", admin: "full", manager: "full", agent: "limited", customer: "none" },
   },
   {
     id: "users",
     label: "Users",
-    levels: { owner: "full", admin: "full", agent: "none", customer: "none" },
+    levels: { owner: "full", admin: "full", manager: "full", agent: "none", customer: "none" },
   },
   {
     id: "channels",
     label: "Channels",
-    levels: { owner: "full", admin: "full", agent: "none", customer: "none" },
+    levels: { owner: "full", admin: "full", manager: "none", agent: "none", customer: "none" },
   },
   {
     id: "billing",
     label: "Billing",
-    levels: { owner: "full", admin: "none", agent: "none", customer: "none" },
+    levels: { owner: "full", admin: "none", manager: "none", agent: "none", customer: "none" },
   },
   {
     id: "settings",
-    label: "Settings",
-    levels: { owner: "full", admin: "full", agent: "none", customer: "none" },
+    label: "Workspace config",
+    levels: { owner: "full", admin: "full", manager: "none", agent: "none", customer: "none" },
   },
   {
     id: "analytics",
     label: "Analytics",
-    levels: { owner: "full", admin: "full", agent: "none", customer: "none" },
+    levels: { owner: "full", admin: "full", manager: "full", agent: "none", customer: "none" },
+  },
+  {
+    id: "ai-agent",
+    label: "AI Agent",
+    levels: { owner: "full", admin: "full", manager: "full", agent: "none", customer: "none" },
   },
 ];
 
@@ -122,7 +142,7 @@ export function splitFullName(fullName: string): { firstName: string; lastName: 
   const trimmed = fullName.trim();
   if (!trimmed) return { firstName: "", lastName: "" };
   const parts = trimmed.split(/\s+/);
-  if (parts.length === 1) return { firstName: parts[0], lastName: "-" };
+  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
   return {
     firstName: parts[0],
     lastName: parts.slice(1).join(" "),
@@ -134,6 +154,14 @@ export type UserManagePermissions = {
   canChangeRole: boolean;
   canDelete: boolean;
 };
+
+export function inviteRoleOptionsFor(actorRole?: Role | null): InviteRoleOption[] {
+  if (actorRole === "owner" || actorRole === "admin") return INVITE_ROLE_OPTIONS;
+  if (actorRole === "manager") {
+    return INVITE_ROLE_OPTIONS.filter((option) => option.id === "agent");
+  }
+  return [];
+}
 
 export function getUserManagePermissions(
   actor: Pick<User, "_id" | "role"> | null | undefined,
@@ -157,7 +185,11 @@ export function getUserManagePermissions(
     return { canEdit: true, canChangeRole: true, canDelete: true };
   }
 
-  if (actor.role === "admin" && target.role === "agent") {
+  if (actor.role === "admin" && ["agent", "manager"].includes(target.role)) {
+    return { canEdit: true, canChangeRole: true, canDelete: true };
+  }
+
+  if (actor.role === "manager" && target.role === "agent") {
     return { canEdit: true, canChangeRole: true, canDelete: true };
   }
 

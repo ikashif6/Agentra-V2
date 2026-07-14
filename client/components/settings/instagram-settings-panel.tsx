@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowRight,
+  ChevronRight,
   CheckCircle2,
   ExternalLink,
   Inbox,
@@ -80,7 +80,11 @@ function formatConnectedAt(value?: string | null) {
   return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-export default function InstagramSettingsPanel() {
+type InstagramSettingsPanelProps = {
+  returnTo?: string;
+};
+
+export default function InstagramSettingsPanel({ returnTo }: InstagramSettingsPanelProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -93,12 +97,16 @@ export default function InstagramSettingsPanel() {
   const [disconnecting, setDisconnecting] = useState(false);
 
   const clearOAuthParams = useCallback(() => {
+    if (returnTo) {
+      router.replace(returnTo, { scroll: false });
+      return;
+    }
     const params = new URLSearchParams(searchParams.toString());
     params.delete("instagram");
     params.delete("message");
     params.delete("account");
     router.replace(`/settings?${params.toString()}`, { scroll: false });
-  }, [router, searchParams]);
+  }, [router, searchParams, returnTo]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -148,7 +156,10 @@ export default function InstagramSettingsPanel() {
   const startConnect = async () => {
     setConnecting(true);
     try {
-      const { data } = await instagramChannelApi.getOAuthUrl(window.location.origin);
+      const { data } = await instagramChannelApi.getOAuthUrl(
+        window.location.origin,
+        returnTo,
+      );
       window.location.assign(data.data.url);
     } catch (err: unknown) {
       const { message } = getApiError(err, "Could not start Instagram connection");
@@ -357,7 +368,7 @@ export default function InstagramSettingsPanel() {
                 {selectingId === account.igUserId ? (
                   <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
                 ) : (
-                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
                 )}
               </button>
             ))}

@@ -145,21 +145,24 @@ async function handleMessagingEvent(company, pageToken, igUserId, event) {
     attachments,
   );
 
-  if (isNew) return;
-
-  ticket.messages.push({
-    sender: customer._id,
-    senderEmail: customer.email,
-    body,
-    attachments,
-    sentAt: new Date(),
-  });
-  if (['resolved', 'closed', 'self_closed'].includes(ticket.status)) {
-    ticket.status = 'open';
+  if (!isNew) {
+    ticket.messages.push({
+      sender: customer._id,
+      senderEmail: customer.email,
+      body,
+      attachments,
+      sentAt: new Date(),
+    });
+    if (['resolved', 'closed', 'self_closed'].includes(ticket.status)) {
+      ticket.status = 'open';
+    }
+    ticket.isUnread = true;
+    ticket.lastActivity = new Date();
+    await ticket.save();
   }
-  ticket.isUnread = true;
-  ticket.lastActivity = new Date();
-  await ticket.save();
+
+  const { scheduleTicketAiReply } = require('./ai-agent-ticket.service');
+  scheduleTicketAiReply(company._id, ticket._id, body);
 }
 
 /**

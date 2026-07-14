@@ -100,7 +100,7 @@ function attachWebSocketServer(server) {
         type: 'system_event',
         data: {
           event: 'agent_joined',
-          agentName: [agent.firstName, agent.lastName].filter(Boolean).join(' ') || agent.email,
+          agentName: require('./ticket-system-events.service').agentDisplayName(agent),
         },
       });
     },

@@ -1,6 +1,7 @@
 const { signOAuthState } = require('../utils/token');
 const {
   normalizeReturnOrigin,
+  normalizeReturnPath,
   buildSettingsRedirect,
   getApiBaseUrl,
   subscribePageToApp,
@@ -53,7 +54,7 @@ async function graphGet(path, accessToken, params = {}) {
   return body;
 }
 
-function buildInstagramOAuthUrl({ companyId, subdomain, userId, returnOrigin }) {
+function buildInstagramOAuthUrl({ companyId, subdomain, userId, returnOrigin, returnPath }) {
   if (!isInstagramConfigured()) {
     throw new Error('Instagram integration is not configured on the server');
   }
@@ -64,6 +65,7 @@ function buildInstagramOAuthUrl({ companyId, subdomain, userId, returnOrigin }) 
     subdomain,
     userId: userId.toString(),
     returnOrigin: normalizeReturnOrigin(returnOrigin) || undefined,
+    returnPath: normalizeReturnPath(returnPath) || undefined,
   });
 
   const url = new URL(`https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`);

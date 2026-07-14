@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft,
+  ChevronLeft,
   Check,
   CheckCircle2,
   Copy,
@@ -21,6 +21,7 @@ import { storeApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
 import type { StoreIntegration, StoreProvider } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { PLATFORM_OPTIONS } from "@/components/onboarding/onboarding-config";
 import { PlatformBrandIcon } from "@/components/onboarding/platform-brand-icons";
 import SettingsPanelShell from "./settings-panel-shell";
@@ -65,7 +66,12 @@ const PROVIDER_COPY: Record<
   },
 };
 
-export default function StoreSettingsPanel() {
+type StoreSettingsPanelProps = {
+  /** When set (e.g. `/setup?step=store`), OAuth returns here instead of Settings. */
+  returnTo?: string;
+};
+
+export default function StoreSettingsPanel({ returnTo }: StoreSettingsPanelProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [store, setStore] = useState<StoreIntegration | null>(null);
@@ -128,10 +134,14 @@ export default function StoreSettingsPanel() {
       }, 2500);
     }
 
-    const params = new URLSearchParams(searchParams.toString());
-    ["store", "name", "message"].forEach((k) => params.delete(k));
-    router.replace(`/settings?${params.toString()}`, { scroll: false });
-  }, [searchParams, router, load]);
+    if (returnTo) {
+      router.replace(returnTo, { scroll: false });
+    } else {
+      const params = new URLSearchParams(searchParams.toString());
+      ["store", "name", "message"].forEach((k) => params.delete(k));
+      router.replace(`/settings?${params.toString()}`, { scroll: false });
+    }
+  }, [searchParams, router, load, returnTo]);
 
   const onConnected = (next: StoreIntegration) => {
     setStore(next);
@@ -179,6 +189,7 @@ export default function StoreSettingsPanel() {
         provider={provider}
         config={config}
         replacing={replacing}
+        returnTo={returnTo}
         onBack={() => {
           setStep("choose");
           setProvider(null);
@@ -255,12 +266,14 @@ function ProviderConnectForm({
   provider,
   config,
   replacing,
+  returnTo,
   onBack,
   onConnected,
 }: {
   provider: StoreProvider;
   config: StoreConfig;
   replacing?: boolean;
+  returnTo?: string;
   onBack: () => void;
   onConnected: (store: StoreIntegration) => void;
 }) {
@@ -282,7 +295,7 @@ function ProviderConnectForm({
     setRedirecting(true);
     setFormError(null);
     try {
-      const { data } = await storeApi.shopifyOAuthUrl(shopDomain.trim());
+      const { data } = await storeApi.shopifyOAuthUrl(shopDomain.trim(), returnTo);
       window.location.href = data.data.url;
     } catch (err: unknown) {
       const { message } = getApiError(err, "Could not start Shopify connection");
@@ -297,7 +310,7 @@ function ProviderConnectForm({
     setRedirecting(true);
     setFormError(null);
     try {
-      const { data } = await storeApi.wooOAuthUrl(storeUrl.trim());
+      const { data } = await storeApi.wooOAuthUrl(storeUrl.trim(), returnTo);
       window.location.href = data.data.url;
     } catch (err: unknown) {
       const { message } = getApiError(err, "Could not start WooCommerce authorization");
@@ -345,7 +358,7 @@ function ProviderConnectForm({
           onClick={onBack}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="size-4" />
+          <ChevronLeft className="size-4" />
           Back to providers
         </button>
 
@@ -566,6 +579,7 @@ function ConnectedStoreView({
   onDisconnect: () => void;
   onChangeProvider: () => void;
 }) {
+  const confirm = useConfirm();
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -648,7 +662,12 @@ function ConnectedStoreView({
   };
 
   const onDisconnectClick = async () => {
-    if (!confirm("Disconnect this store? Synced orders will be removed.")) return;
+    const ok = await confirm({
+      title: "Disconnect store?",
+      description: "Synced orders will be removed from this workspace. You can reconnect later.",
+      confirmLabel: "Disconnect",
+    });
+    if (!ok) return;
     setDisconnecting(true);
     try {
       await storeApi.disconnect();

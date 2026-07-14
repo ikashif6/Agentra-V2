@@ -136,10 +136,11 @@ exports.sendMessage = async (req, res, next) => {
       for (const msg of result.messages || []) {
         if (msg.body) {
           await syncMessageToTicket(session.ticket, {
-            role: msg.role === 'bot' ? 'bot' : 'system',
+            role: msg.role === 'bot' ? 'bot' : msg.role === 'system' ? 'system' : 'system',
             body: msg.body,
             senderName: msg.senderName,
             customerUser: customer,
+            eventType: msg.payload?.type || (msg.contentType === 'system_event' ? 'notice' : undefined),
           });
         }
       }
@@ -149,6 +150,12 @@ exports.sendMessage = async (req, res, next) => {
       for (const msg of result.messages || []) {
         wsHub.notifyMessage(String(company._id), session.sessionToken, msg);
       }
+    }
+
+    if (result.handoff && session.ticket) {
+      const ticketId = session.ticket._id || session.ticket;
+      const { scheduleTicketIntelligence } = require('../services/ticket-intelligence.service');
+      scheduleTicketIntelligence(company._id, ticketId, { force: true });
     }
 
     return response.success(res, {

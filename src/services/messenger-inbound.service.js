@@ -159,22 +159,25 @@ async function handleMessagingEvent(company, pageToken, pageId, event) {
     attachments,
   );
 
-  if (isNew) return; // first message already stored on creation
+  if (!isNew) {
+    ticket.messages.push({
+      sender: customer._id,
+      senderEmail: customer.email,
+      body,
+      attachments,
+      sentAt: new Date(),
+    });
 
-  ticket.messages.push({
-    sender: customer._id,
-    senderEmail: customer.email,
-    body,
-    attachments,
-    sentAt: new Date(),
-  });
-
-  if (['resolved', 'closed', 'self_closed'].includes(ticket.status)) {
-    ticket.status = 'open';
+    if (['resolved', 'closed', 'self_closed'].includes(ticket.status)) {
+      ticket.status = 'open';
+    }
+    ticket.isUnread = true;
+    ticket.lastActivity = new Date();
+    await ticket.save();
   }
-  ticket.isUnread = true;
-  ticket.lastActivity = new Date();
-  await ticket.save();
+
+  const { scheduleTicketAiReply } = require('./ai-agent-ticket.service');
+  scheduleTicketAiReply(company._id, ticket._id, body);
 }
 
 /**

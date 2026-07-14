@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 
 type WorkspaceLogoImgProps = {
@@ -8,6 +8,7 @@ type WorkspaceLogoImgProps = {
   alt: string;
   className?: string;
   fallbackSrc?: string;
+  style?: CSSProperties;
 };
 
 export function WorkspaceLogoImg({
@@ -15,6 +16,7 @@ export function WorkspaceLogoImg({
   alt,
   className,
   fallbackSrc = "/agentraa-logo.svg",
+  style,
 }: WorkspaceLogoImgProps) {
   const [broken, setBroken] = useState(false);
 
@@ -30,6 +32,7 @@ export function WorkspaceLogoImg({
       src={resolved}
       alt={alt}
       className={cn(className)}
+      style={style}
       onError={() => setBroken(true)}
     />
   );

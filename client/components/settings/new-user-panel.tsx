@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,8 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usersApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
+import { useAuth } from "@/contexts/AuthContext";
 import {
-  INVITE_ROLE_OPTIONS,
+  inviteRoleOptionsFor,
   splitFullName,
   type InvitableRole,
 } from "@/lib/user-roles";
@@ -21,7 +22,7 @@ import { cn } from "@/lib/utils";
 const schema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   email: z.string().email("Valid email required"),
-  role: z.enum(["agent", "admin"]),
+  role: z.enum(["agent", "manager", "admin"]),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -29,10 +30,13 @@ type FormData = z.infer<typeof schema>;
 type NewUserPanelProps = {
   onBack: () => void;
   onCreated: () => void;
+  hideBack?: boolean;
 };
 
-export default function NewUserPanel({ onBack, onCreated }: NewUserPanelProps) {
+export default function NewUserPanel({ onBack, onCreated, hideBack }: NewUserPanelProps) {
   const router = useRouter();
+  const { user } = useAuth();
+  const inviteOptions = inviteRoleOptionsFor(user?.role);
   const {
     register,
     handleSubmit,
@@ -57,7 +61,9 @@ export default function NewUserPanel({ onBack, onCreated }: NewUserPanelProps) {
       });
       toast.success(`Invitation sent to ${values.email}`);
       onCreated();
-      router.replace("/settings?item=users", { scroll: false });
+      if (!hideBack) {
+        router.replace("/settings?item=users", { scroll: false });
+      }
     } catch (err: unknown) {
       const { message } = getApiError(err, "Could not create user");
       toast.error(message);
@@ -67,15 +73,19 @@ export default function NewUserPanel({ onBack, onCreated }: NewUserPanelProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 border-b border-border/60 pb-4">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex size-9 items-center justify-center rounded-lg border border-border/80 text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Back to users"
-        >
-          <ArrowLeft className="size-4" />
-        </button>
-        <h2 className="text-xl font-bold text-foreground">New user</h2>
+        {!hideBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex size-9 items-center justify-center rounded-lg border border-border/80 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Back to users"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+        ) : null}
+        <h2 className="text-xl font-bold text-foreground">
+          {hideBack ? "Invite a teammate" : "New user"}
+        </h2>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-2xl space-y-6">
@@ -115,7 +125,7 @@ export default function NewUserPanel({ onBack, onCreated }: NewUserPanelProps) {
           </div>
 
           <div className="space-y-2">
-            {INVITE_ROLE_OPTIONS.map((option) => {
+            {inviteOptions.map((option) => {
               const selected = selectedRole === option.id;
               return (
                 <label
@@ -151,12 +161,14 @@ export default function NewUserPanel({ onBack, onCreated }: NewUserPanelProps) {
         </div>
 
         <div className="flex flex-wrap justify-end gap-2 pt-2">
-          <Button type="button" variant="outline" onClick={onBack}>
-            Cancel
-          </Button>
+          {!hideBack ? (
+            <Button type="button" variant="outline" onClick={onBack}>
+              Cancel
+            </Button>
+          ) : null}
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-            Create user
+            {hideBack ? "Send invite" : "Create user"}
           </Button>
         </div>
       </form>

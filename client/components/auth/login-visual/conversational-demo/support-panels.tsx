@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BarChart3, Users, Zap } from "lucide-react";
+import { ChevronRight, BarChart3, Users, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cardGlow, TEAM_MEMBERS, type DemoPhase, type DemoScenario } from "./demo-config";
 import { CardHeader, DemoCard } from "./inbox-panel";
@@ -151,7 +151,7 @@ export function RoutingPanel({ scenario, phase, entered }: RoutingPanelProps) {
 }
 
 function RoutingRuleText({ rule }: { rule: string }) {
-  const arrowIndex = rule.indexOf("→");
+  const arrowIndex = rule.indexOf("›");
   if (arrowIndex === -1) {
     return (
       <>
@@ -167,7 +167,7 @@ function RoutingRuleText({ rule }: { rule: string }) {
     <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-0.5">
       <span className="font-semibold text-[#D85A30]">If</span>
       <span>{when}</span>
-      <ArrowRight className="size-3 shrink-0 text-[#D85A30]" strokeWidth={2.5} aria-hidden="true" />
+      <ChevronRight className="size-3 shrink-0 text-[#D85A30]" strokeWidth={2.5} aria-hidden="true" />
       <span>{then}</span>
     </span>
   );

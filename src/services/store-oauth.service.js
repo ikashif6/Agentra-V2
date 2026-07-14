@@ -87,10 +87,34 @@ function normalizeReturnOrigin(origin) {
   return null;
 }
 
-function buildStoreSettingsRedirect(subdomain, params = {}, returnOrigin = null) {
-  const query = new URLSearchParams({ item: 'store', ...params });
+function normalizeReturnPath(path) {
+  if (!path || typeof path !== 'string') return null;
+  const trimmed = path.trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return null;
+  const withoutHash = trimmed.split('#')[0];
+  if (withoutHash.length > 512) return null;
+  try {
+    const url = new URL(withoutHash, 'http://local.invalid');
+    if (url.pathname !== '/settings' && url.pathname !== '/setup') return null;
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
+}
+
+function buildStoreSettingsRedirect(subdomain, params = {}, returnOrigin = null, returnPath = null) {
   const origin = normalizeReturnOrigin(returnOrigin) || getFrontendOrigin(subdomain);
-  return `${origin}/settings?${query.toString()}`;
+  const path = normalizeReturnPath(returnPath) || '/settings';
+  const url = new URL(path, origin);
+  if (url.pathname === '/settings' && !url.searchParams.get('item')) {
+    url.searchParams.set('item', 'store');
+  }
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null) {
+      url.searchParams.set(key, String(value));
+    }
+  }
+  return url.toString();
 }
 
 async function readJsonResponse(res) {
@@ -177,7 +201,14 @@ function buildShopifyCustomInstallUrl(shopDomain) {
   return url.toString();
 }
 
-function buildShopifyAuthorizeUrl({ shopDomain, companyId, subdomain, userId, returnOrigin }) {
+function buildShopifyAuthorizeUrl({
+  shopDomain,
+  companyId,
+  subdomain,
+  userId,
+  returnOrigin,
+  returnPath,
+}) {
   if (!isShopifyOAuthConfigured()) {
     throw new Error(
       'Shopify is not configured on the server. Add SHOPIFY_API_KEY and SHOPIFY_API_SECRET.',
@@ -191,6 +222,7 @@ function buildShopifyAuthorizeUrl({ shopDomain, companyId, subdomain, userId, re
     userId: userId.toString(),
     shopDomain: domain,
     returnOrigin: normalizeReturnOrigin(returnOrigin) || undefined,
+    returnPath: normalizeReturnPath(returnPath) || undefined,
   });
 
   const url = new URL(`https://${domain}/admin/oauth/authorize`);
@@ -201,7 +233,14 @@ function buildShopifyAuthorizeUrl({ shopDomain, companyId, subdomain, userId, re
   return url.toString();
 }
 
-function buildShopifyInstallUrl({ shopDomain, companyId, subdomain, userId, returnOrigin }) {
+function buildShopifyInstallUrl({
+  shopDomain,
+  companyId,
+  subdomain,
+  userId,
+  returnOrigin,
+  returnPath,
+}) {
   if (!isShopifyOAuthConfigured()) {
     throw new Error(
       'Shopify is not configured on the server. Add SHOPIFY_API_KEY and SHOPIFY_API_SECRET.',
@@ -219,6 +258,7 @@ function buildShopifyInstallUrl({ shopDomain, companyId, subdomain, userId, retu
     subdomain,
     userId,
     returnOrigin,
+    returnPath,
   });
 }
 
@@ -320,7 +360,7 @@ async function registerShopifyWebhooks({ shopDomain, accessToken, companyId }) {
 
 // ─── WooCommerce auth handshake (wc-auth/v1) ──────────────────────────────────
 
-function buildWooAuthUrl({ storeUrl, companyId, subdomain, userId, returnOrigin }) {
+function buildWooAuthUrl({ storeUrl, companyId, subdomain, userId, returnOrigin, returnPath }) {
   const url = normalizeStoreUrl(storeUrl);
   const state = signOAuthState({
     purpose: 'woo_oauth',
@@ -329,6 +369,7 @@ function buildWooAuthUrl({ storeUrl, companyId, subdomain, userId, returnOrigin 
     userId: userId.toString(),
     storeUrl: url,
     returnOrigin: normalizeReturnOrigin(returnOrigin) || undefined,
+    returnPath: normalizeReturnPath(returnPath) || undefined,
   });
 
   const authUrl = new URL(`${url}/wc-auth/v1/authorize`);
@@ -338,7 +379,7 @@ function buildWooAuthUrl({ storeUrl, companyId, subdomain, userId, returnOrigin 
   authUrl.searchParams.set('user_id', state);
   authUrl.searchParams.set(
     'return_url',
-    buildStoreSettingsRedirect(subdomain, { store: 'pending' }, returnOrigin),
+    buildStoreSettingsRedirect(subdomain, { store: 'pending' }, returnOrigin, returnPath),
   );
   authUrl.searchParams.set('callback_url', getWooCallbackUrl());
   return { url: authUrl.toString(), storeUrl: url };

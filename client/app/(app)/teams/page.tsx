@@ -62,7 +62,7 @@ export default function TeamsPage() {
             {search ? "No teams match your search." : "No teams yet. Create one from a department."}
             {!search && (
               <Link href="/departments" className="text-sm font-medium hover:underline text-primary">
-                Go to Departments →
+                Go to Departments ›
               </Link>
             )}
           </div>

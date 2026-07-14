@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Bell, CheckCheck, Loader2, Menu, Search, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { findSettingsItem, resolveSettingsItem } from "@/lib/settings-navigation";
+import { resolveWorkspaceDocumentTitle } from "@/lib/workspace-branding";
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Home",
@@ -46,8 +48,9 @@ function formatRelative(str: string) {
 
 export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, company } = useAuth();
   const { time, weekdayDate, zoneLabel } = useUserLocalTime();
 
   const [searchOpen, setSearchOpen] = useState(false);
@@ -63,8 +66,37 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const title =
     Object.entries(PAGE_TITLES).find(
       ([key]) => pathname === key || pathname.startsWith(key + "/"),
-    )?.[1] ?? "Agentra";
+    )?.[1] ?? "Home";
   const displayTitle = title === "Tickets" && user?.role === "customer" ? "My Tickets" : title;
+  const tagline = company?.branding?.tagline?.trim() || null;
+
+  useEffect(() => {
+    const settingsItem = pathname.startsWith("/settings")
+      ? resolveSettingsItem(searchParams.get("item"), searchParams.get("tab"))
+      : null;
+    const settingsMeta = settingsItem ? findSettingsItem(settingsItem) : null;
+
+    let pageLabel: string | null = displayTitle;
+    if (pathname.startsWith("/settings")) {
+      pageLabel = settingsMeta?.section.label ?? "Settings";
+    }
+
+    document.title = resolveWorkspaceDocumentTitle({
+      pathname,
+      settingsItem,
+      browserTitle: company?.branding?.browserTitle,
+      tagline: company?.branding?.tagline,
+      companyName: company?.name,
+      pageLabel,
+    });
+  }, [
+    pathname,
+    searchParams,
+    displayTitle,
+    company?.branding?.browserTitle,
+    company?.branding?.tagline,
+    company?.name,
+  ]);
 
   const loadNotifications = useCallback(async () => {
     setNotificationsLoading(true);
@@ -182,9 +214,10 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
           </button>
           <div>
             <h1 className="text-base font-semibold tracking-tight text-foreground">{displayTitle}</h1>
-          <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
-            {weekdayDate} · {time} ({zoneLabel})
-          </p>
+            <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
+              {tagline ? `${tagline} · ` : ""}
+              {weekdayDate} · {time} ({zoneLabel})
+            </p>
           </div>
         </div>
 

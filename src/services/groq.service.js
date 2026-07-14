@@ -54,8 +54,43 @@ async function groqClassify(text) {
   }
 }
 
+function extractJsonObject(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(raw.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+async function groqJson({ messages, model, temperature = 0.2, maxTokens = 2000 }) {
+  const content = await groqChat({
+    messages,
+    model: model || process.env.GROQ_FAST_MODEL || process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+    temperature,
+    maxTokens,
+  });
+  const parsed = extractJsonObject(content);
+  if (!parsed) {
+    throw new Error('AI returned invalid JSON');
+  }
+  return parsed;
+}
+
 module.exports = {
   isGroqConfigured,
   groqChat,
   groqClassify,
+  groqJson,
+  extractJsonObject,
 };

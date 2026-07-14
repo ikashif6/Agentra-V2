@@ -2,13 +2,22 @@ export type WorkspaceTheme = "light" | "dark" | "system";
 
 export type WorkspaceBranding = {
   logo: string | null;
+  logoDark: string | null;
+  favicon: string | null;
+  browserTitle: string | null;
+  tagline: string | null;
+  logoWidth: number;
+  logoHeight: number;
   primaryColor: string;
   theme: WorkspaceTheme;
 };
 
 export const DEFAULT_PRIMARY_COLOR = "#D85A30";
+export const DEFAULT_LOGO_WIDTH = 148;
+export const DEFAULT_LOGO_HEIGHT = 28;
 
 const BRANDING_CACHE_KEY = "agentra_workspace_branding";
+const FAVICON_LINK_ID = "agentra-workspace-favicon";
 
 type Rgb = { r: number; g: number; b: number };
 type Hsl = { h: number; s: number; l: number };
@@ -21,6 +30,28 @@ export function normalizeHex(hex: string) {
     return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
   }
   return DEFAULT_PRIMARY_COLOR;
+}
+
+function clampLogoSize(n: number | undefined, min: number, max: number, fallback: number) {
+  const value = Number(n);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+export function normalizeWorkspaceBranding(
+  branding: Partial<WorkspaceBranding> | null | undefined,
+): WorkspaceBranding {
+  return {
+    logo: branding?.logo ?? null,
+    logoDark: branding?.logoDark ?? null,
+    favicon: branding?.favicon ?? null,
+    browserTitle: branding?.browserTitle?.trim() || null,
+    tagline: branding?.tagline?.trim() || null,
+    logoWidth: clampLogoSize(branding?.logoWidth, 24, 280, DEFAULT_LOGO_WIDTH),
+    logoHeight: clampLogoSize(branding?.logoHeight, 16, 120, DEFAULT_LOGO_HEIGHT),
+    primaryColor: normalizeHex(branding?.primaryColor ?? DEFAULT_PRIMARY_COLOR),
+    theme: branding?.theme === "dark" || branding?.theme === "system" ? branding.theme : "light",
+  };
 }
 
 function hexToRgb(hex: string): Rgb | null {
@@ -116,44 +147,149 @@ export function resolveWorkspaceTheme(theme: WorkspaceTheme): "light" | "dark" {
   return theme === "dark" ? "dark" : "light";
 }
 
+/** Logo to show for the currently resolved light/dark appearance. */
+export function resolveWorkspaceLogoSrc(
+  branding: Pick<WorkspaceBranding, "logo" | "logoDark" | "theme"> | null | undefined,
+  appearance?: "light" | "dark",
+): string | null {
+  if (!branding) return null;
+  const mode = appearance ?? resolveWorkspaceTheme(branding.theme);
+  if (mode === "dark" && branding.logoDark) return branding.logoDark;
+  return branding.logo ?? branding.logoDark ?? null;
+}
+
 export function cacheWorkspaceBranding(branding: WorkspaceBranding) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(BRANDING_CACHE_KEY, JSON.stringify(branding));
+  localStorage.setItem(BRANDING_CACHE_KEY, JSON.stringify(normalizeWorkspaceBranding(branding)));
 }
 
 export function readCachedWorkspaceBranding(): WorkspaceBranding | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(BRANDING_CACHE_KEY);
-    return raw ? (JSON.parse(raw) as WorkspaceBranding) : null;
+    return raw ? normalizeWorkspaceBranding(JSON.parse(raw) as WorkspaceBranding) : null;
   } catch {
     return null;
   }
 }
 
+function inferFaviconType(url: string) {
+  const path = url.split("?")[0].toLowerCase();
+  if (path.endsWith(".svg")) return "image/svg+xml";
+  if (path.endsWith(".png")) return "image/png";
+  if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+  if (path.endsWith(".ico")) return "image/x-icon";
+  if (path.endsWith(".webp")) return "image/webp";
+  return undefined;
+}
+
+function applyWorkspaceFavicon(favicon: string | null | undefined) {
+  if (typeof document === "undefined") return;
+
+  let link = document.getElementById(FAVICON_LINK_ID) as HTMLLinkElement | null;
+
+  if (!favicon) {
+    link?.remove();
+    return;
+  }
+
+  const type = inferFaviconType(favicon);
+  const bust = favicon.includes("?") ? "&" : "?";
+  const href = `${favicon}${bust}v=${encodeURIComponent(favicon.slice(-24))}`;
+
+  if (!link) {
+    link = document.createElement("link");
+    link.id = FAVICON_LINK_ID;
+    link.rel = "icon";
+    document.head.appendChild(link);
+  }
+
+  if (type) link.type = type;
+  else link.removeAttribute("type");
+  link.sizes = "any";
+  link.href = href;
+
+  // Point every icon link at the workspace favicon (do not remove nodes —
+  // removing framework-owned links breaks client navigation).
+  document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"]').forEach((el) => {
+    const node = el as HTMLLinkElement;
+    if (node.href !== link!.href) node.href = link!.href;
+    if (type) node.type = type;
+  });
+}
+
+function applyWorkspaceDocumentMeta(branding: WorkspaceBranding) {
+  if (typeof document === "undefined") return;
+
+  // Tab title is owned by the app shell (route-aware). Only keep description here.
+  const description = branding.tagline?.trim();
+  if (description) {
+    let meta = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "description";
+      document.head.appendChild(meta);
+    }
+    meta.content = description;
+  }
+}
+
+/** Build a white-label browser tab title from the current route + branding. */
+export function resolveWorkspaceDocumentTitle(options: {
+  pathname: string;
+  settingsItem?: string | null;
+  browserTitle?: string | null;
+  tagline?: string | null;
+  companyName?: string | null;
+  pageLabel?: string | null;
+}): string {
+  const brand =
+    options.browserTitle?.trim() ||
+    options.companyName?.trim() ||
+    "Workspace";
+  const tagline = options.tagline?.trim() || "";
+  const path = options.pathname || "/";
+
+  const isHome = path === "/" || path === "/dashboard";
+  if (isHome) {
+    return tagline ? `${brand} | ${tagline}` : brand;
+  }
+
+  if (path.startsWith("/settings")) {
+    // Lazy import avoided — caller passes section label via pageLabel when known.
+    const section = options.pageLabel?.trim() || "Settings";
+    return `${section} | ${brand}`;
+  }
+
+  const page = options.pageLabel?.trim();
+  if (page) return `${page} | ${brand}`;
+  return tagline ? `${brand} | ${tagline}` : brand;
+}
+
 export function applyWorkspaceBranding(branding: Partial<WorkspaceBranding>) {
   if (typeof document === "undefined") return;
 
+  const normalized = normalizeWorkspaceBranding(branding);
   const root = document.documentElement;
-  const primaryColor = normalizeHex(branding.primaryColor ?? DEFAULT_PRIMARY_COLOR);
-  const theme = branding.theme ?? "light";
-  const resolved = resolveWorkspaceTheme(theme);
+  const resolved = resolveWorkspaceTheme(normalized.theme);
 
   root.classList.remove("light", "dark");
   root.classList.add(resolved);
   root.style.colorScheme = resolved;
 
-  const vars = generateBrandCssVars(primaryColor);
+  const vars = generateBrandCssVars(normalized.primaryColor);
   if (vars) {
     Object.entries(vars).forEach(([key, value]) => {
       root.style.setProperty(key, value);
     });
   }
+
+  applyWorkspaceFavicon(normalized.favicon);
+  applyWorkspaceDocumentMeta(normalized);
 }
 
 export async function resizeLogoFile(file: File, maxWidth = 320, maxHeight = 96): Promise<File> {
   if (!file.type.startsWith("image/")) return file;
-  // SVG must stay vector — canvas resize fails / rasterizes badly in most browsers.
   if (
     file.type === "image/svg+xml" ||
     file.name.toLowerCase().endsWith(".svg")
@@ -185,7 +321,6 @@ export async function resizeLogoFile(file: File, maxWidth = 320, maxHeight = 96)
     const ext = file.type === "image/png" ? "png" : "jpg";
     return new File([blob], `workspace-logo.${ext}`, { type: blob.type });
   } catch {
-    // Unsupported decode (some SVGs / exotic formats) — upload original.
     return file;
   }
 }
@@ -199,7 +334,17 @@ export const THEME_OPTIONS: { id: WorkspaceTheme; label: string; description: st
 type ThemeUser = { preferences?: { theme?: WorkspaceTheme } } | null;
 type ThemeCompany = {
   logo?: string | null;
-  branding?: { primaryColor?: string; theme?: WorkspaceTheme };
+  name?: string;
+  branding?: {
+    primaryColor?: string;
+    theme?: WorkspaceTheme;
+    favicon?: string | null;
+    logoDark?: string | null;
+    browserTitle?: string | null;
+    tagline?: string | null;
+    logoWidth?: number;
+    logoHeight?: number;
+  };
 } | null;
 
 export function effectiveWorkspaceBranding(
@@ -219,5 +364,15 @@ export function effectiveWorkspaceBranding(
     theme = "system";
   }
 
-  return { logo, primaryColor, theme };
+  return normalizeWorkspaceBranding({
+    logo,
+    logoDark: company?.branding?.logoDark ?? null,
+    favicon: company?.branding?.favicon ?? null,
+    browserTitle: company?.branding?.browserTitle || company?.name || null,
+    tagline: company?.branding?.tagline ?? null,
+    logoWidth: company?.branding?.logoWidth,
+    logoHeight: company?.branding?.logoHeight,
+    primaryColor,
+    theme,
+  });
 }

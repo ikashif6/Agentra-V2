@@ -25,6 +25,8 @@ const storeRoutes        = require('./store.routes');
 const storeWebhookRoutes = require('./store-webhook.routes');
 const liveChatRoutes     = require('./live-chat.routes');
 const widgetRoutes       = require('./widget.routes');
+const aiAgentRoutes      = require('./ai-agent.routes');
+const helpdeskAiRoutes   = require('./helpdesk-ai.routes');
 
 // Health check
 router.get('/health', (req, res) => {
@@ -59,6 +61,8 @@ router.use('/workspace',     workspaceRoutes);
 router.use('/business-hours', businessHoursRoutes);
 router.use('/store',         storeRoutes);
 router.use('/live-chat',     liveChatRoutes);
+router.use('/ai-agent',      aiAgentRoutes);
+router.use('/helpdesk-ai',   helpdeskAiRoutes);
 router.use('/widget',        widgetRoutes);
 router.use('/webhooks/facebook', facebookWebhookRoutes);
 router.use('/webhooks/tiktok', tiktokWebhookRoutes);

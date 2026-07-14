@@ -13,7 +13,7 @@ export default function UsersSettingsPanel() {
 
   const view = searchParams.get("view");
   const isNewUser = view === "new";
-  const canInvite = ["owner", "admin"].includes(user?.role ?? "");
+  const canInvite = ["owner", "admin", "manager"].includes(user?.role ?? "");
 
   const goToList = useCallback(() => {
     router.replace("/settings?item=users", { scroll: false });

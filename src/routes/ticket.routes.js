@@ -3,6 +3,7 @@ const { body, param, query } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 
 const ticketController = require('../controllers/ticket.controller');
+const helpdeskAiController = require('../controllers/helpdesk-ai.controller');
 const { resolveTenant, protect, authorize } = require('../middleware/auth.middleware');
 const { resolveTrackSession, requireTicketAccess } = require('../middleware/ticket.middleware');
 const { validate } = require('../middleware/validate.middleware');
@@ -110,7 +111,7 @@ router.use(resolveTenant);
 router.post(
   '/',
   protect,
-  authorize('admin', 'agent', 'customer'),
+  authorize('admin', 'manager', 'agent', 'customer'),
   createRules,
   validate,
   ticketController.createTicket
@@ -122,7 +123,7 @@ router.post(
 router.post(
   '/demo',
   protect,
-  authorize('owner', 'admin', 'agent'),
+  authorize('owner', 'admin', 'manager', 'agent'),
   ticketController.createDemoTicket
 );
 
@@ -154,7 +155,7 @@ router.get(
 router.get(
   '/stats/dashboard',
   protect,
-  authorize('owner', 'admin'),
+  authorize('owner', 'admin', 'manager'),
   ticketController.getDashboardStats
 );
 
@@ -164,7 +165,7 @@ router.get(
 router.get(
   '/inbox/counts',
   protect,
-  authorize('owner', 'admin', 'agent'),
+  authorize('owner', 'admin', 'manager', 'agent'),
   ticketController.getInboxCounts
 );
 
@@ -183,6 +184,102 @@ router.get(
   param('code').trim().notEmpty(),
   validate,
   ticketController.getTicket
+);
+
+/**
+ * GET /tickets/:code/ai-intelligence
+ */
+router.get(
+  '/:code/ai-intelligence',
+  protect,
+  authorize('owner', 'admin', 'manager', 'agent'),
+  param('code').trim().notEmpty(),
+  validate,
+  helpdeskAiController.getIntelligence,
+);
+
+/**
+ * POST /tickets/:code/ai-intelligence — regenerate overview
+ */
+router.post(
+  '/:code/ai-intelligence',
+  protect,
+  authorize('owner', 'admin', 'manager', 'agent'),
+  param('code').trim().notEmpty(),
+  validate,
+  helpdeskAiController.refreshIntelligence,
+);
+
+/**
+ * GET /tickets/:code/customer-intelligence — profile, timeline, similar tickets
+ */
+router.get(
+  '/:code/customer-intelligence',
+  protect,
+  authorize('owner', 'admin', 'manager', 'agent'),
+  param('code').trim().notEmpty(),
+  validate,
+  helpdeskAiController.getCustomerIntelligence,
+);
+
+/**
+ * GET /tickets/:code/ops-intelligence — SLA, incidents, merge candidates
+ */
+router.get(
+  '/:code/ops-intelligence',
+  protect,
+  authorize('owner', 'admin', 'manager', 'agent'),
+  param('code').trim().notEmpty(),
+  validate,
+  helpdeskAiController.getOpsIntelligence,
+);
+
+/**
+ * POST /tickets/:code/resolution-check
+ */
+router.post(
+  '/:code/resolution-check',
+  protect,
+  authorize('owner', 'admin', 'manager', 'agent'),
+  param('code').trim().notEmpty(),
+  validate,
+  helpdeskAiController.checkResolution,
+);
+
+/**
+ * POST /tickets/:code/merge — merge sourceCode into this ticket
+ */
+router.post(
+  '/:code/merge',
+  protect,
+  authorize('owner', 'admin', 'manager', 'agent'),
+  param('code').trim().notEmpty(),
+  validate,
+  helpdeskAiController.mergeTicket,
+);
+
+/**
+ * POST /tickets/:code/ai-qa — force QA score for a closed ticket
+ */
+router.post(
+  '/:code/ai-qa',
+  protect,
+  authorize('owner', 'admin', 'manager'),
+  param('code').trim().notEmpty(),
+  validate,
+  helpdeskAiController.scoreTicketQa,
+);
+
+/**
+ * POST /tickets/:code/ai-copilot — suggest or transform reply
+ */
+router.post(
+  '/:code/ai-copilot',
+  protect,
+  authorize('owner', 'admin', 'manager', 'agent'),
+  param('code').trim().notEmpty(),
+  validate,
+  helpdeskAiController.copilot,
 );
 
 /**
@@ -218,7 +315,7 @@ router.post(
 router.post(
   '/:code/reopen',
   protect,
-  authorize('owner', 'admin', 'agent'),
+  authorize('owner', 'admin', 'manager', 'agent'),
   ticketController.reopenTicket
 );
 
@@ -241,7 +338,7 @@ router.delete(
 router.post(
   '/:code/peoples',
   protect,
-  authorize('admin', 'agent'),
+  authorize('owner', 'admin', 'manager', 'agent'),
   addPersonRules,
   validate,
   ticketController.addPerson
@@ -253,7 +350,7 @@ router.post(
 router.delete(
   '/:code/peoples/:userId',
   protect,
-  authorize('admin', 'agent'),
+  authorize('owner', 'admin', 'manager', 'agent'),
   param('userId').isMongoId(),
   validate,
   ticketController.removePerson

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -32,6 +32,7 @@ type FormData = z.infer<typeof schema>;
 type NewTeamPanelProps = {
   onBack: () => void;
   onCreated: (teamId: string) => void;
+  hideBack?: boolean;
 };
 
 async function ensureDefaultDepartment(): Promise<string> {
@@ -46,7 +47,7 @@ async function ensureDefaultDepartment(): Promise<string> {
   return created.data.data.department._id;
 }
 
-export default function NewTeamPanel({ onBack, onCreated }: NewTeamPanelProps) {
+export default function NewTeamPanel({ onBack, onCreated, hideBack }: NewTeamPanelProps) {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentId, setDepartmentId] = useState("");
   const [teamLead, setTeamLead] = useState<User | null>(null);
@@ -99,14 +100,16 @@ export default function NewTeamPanel({ onBack, onCreated }: NewTeamPanelProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 border-b border-border/60 pb-4">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex size-9 items-center justify-center rounded-lg border border-border/80 text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Back to teams"
-        >
-          <ArrowLeft className="size-4" />
-        </button>
+        {!hideBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex size-9 items-center justify-center rounded-lg border border-border/80 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Back to teams"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+        ) : null}
         <h2 className="text-xl font-bold text-foreground">Create team</h2>
       </div>
 
@@ -170,9 +173,11 @@ export default function NewTeamPanel({ onBack, onCreated }: NewTeamPanelProps) {
         </div>
 
         <div className="flex flex-wrap justify-end gap-2 pt-2">
-          <Button type="button" variant="outline" onClick={onBack}>
-            Cancel
-          </Button>
+          {!hideBack ? (
+            <Button type="button" variant="outline" onClick={onBack}>
+              Cancel
+            </Button>
+          ) : null}
           <Button type="submit" disabled={submitting || loadingDepts}>
             {submitting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
             Create team

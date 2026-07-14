@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { departmentApi } from "@/lib/api";
 import { Department, User } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 10;
@@ -21,6 +22,7 @@ function initials(u: User) { return `${u.firstName[0]}${u.lastName[0]}`.toUpperC
 
 export default function DepartmentsPage() {
   const { user } = useAuth();
+  const confirm = useConfirm();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -63,7 +65,12 @@ export default function DepartmentsPage() {
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
-    if (!confirm("Deactivate this department? All teams inside will also be deactivated.")) return;
+    const ok = await confirm({
+      title: "Deactivate department?",
+      description: "All teams inside this department will also be deactivated.",
+      confirmLabel: "Deactivate",
+    });
+    if (!ok) return;
     try {
       await departmentApi.delete(id);
       toast.success("Department deactivated");

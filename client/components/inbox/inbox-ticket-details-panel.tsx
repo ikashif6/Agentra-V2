@@ -28,12 +28,14 @@ import {
   orderItemCount,
 } from "@/components/inbox/order-utils";
 import { InboxMetadataPicker } from "@/components/inbox/inbox-metadata-picker";
+import { AiOverviewPanel } from "@/components/inbox/ai-overview-panel";
 import {
   CONTACT_REASON_OPTIONS,
   CUSTOMER_TYPE_OPTIONS,
   PRODUCT_OPTIONS,
   RESOLUTION_OPTIONS,
 } from "@/lib/ticket-metadata-options";
+import type { TicketAiIntelligence } from "@/lib/types";
 
 function CustomerOrders({ email, phone }: { email: string; phone: string }) {
   const [orders, setOrders] = useState<StoreOrder[] | null>(null);
@@ -248,6 +250,8 @@ type InboxTicketDetailsPanelProps = {
   ticketCount?: number;
   onUpdateDetails: (patch: Partial<TicketDetails>) => void;
   onUpdateTags: (tags: string[]) => void;
+  onUseSuggestedReply?: (reply: string) => void;
+  onIntelligenceUpdated?: (intelligence: TicketAiIntelligence | null, meta?: Partial<Ticket>) => void;
 };
 
 export function InboxTicketDetailsPanel({
@@ -255,6 +259,8 @@ export function InboxTicketDetailsPanel({
   ticketCount = 1,
   onUpdateDetails,
   onUpdateTags,
+  onUseSuggestedReply,
+  onIntelligenceUpdated,
 }: InboxTicketDetailsPanelProps) {
   const [ticketOpen, setTicketOpen] = useState(true);
   const [customerOpen, setCustomerOpen] = useState(true);
@@ -311,6 +317,12 @@ export function InboxTicketDetailsPanel({
   return (
     <aside className="hidden w-[280px] shrink-0 flex-col border-l border-border/70 bg-muted/10 xl:flex">
       <div className="min-h-0 flex-1 overflow-y-auto">
+        <AiOverviewPanel
+          ticket={ticket}
+          onUseSuggestedReply={onUseSuggestedReply}
+          onIntelligenceUpdated={onIntelligenceUpdated}
+        />
+
         {/* Ticket details */}
         <section className="border-b border-border/60">
           <button

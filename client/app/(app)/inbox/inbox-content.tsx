@@ -40,7 +40,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ticketApi, teamApi, usersApi, liveChatApi } from "@/lib/api";
+import { ticketApi, teamApi, usersApi, liveChatApi, ticketAiApi } from "@/lib/api";
 import type {
   Attachment,
   Team,
@@ -65,12 +65,14 @@ import {
   liveChatViewsForRole,
 } from "@/lib/live-chat-navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConfirm } from "@/contexts/ConfirmContext";
 import { STATUS_COLORS, STATUS_LABELS } from "@/lib/constants";
 import { TicketSourceBadge, TicketSourceIcon } from "@/lib/ticket-source";
 import { cn } from "@/lib/utils";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { formatUserDisplayName, userInitials } from "@/lib/user-display";
 
 const createSchema = z.object({
   ticket_title: z.string().min(1, "Title required").max(200),
@@ -78,18 +80,16 @@ const createSchema = z.object({
 });
 type CreateForm = z.infer<typeof createSchema>;
 
-// Channel filters for the async Inbox (live chat lives in the AI Agent surface).
+// Channel filters shared by Inbox + AI Agent (ownership decides which surface lists them).
 const CHANNEL_FILTERS: { id: string; label: string; source?: TicketSource }[] = [
   { id: "all", label: "All channels" },
   { id: "email", label: "Email", source: "email" },
+  { id: "live_chat", label: "Live chat", source: "chatbot" },
   { id: "facebook", label: "Facebook", source: "facebook" },
   { id: "instagram", label: "Instagram", source: "instagram" },
   { id: "whatsapp", label: "WhatsApp", source: "whatsapp" },
+  { id: "tiktok", label: "TikTok", source: "tiktok" },
 ];
-
-function initials(name: string) {
-  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
-}
 
 function formatRelative(str: string) {
   const diff = Date.now() - new Date(str).getTime();
@@ -125,10 +125,10 @@ function hasTimeGap(prev?: string, current?: string) {
 function customerLabel(ticket: Ticket) {
   const customer = ticket.peoples?.find((p) => p.role === "customer")?.user;
   if (customer && typeof customer === "object") {
-    return customer.fullName || `${customer.firstName} ${customer.lastName}`;
+    return formatUserDisplayName(customer, "Customer");
   }
   if (ticket.createdBy && typeof ticket.createdBy === "object") {
-    return ticket.createdBy.fullName || ticket.createdBy.email;
+    return formatUserDisplayName(ticket.createdBy, ticket.createdBy.email || "Customer");
   }
   return "Customer";
 }
@@ -138,6 +138,48 @@ function lastPreview(ticket: Ticket) {
   const raw = last?.body ?? ticket.ticket_description ?? "";
   const plain = isMessageHtml(raw) ? messageHtmlToPlain(raw) : raw;
   return plain.replace(/\s+/g, " ").trim().slice(0, 120);
+}
+
+/** Agent / AI replies sit on the right; customer messages on the left. */
+function isSystemMessage(msg: TicketMessage) {
+  return Boolean(msg.isSystem || msg.contentType === "system_event");
+}
+
+function isOutboundMessage(msg: TicketMessage, currentUserId?: string) {
+  if (isSystemMessage(msg)) return false;
+  if (msg.isAi) return true;
+  const email = String(msg.senderEmail || "").toLowerCase();
+  if (email.includes("bot@agentra")) return true;
+  if (email.includes("system@agentra")) return false;
+
+  if (typeof msg.sender === "object" && msg.sender) {
+    if (currentUserId && msg.sender._id === currentUserId) return true;
+    if (["agent", "admin", "owner"].includes(msg.sender.role)) return true;
+  }
+
+  return false;
+}
+
+function messageSenderLabel(msg: TicketMessage) {
+  if (isSystemMessage(msg)) return "System";
+  if (msg.isAi || String(msg.senderEmail || "").toLowerCase().includes("bot@agentra")) {
+    const tagged = String(msg.body || "").match(/^\[([^\]]+)\]\s*/);
+    if (tagged?.[1] && !/customer|visitor/i.test(tagged[1])) {
+      return tagged[1].replace(/\s*-\s*$/, "").trim() || "Support Assistant";
+    }
+    return "Support Assistant";
+  }
+  if (typeof msg.sender === "object" && msg.sender) {
+    return formatUserDisplayName(msg.sender, msg.senderEmail || "Agent");
+  }
+  return msg.senderEmail || "Unknown";
+}
+
+function systemEventLabel(msg: TicketMessage) {
+  return String(msg.body || "")
+    .replace(/^\[System\]\s*/i, "")
+    .replace(/^\[system\]\s*/i, "")
+    .trim();
 }
 
 function isLiveChatScope(scope: ConversationScope) {
@@ -164,10 +206,11 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const confirm = useConfirm();
   const selectedCode = searchParams.get("ticket");
 
   const role = user?.role ?? "customer";
-  const isStaff = ["owner", "admin", "agent"].includes(role);
+  const isStaff = ["owner", "admin", "manager", "agent"].includes(role);
   const isOwner = role === "owner";
   const isLiveChat = isLiveChatScope(scope);
   const basePath = isLiveChat ? "/ai-agent" : "/inbox";
@@ -235,7 +278,9 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
     try {
       const params: Record<string, unknown> = { limit: 50, view, scope: apiScope };
       if (search) params.search = search;
-      if (!isLiveChat && channelFilter !== "all") params.channel = channelFilter;
+      if (channelFilter !== "all") {
+        params.channel = channelFilter === "live_chat" ? "chatbot" : channelFilter;
+      }
 
       const { data } = await ticketApi.list(params);
       setTickets(data.data.tickets);
@@ -283,7 +328,7 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
     const applyStaffList = (users: User[]) => {
       setAgents(
         role === "agent"
-          ? users.filter((member) => ["admin", "agent"].includes(member.role))
+          ? users.filter((member) => ["admin", "manager", "agent"].includes(member.role))
           : users,
       );
     };
@@ -527,6 +572,35 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
   };
 
   const updateStatus = async (status: TicketStatus) => {
+    if (!activeTicket) return;
+    if (status === "resolved" || status === "closed") {
+      try {
+        const { data } = await ticketAiApi.checkResolution(activeTicket.ticket_code, {
+          draftReply: messageHtmlToPlain(msgBody),
+        });
+        const issues = (data.data.issues || []) as Array<{ severity?: string; message?: string }>;
+        const high = issues.filter((i) => i.severity === "high");
+        if (high.length || (issues.length && data.data.ok === false)) {
+          const lines = issues
+            .slice(0, 4)
+            .map((i) => `• ${i.message}`)
+            .join("\n");
+          const proceed = await confirm({
+            title: "Resolution check found issues",
+            description: `${lines}\n\nResolve or close this conversation anyway?`,
+            confirmLabel: "Resolve anyway",
+            variant: "default",
+          });
+          if (!proceed) return;
+        } else if (issues.length) {
+          toast.message("Resolution notes", {
+            description: issues[0]?.message || "Review before closing if needed.",
+          });
+        }
+      } catch {
+        // Don't block close if check fails
+      }
+    }
     await patchTicket({ status });
   };
 
@@ -549,7 +623,7 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
   const transferTicket = async (agent: User) => {
     const ok = await patchTicket(
       { assigned_agent: agent._id },
-      `Transferred to ${agent.firstName} ${agent.lastName}`,
+      `Transferred to ${formatUserDisplayName(agent)}`,
     );
     if (ok) return;
   };
@@ -651,8 +725,7 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                 placeholder="Search conversations…"
                 className="h-9 pl-8 pr-9"
               />
-              {!isLiveChat ? (
-                <DropdownMenu>
+              <DropdownMenu>
                   <DropdownMenuTrigger
                     aria-label="Filter by channel"
                     className={cn(
@@ -688,9 +761,8 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                     </DropdownMenuGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              ) : null}
             </div>
-            {!isLiveChat && channelFilter !== "all" ? (
+            {channelFilter !== "all" ? (
               <Badge
                 variant="secondary"
                 className="hidden h-9 items-center gap-1 whitespace-nowrap px-2.5 sm:inline-flex"
@@ -735,8 +807,10 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                 <p className="mt-1 max-w-xs text-xs text-muted-foreground">
                   {isStaff
                     ? isLiveChat
-                      ? "Live chat is handled by AI first. Conversations appear here when a customer wants to speak with a person."
-                      : "Start a new conversation or load a sample thread to preview the inbox."
+                      ? "AI-owned threads across email, chat, and social appear here until they are handed to a human agent."
+                      : search || channelFilter !== "all"
+                        ? "Try a different search or channel filter."
+                        : "Human-owned conversations — including live chat after handoff — appear here."
                     : "When you open a support request it will appear here."}
                 </p>
                 {isStaff ? (
@@ -879,13 +953,32 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                 className="h-full space-y-4 overflow-y-auto px-4 py-4 print:px-0"
               >
                 {activeTicket.messages?.map((msg: TicketMessage, index) => {
-                  const sender =
-                    typeof msg.sender === "object"
-                      ? msg.sender.fullName || msg.sender.email
-                      : "Unknown";
-                  const isMe = typeof msg.sender === "object" && msg.sender._id === user?._id;
                   const prev = activeTicket.messages?.[index - 1];
                   const showDivider = index === 0 || hasTimeGap(prev?.sentAt, msg.sentAt);
+
+                  if (isSystemMessage(msg)) {
+                    const label = systemEventLabel(msg);
+                    if (!label) return null;
+                    return (
+                      <Fragment key={msg._id}>
+                        {showDivider && msg.sentAt ? (
+                          <div className="flex justify-center py-1">
+                            <span className="text-[11px] font-medium text-muted-foreground/60">
+                              {formatMessageTime(msg.sentAt)}
+                            </span>
+                          </div>
+                        ) : null}
+                        <div className="flex justify-center px-2 py-1">
+                          <span className="max-w-[90%] rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-center text-[11px] font-medium text-muted-foreground">
+                            {label}
+                          </span>
+                        </div>
+                      </Fragment>
+                    );
+                  }
+
+                  const sender = messageSenderLabel(msg);
+                  const isOutbound = isOutboundMessage(msg, user?._id);
                   return (
                     <Fragment key={msg._id}>
                       {showDivider && msg.sentAt ? (
@@ -895,14 +988,16 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                           </span>
                         </div>
                       ) : null}
-                      <div className={cn("group flex items-center gap-3", isMe && "flex-row-reverse")}>
+                      <div className={cn("group flex items-center gap-3", isOutbound && "flex-row-reverse")}>
                         <Avatar className="size-8 shrink-0 self-end">
-                          <AvatarFallback className="bg-muted text-xs">{initials(sender)}</AvatarFallback>
+                          <AvatarFallback className="bg-muted text-xs">
+                            {userInitials(sender)}
+                          </AvatarFallback>
                         </Avatar>
                         <div
                           className={cn(
                             "max-w-[85%] rounded-[10px] border px-3 py-2.5 text-sm",
-                            isMe ? "border-primary/20 bg-primary/8" : "border-border/60 bg-muted/30",
+                            isOutbound ? "border-primary/20 bg-primary/8" : "border-border/60 bg-muted/30",
                           )}
                         >
                           <p className="mb-1 text-xs font-medium text-muted-foreground">{sender}</p>
@@ -935,6 +1030,7 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                 value={msgBody}
                 onChange={setMsgBody}
                 sending={sending}
+                ticketCode={activeTicket.ticket_code}
                 onSend={(payload) => void sendMessage(payload)}
               />
             </>
@@ -947,6 +1043,26 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
             ticketCount={1}
             onUpdateDetails={(details) => void updateTicketDetails(details)}
             onUpdateTags={(tags) => void updateTicketTags(tags)}
+            onUseSuggestedReply={(reply) => {
+              const html = reply
+                .split(/\n+/)
+                .map((line) => `<p>${line.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`)
+                .join("");
+              setMsgBody(html || `<p>${reply}</p>`);
+            }}
+            onIntelligenceUpdated={(intelligence, meta) => {
+              setActiveTicket((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      aiIntelligence: intelligence,
+                      ...(meta?.priority ? { priority: meta.priority } : {}),
+                      ...(meta?.tags ? { tags: meta.tags } : {}),
+                      ...(meta?.details ? { details: { ...prev.details, ...meta.details } } : {}),
+                    }
+                  : prev,
+              );
+            }}
           />
         ) : activeTicket ? (
           <aside className="hidden w-[260px] shrink-0 flex-col border-l border-border/70 bg-muted/10 xl:flex">
@@ -959,7 +1075,7 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
               <div className="flex items-center gap-3">
                 <Avatar className="size-10">
                   <AvatarFallback className="bg-primary/10 text-primary">
-                    {initials(customerLabel(activeTicket))}
+                    {userInitials(customerLabel(activeTicket))}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">

@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { usersApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
 import {
-  INVITE_ROLE_OPTIONS,
+  inviteRoleOptionsFor,
   ROLE_DISPLAY,
   getUserManagePermissions,
   type InvitableRole,
@@ -34,7 +34,7 @@ const schema = z.object({
   lastName: z.string().max(50).optional(),
   email: z.string().email("Valid email required"),
   jobTitle: z.string().max(100).optional(),
-  role: z.enum(["agent", "admin"]).optional(),
+  role: z.enum(["agent", "manager", "admin"]).optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -64,6 +64,7 @@ export default function EditUserDialog({
 }: EditUserDialogProps) {
   const perms = user && actor ? getUserManagePermissions(actor, user) : null;
   const isSelf = user && actor ? user._id === actor._id : false;
+  const roleOptions = inviteRoleOptionsFor(actor?.role);
 
   const {
     register,
@@ -85,7 +86,10 @@ export default function EditUserDialog({
       lastName: user.lastName === "-" ? "" : (user.lastName ?? ""),
       email: user.email,
       jobTitle: user.jobTitle ?? "",
-      role: user.role === "admin" || user.role === "agent" ? user.role : undefined,
+      role:
+        user.role === "admin" || user.role === "manager" || user.role === "agent"
+          ? user.role
+          : undefined,
     });
   }, [user, open, reset]);
 
@@ -100,7 +104,7 @@ export default function EditUserDialog({
       role?: InvitableRole;
     } = {
       firstName: values.firstName.trim(),
-      lastName: values.lastName?.trim() || "-",
+      lastName: values.lastName?.trim() || "",
       email: values.email.trim(),
       jobTitle: values.jobTitle?.trim() ?? "",
     };
@@ -184,7 +188,7 @@ export default function EditUserDialog({
             <SectionTitle>Workspace access</SectionTitle>
             {perms?.canChangeRole ? (
               <div className="grid gap-2">
-                {INVITE_ROLE_OPTIONS.map((option) => {
+                {roleOptions.map((option) => {
                   const selected = selectedRole === option.id;
                   return (
                     <button

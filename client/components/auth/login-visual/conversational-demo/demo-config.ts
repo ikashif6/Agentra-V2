@@ -91,7 +91,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     metrics: { open: 23, waiting: 8, resolved: 148 },
     routing: {
       label: "Priority routing",
-      rule: "High priority + Support dept → assign to Emma",
+      rule: "High priority + Support dept › assign to Emma",
       toast: "Routed to Emma · Support queue",
     },
     ticket: {
@@ -117,7 +117,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     metrics: { open: 19, waiting: 5, resolved: 152 },
     routing: {
       label: "Channel routing",
-      rule: "Billing topic + Email → send to Finance",
+      rule: "Billing topic + Email › send to Finance",
       toast: "Routed to Daniel · Finance queue",
     },
     ticket: {
