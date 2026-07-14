@@ -260,11 +260,6 @@ export default function LiveChatSettingsPanel() {
         <h2 className="text-xl font-bold text-foreground">Live chat</h2>
         <p className="max-w-2xl text-sm text-muted-foreground">
           Configure your storefront chat widget, AI assistant, and knowledge base.
-          {settings.canAutoInstall
-            ? " With Shopify connected, turning on live chat installs the widget on your store automatically."
-            : settings.shopifyAutoInstallPending
-              ? " Your Shopify store is connected — use the Install tab to add the widget until one-click install is enabled."
-              : " Paste the embed code on your site, or connect Shopify for one-click install."}
         </p>
       </header>
 
@@ -289,49 +284,11 @@ export default function LiveChatSettingsPanel() {
       {tab === "general" ? (
         <div className="grid w-full min-w-0 grid-cols-1 gap-10 lg:grid-cols-[minmax(0,28rem)_minmax(0,22rem)] lg:items-start xl:grid-cols-[minmax(0,32rem)_minmax(0,24rem)]">
           <div className="min-w-0 space-y-5">
-          {settings.canAutoInstall ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-900">
-              <p className="font-semibold">Shopify one-click install</p>
-              <p className="mt-1 text-emerald-800">
-                Your store is connected. Turn on live chat below and we install the widget on your
-                storefront automatically — no theme code needed.
-              </p>
-              {settings.widgetInstalled ? (
-                <p className="mt-2 text-xs font-medium text-emerald-700">
-                  ✓ Widget is live on your Shopify store
-                </p>
-              ) : settings.enabled ? (
-                <p className="mt-2 text-xs text-amber-700">
-                  Enabled but not installed yet. Save again or use Install now.
-                </p>
-              ) : null}
-              {settings.lastError ? (
-                <p className="mt-2 text-xs text-red-700">{settings.lastError}</p>
-              ) : null}
-            </div>
-          ) : settings.shopifyAutoInstallPending ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-950">
-              <p className="font-semibold">Shopify connected — manual install for now</p>
-              <p className="mt-1 text-amber-900">
-                Your store is connected, but Shopify did not grant{" "}
-                <code className="text-xs">write_script_tags</code> on the access token (Partner
-                settings alone are not enough). Release an app version that includes that scope,
-                ensure Railway{" "}
-                <code className="text-xs">SHOPIFY_SCOPES</code> includes it, then disconnect and
-                reconnect the store.
-              </p>
-              {settings.shopifyGrantedScope ? (
-                <p className="mt-2 break-all text-xs text-amber-800/90">
-                  Granted now: {settings.shopifyGrantedScope}
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
-              Connect a store in Settings → Store for automatic install (Shopify), or use the Install
-              tab to paste embed code on WooCommerce / custom sites.
-            </div>
-          )}
+          {settings.lastError ? (
+            <p className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-800">
+              {settings.lastError}
+            </p>
+          ) : null}
 
           <div className="flex items-center justify-between rounded-xl border border-border/60 p-4">
             <div>
@@ -339,9 +296,7 @@ export default function LiveChatSettingsPanel() {
               <p className="text-xs text-muted-foreground">
                 {settings.canAutoInstall
                   ? "Installs on your Shopify storefront when saved"
-                  : settings.shopifyAutoInstallPending
-                    ? "Use the Install tab embed code on your theme until one-click is available"
-                    : "Show the chat bubble after you add the embed code"}
+                  : "Show the chat bubble after the widget is installed on your store"}
               </p>
             </div>
             <Switch
@@ -942,9 +897,9 @@ export default function LiveChatSettingsPanel() {
         <div className="max-w-2xl space-y-4">
           {settings.canAutoInstall ? (
             <div className="rounded-xl border border-border/60 bg-muted/30 p-4 text-sm">
-              <p className="font-semibold text-foreground">Shopify — no code required</p>
+              <p className="font-semibold text-foreground">Shopify</p>
               <p className="mt-1 text-muted-foreground">
-                Enable live chat on the General tab. Agentra injects the widget via Shopify.
+                Enable live chat on the General tab to install the widget on your storefront.
               </p>
               <Button
                 className="mt-3"
@@ -963,17 +918,11 @@ export default function LiveChatSettingsPanel() {
                 Install on store now
               </Button>
             </div>
-          ) : settings.shopifyAutoInstallPending ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-950">
-              <p className="font-semibold">Shopify — embed code (until one-click is ready)</p>
-              <p className="mt-1 text-amber-900">
-                Add <code className="text-xs">write_script_tags</code> to your Shopify app version
-                scopes, reconnect the store in Settings → Store, then one-click install works. Until
-                then, paste the embed code below into your theme (Online Store → Themes → Edit code →
-                theme.liquid, before <code className="text-xs">&lt;/body&gt;</code>).
-              </p>
+          ) : (
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
+              Paste this snippet before the closing <code>&lt;/body&gt;</code> tag on your storefront.
             </div>
-          ) : null}
+          )}
           <Field label="Widget key">
             <div className="flex gap-2">
               <Input readOnly value={settings.widgetKey ?? ""} />
