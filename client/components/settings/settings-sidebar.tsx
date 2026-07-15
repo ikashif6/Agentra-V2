@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import {
   type SettingsItemId,
+  type SettingsNavSection,
   visibleSettingsSections,
 } from "@/lib/settings-navigation";
 import type { Role } from "@/lib/types";

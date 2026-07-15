@@ -15,6 +15,7 @@ const MATRIX_ROLES: Role[] = ["owner", "admin", "manager", "agent", "customer"];
 const ROLE_COLUMN: Record<Role, string> = {
   owner: "Owner",
   admin: "Admin",
+  manager: "Manager",
   agent: "Agent",
   customer: "Customer",
 };
@@ -26,7 +27,8 @@ export default function AccessPermissionsPanel() {
         <div>
           <h2 className="text-xl font-bold text-foreground">Roles & permissions</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Four built-in roles. Assign admin or agent when inviting someone from Users.
+            Built-in roles for owners, admins, managers, agents, and customers.
+            Assign roles when inviting someone from Users.
           </p>
         </div>
         <Link href="/settings?item=users" className={buttonVariants({ variant: "outline", size: "sm" })}>
