@@ -499,6 +499,7 @@ export interface TicketMessage {
   _id: string;
   sender: User;
   senderEmail?: string;
+  senderName?: string;
   body: string;
   attachments: Attachment[];
   isInternal: boolean;

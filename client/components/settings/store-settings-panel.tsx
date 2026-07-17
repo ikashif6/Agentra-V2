@@ -633,10 +633,14 @@ function ConnectedStoreView({
     setSyncing(true);
     try {
       const { data } = await storeApi.syncNow();
+      const orders = data.data?.synced;
+      const products = data.data?.productsSynced;
       toast.success(
-        typeof data.data?.synced === "number"
-          ? `Synced ${data.data.synced} orders`
-          : "Sync completed",
+        typeof products === "number"
+          ? `Synced ${orders ?? 0} orders and ${products} products`
+          : typeof orders === "number"
+            ? `Synced ${orders} orders`
+            : "Sync completed",
       );
       onRefresh();
     } catch (err: unknown) {
@@ -650,8 +654,13 @@ function ConnectedStoreView({
   const onSaveSettings = async () => {
     setSaving(true);
     try {
-      await storeApi.updateSettings({ syncSettings });
-      toast.success("Sync preferences saved");
+      const { data } = await storeApi.updateSettings({ syncSettings });
+      const productsSynced = data?.data?.productsSynced;
+      toast.success(
+        typeof productsSynced === "number"
+          ? `Preferences saved. Synced ${productsSynced} products.`
+          : "Sync preferences saved",
+      );
       onRefresh();
     } catch (err: unknown) {
       const { message } = getApiError(err, "Failed to save settings");

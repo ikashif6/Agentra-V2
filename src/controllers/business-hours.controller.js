@@ -5,6 +5,17 @@ const {
   getBusinessHoursResponse,
 } = require('../services/business-hours.service');
 const { logBusinessHoursUpdated } = require('../services/activity.service');
+const { bumpAssistantConfigVersion } = require('../services/assistant-engine/assistant-config-version.service');
+const { clearRuntimeConfigCache } = require('../services/assistant-engine/assistant-runtime-config.service');
+
+async function bumpConfigAfterHours(companyId) {
+  try {
+    await bumpAssistantConfigVersion(companyId, 'business_hours');
+    clearRuntimeConfigCache(String(companyId));
+  } catch (err) {
+    console.warn('[business-hours] assistant config version bump failed', err.message);
+  }
+}
 
 /**
  * GET /business-hours
@@ -52,6 +63,7 @@ exports.updateDefault = async (req, res, next) => {
 
     company.markModified('settings');
     await company.save();
+    await bumpConfigAfterHours(company._id);
 
     logBusinessHoursUpdated({ company, actor: req.user, req, scope: 'default' });
 
@@ -102,6 +114,7 @@ exports.createCustom = async (req, res, next) => {
 
     company.markModified('settings');
     await company.save();
+    await bumpConfigAfterHours(company._id);
 
     return response.created(
       res,
@@ -151,6 +164,7 @@ exports.updateCustom = async (req, res, next) => {
 
     company.markModified('settings');
     await company.save();
+    await bumpConfigAfterHours(company._id);
 
     logBusinessHoursUpdated({ company, actor: req.user, req, scope: 'custom' });
 
@@ -188,6 +202,7 @@ exports.deleteCustom = async (req, res, next) => {
     entry.deleteOne();
     company.markModified('settings');
     await company.save();
+    await bumpConfigAfterHours(company._id);
 
     return response.success(
       res,

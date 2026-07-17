@@ -32,6 +32,8 @@ const messageSchema = new Schema(
     },
     // For guest / track-session senders we store their email as a fallback
     senderEmail: { type: String },
+    /** Display name for AI / visitor bubbles (kept out of body text) */
+    senderName: { type: String, trim: true },
     body: {
       type: String,
       required: [true, 'Message body is required'],

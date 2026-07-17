@@ -6,14 +6,12 @@ import {
 } from "lucide-react";
 import { AiAgentIcon } from "@/components/icons/ai-agent-icon";
 import { AnalyticsIcon } from "@/components/icons/analytics-icon";
-import { LiveChatIcon } from "@/components/icons/live-chat-icon";
 import { Role } from "@/lib/types";
 
 export type AppNavIcon =
   | LucideIcon
   | typeof AiAgentIcon
-  | typeof AnalyticsIcon
-  | typeof LiveChatIcon;
+  | typeof AnalyticsIcon;
 
 export type AppNavItem = {
   label: string;
@@ -41,12 +39,6 @@ export const PRIMARY_NAV: AppNavItem[] = [
     label: "AI Agent",
     href: "/ai-agent",
     icon: AiAgentIcon,
-    roles: ["owner", "admin", "manager"],
-  },
-  {
-    label: "Chatbot",
-    href: "/chatbot",
-    icon: LiveChatIcon,
     roles: ["owner", "admin", "manager"],
   },
   {

@@ -408,6 +408,14 @@ async function publishDraft(companyId, draftId) {
   draft.active = true;
   draft.source = draft.source || 'ai_draft';
   await draft.save();
+  try {
+    const { bumpAssistantConfigVersion } = require('./assistant-engine/assistant-config-version.service');
+    const { clearRuntimeConfigCache } = require('./assistant-engine/assistant-runtime-config.service');
+    await bumpAssistantConfigVersion(companyId, 'knowledge_publish');
+    clearRuntimeConfigCache(String(companyId));
+  } catch (err) {
+    console.warn('[knowledge-ai] version bump failed', err.message);
+  }
   return draft;
 }
 

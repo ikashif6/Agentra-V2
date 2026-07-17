@@ -8,6 +8,19 @@ import {
 import { stripQuotedPlainText } from "@/lib/email-reply-strip";
 import { cn } from "@/lib/utils";
 
+/** Legacy ticket messages were stored as `[Sender Name] body`. */
+const SENDER_PREFIX_RE = /^\[([^\]]+)\]\s*/;
+
+export function extractTicketSenderPrefix(body?: string | null): string | null {
+  const match = String(body || "").match(SENDER_PREFIX_RE);
+  const name = match?.[1]?.replace(/\s*-\s*$/, "").trim();
+  return name || null;
+}
+
+export function stripTicketSenderPrefix(body?: string | null): string {
+  return String(body || "").replace(SENDER_PREFIX_RE, "").trimStart();
+}
+
 function renderMarkdownLine(text: string, keyPrefix: string) {
   const parts: ReactNode[] = [];
   const pattern =
@@ -87,8 +100,10 @@ export function FormattedMessageBody({
   attachments?: Attachment[];
   className?: string;
 }) {
-  if (isMessageHtml(body)) {
-    const safe = sanitizeMessageHtml(body);
+  const displayBody = stripTicketSenderPrefix(body);
+
+  if (isMessageHtml(displayBody)) {
+    const safe = sanitizeMessageHtml(displayBody);
     return (
       <div className={cn("text-foreground", className)}>
         <div
@@ -114,7 +129,7 @@ export function FormattedMessageBody({
     );
   }
 
-  const lines = stripQuotedPlainText(body).split("\n");
+  const lines = stripQuotedPlainText(displayBody).split("\n");
 
   return (
     <div className={cn("text-foreground", className)}>

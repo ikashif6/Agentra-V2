@@ -10,6 +10,7 @@
     "build": "vite build",
     "test": "node --test test/**/*.test.js",
     "test:live-chat": "node --test test/live-chat-orchestration.test.js test/live-chat-orchestration-extended.test.js test/live-chat-turn-route.test.js test/live-chat-conversation-sequence.test.js test/live-chat-conversation-v2.test.js",
+    "test:assistant-engine": "node --test test/assistant-config-characterization.test.js test/assistant-engine-config.test.js test/assistant-engine-integration.test.js test/assistant-response-quality.test.js",
     "eval:live-chat": "node scripts/eval-live-chat.js",
     "eval:live-chat:conversations": "node scripts/eval-live-chat-conversations.js",
     "eval:live-chat:model": "node scripts/eval-live-chat-model.js",

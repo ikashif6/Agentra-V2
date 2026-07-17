@@ -118,7 +118,8 @@ async function syncMessageToTicket(ticket, { role, body, senderName, customerUse
   ticket.messages.push({
     sender: senderId,
     senderEmail,
-    body: isSystem ? String(body) : `[${senderName || role}] ${body}`,
+    senderName: isSystem ? undefined : senderName || undefined,
+    body: String(body),
     sentAt: new Date(),
     isInternal: false,
     isAi,

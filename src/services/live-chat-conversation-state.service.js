@@ -39,6 +39,7 @@ function defaultConversationState() {
       contactMethod: null,
       preferredContactTime: null,
       productPreferences: emptyProductPreferences(),
+      declinedOptionalPreferences: [],
       contactEmailExplicit: false,
       contactPhoneExplicit: false,
       consentToContact: false,
@@ -73,6 +74,9 @@ function ensureConversationState(session) {
     }
     if (!wf.collectedContext.productPreferences) {
       wf.collectedContext.productPreferences = emptyProductPreferences();
+    }
+    if (!Array.isArray(wf.collectedContext.declinedOptionalPreferences)) {
+      wf.collectedContext.declinedOptionalPreferences = [];
     }
     if (!Array.isArray(wf.unresolvedIssues)) wf.unresolvedIssues = [];
     if (!Array.isArray(wf.expectedFields)) wf.expectedFields = [];

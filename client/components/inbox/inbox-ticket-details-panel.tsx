@@ -273,9 +273,16 @@ export function InboxTicketDetailsPanel({
   const [emailDraft, setEmailDraft] = useState(ticket.details?.customerEmail ?? "");
 
   const customer = customerFromTicket(ticket);
-  const customerName = customer
-    ? customer.fullName || `${customer.firstName} ${customer.lastName}`
-    : "Customer";
+  const customerEmail =
+    ticket.details?.customerEmail?.trim() ||
+    customer?.email ||
+    "";
+  const customerName =
+    (ticket.source === "chatbot" || ticket.source === "chat") && customerEmail
+      ? customerEmail
+      : customer
+        ? customer.fullName || `${customer.firstName} ${customer.lastName}`.trim() || customerEmail || "Customer"
+        : customerEmail || "Customer";
   const tags = ticket.tags ?? [];
   const details = ticket.details ?? {};
 

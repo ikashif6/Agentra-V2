@@ -18,6 +18,9 @@ const TURN_TYPES = new Set([
   'complaint',
   'handoff_request',
   'casual_conversation',
+  'preference_declined',
+  'show_results_now',
+  'ai_identity_question',
   'unknown',
 ]);
 
@@ -31,6 +34,7 @@ const INTENTS = new Set([
   'refund_status',
   'refund_not_received',
   'request_refund',
+  'refund_reason',
   'return_policy',
   'start_return',
   'exchange_item',
@@ -53,6 +57,7 @@ const INTENTS = new Set([
   'complaint',
   'clarify_previous_response',
   'correct_previous_information',
+  'ai_identity_question',
   'thank_you',
   'goodbye',
   'unsupported',
@@ -140,6 +145,8 @@ function emptyUnderstanding(overrides = {}) {
     needsClarification: false,
     clarificationQuestion: null,
     confidence: 0,
+    searchNow: false,
+    declinedOptionalPreferences: [],
     source: 'fallback',
     ...overrides,
   };
@@ -191,6 +198,10 @@ function deterministicEntities(text) {
   const orderNumber = extractOrderNumber(text);
   const email = extractEmail(text);
   const phoneMatch = String(text || '').match(/\+?\d[\d\s()-]{8,}\d/);
+  const {
+    parseBudgetShorthand,
+  } = require('./assistant-engine/assistant-response-quality.service');
+  const budgetFromShorthand = parseBudgetShorthand(text);
   const budgetMatch = String(text || '').match(/under\s*\$?\s*(\d+(?:\.\d+)?)/i);
   const sizeMatch =
     String(text || '').match(
@@ -199,7 +210,8 @@ function deterministicEntities(text) {
     String(text || '').match(/\bsize\s*([sml])\b/i) ||
     String(text || '')
       .trim()
-      .match(/^(xs|s|m|l|xl|xxl)$/i);
+      .match(/^(xs|s|m|l|xl|xxl)$/i) ||
+    String(text || '').match(/\bwear(?:ing)?\s+(extra\s*small|x-?small|xs|small|medium|large|extra\s*large|x-?large|xxl|xl)\b/i);
   const colorMatch = String(text || '').match(
     /\b(black|white|off[\s-]?white|ivory|cream|red|blue|green|gold|silver|pink|beige|navy|blush|champagne)\b/i,
   );
@@ -210,7 +222,12 @@ function deterministicEntities(text) {
     orderNumber,
     email,
     phone: phoneMatch ? phoneMatch[0].replace(/\s+/g, '') : null,
-    budgetMax: budgetMatch ? Number(budgetMatch[1]) : null,
+    budgetMax:
+      budgetFromShorthand != null
+        ? budgetFromShorthand
+        : budgetMatch
+          ? Number(budgetMatch[1])
+          : null,
     size: sizeMatch
       ? normalizeSize(sizeMatch[1] || sizeMatch[0])
       : null,
@@ -287,10 +304,49 @@ function mergeDeterministic(text, llm) {
     if (v != null && v !== '') entities[k] = v;
   });
 
+  const {
+    detectPreferenceDeclined,
+    detectAiIdentityQuestion,
+    detectWhyReasonQuestion,
+  } = require('./assistant-engine/assistant-response-quality.service');
+
   // High-signal safety overrides for handoff / rejection without keyword soup for everything
   const lower = String(text || '').toLowerCase();
   let { primaryIntent, turnType, requestsHuman, rejectsPreviousAnswer, isCorrection, confidence } =
     base;
+  let searchNow = false;
+  let declinedOptionalPreferences = [];
+
+  if (detectAiIdentityQuestion(text)) {
+    primaryIntent = 'ai_identity_question';
+    turnType = 'ai_identity_question';
+    confidence = Math.max(confidence, 0.98);
+  }
+
+  if (detectWhyReasonQuestion(text)) {
+    primaryIntent = 'refund_reason';
+    turnType = 'new_intent';
+    confidence = Math.max(confidence, 0.95);
+  }
+
+  const declined = detectPreferenceDeclined(text);
+  if (declined.declined || declined.searchNow) {
+    searchNow = true;
+    declinedOptionalPreferences = declined.declinedFields || ['style', 'material'];
+    if (
+      primaryIntent === 'unknown' ||
+      primaryIntent === 'product_recommendation' ||
+      primaryIntent === 'product_search' ||
+      turnType === 'field_response' ||
+      turnType === 'workflow_continuation' ||
+      turnType === 'unknown' ||
+      turnType === 'casual_conversation'
+    ) {
+      primaryIntent = 'product_recommendation';
+      turnType = declined.searchNow ? 'show_results_now' : 'preference_declined';
+      confidence = Math.max(confidence, 0.95);
+    }
+  }
 
   if (
     /\b(agent|human|representative|customer service|real person|manager|supprot|support)\b/i.test(
@@ -340,7 +396,7 @@ function mergeDeterministic(text, llm) {
     ) {
       primaryIntent = 'refund_not_received';
       turnType = turnType === 'unknown' || turnType === 'casual_conversation' ? 'new_intent' : turnType;
-    } else if (/\brefund\b/i.test(lower)) {
+    } else if (/\brefund\b/i.test(lower) && !detectWhyReasonQuestion(text)) {
       primaryIntent = 'request_refund';
       turnType = turnType === 'unknown' || turnType === 'casual_conversation' ? 'new_intent' : turnType;
     } else if (/\b(wedding|dress|recommend|looking for|gown)\b/i.test(lower)) {
@@ -365,14 +421,16 @@ function mergeDeterministic(text, llm) {
     'shipping_status',
     'refund_not_received',
     'request_refund',
+    'refund_reason',
     'start_return',
     'product_recommendation',
     'product_search',
     'contact_support',
     'leave_contact_details',
+    'ai_identity_question',
   ]);
   let continueWithAI = Boolean(base.continueWithAI);
-  if (goalIntents.has(primaryIntent) || turnType === 'new_intent') {
+  if (goalIntents.has(primaryIntent) || turnType === 'new_intent' || turnType === 'show_results_now') {
     continueWithAI = false;
   }
   // Only keep continueWithAI when the customer is clearly declining handoff
@@ -395,6 +453,8 @@ function mergeDeterministic(text, llm) {
     isCorrection,
     continueWithAI,
     confidence,
+    searchNow,
+    declinedOptionalPreferences,
     source: llm ? 'merged' : 'deterministic',
     intent: normalizeIntent(primaryIntent),
   });

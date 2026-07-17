@@ -41,6 +41,21 @@ const { retrieveKnowledge } = require('./live-chat-knowledge.service');
 const { mergeLiveChatConfig } = require('./live-chat-config.service');
 const { resolveChannelAiConfig } = require('./ai-agent-config.service');
 const ContactRequest = require('../models/ContactRequest');
+const {
+  isProductSearchReady,
+  detectPreferenceDeclined,
+  detectAiIdentityQuestion,
+  detectWhyReasonQuestion,
+  buildAiIdentityReply,
+  buildAiIdentityFollowUp,
+  extractOrderReasonFields,
+  buildRefundReasonUnavailableText,
+  buildTrackingRefundedText,
+  buildClarificationRefundedText,
+  summarizePrefsForCustomer,
+  formatBudgetMajor,
+  parseBudgetShorthand,
+} = require('./assistant-engine/assistant-response-quality.service');
 
 const PIPELINE_BUILD = '2026-07-16-conv-v2';
 
@@ -87,12 +102,17 @@ function componentSemanticId(component) {
   return `${component.type}:once`;
 }
 
-async function emit(session, config, plan) {
+async function emit(session, config, plan, styleGuidance = '') {
   const state = session.workflowState;
   const rendered = await renderFromPlan(plan, {
     groqChat,
     isGroqConfigured: isGroqConfigured(),
     agentName: config.content.agentName,
+    styleGuidance:
+      styleGuidance ||
+      plan.ownerInstructions ||
+      session._assistantStyleGuidance ||
+      '',
   });
 
   // Drop components already shown this conversation unless data fingerprint changed
@@ -159,10 +179,18 @@ function resolveRoute(understanding, state) {
   const intent = understanding.primaryIntent;
   const turnType = understanding.turnType;
 
-  // Precedence: handoff → continue AI → correction → rejection → clarification →
+  // Precedence: handoff → AI identity → continue AI → correction → rejection → clarification →
   // confirmation → contact leave → explicit new intent → field response → continuation
   if (understanding.requestsHuman || turnType === 'handoff_request' || intent === 'contact_support') {
     return { route: 'handoff', intent: 'contact_support', reason: 'handoff_request' };
+  }
+
+  if (intent === 'ai_identity_question' || turnType === 'ai_identity_question') {
+    return { route: 'ai_identity', intent: 'ai_identity_question', reason: 'ai_identity' };
+  }
+
+  if (intent === 'refund_reason') {
+    return { route: 'refund_reason', intent: 'refund_reason', reason: 'why_reason' };
   }
 
   // continueWithAI is ONLY for canceling handoff / staying with AI — never when the
@@ -176,6 +204,7 @@ function resolveRoute(understanding, state) {
     'refund_status',
     'refund_not_received',
     'request_refund',
+    'refund_reason',
     'start_return',
     'exchange_item',
     'cancel_order',
@@ -193,6 +222,7 @@ function resolveRoute(understanding, state) {
     'missing_item',
     'payment_question',
     'discount_question',
+    'ai_identity_question',
   ]);
   if (
     (intent === 'continue_with_ai' ||
@@ -213,6 +243,13 @@ function resolveRoute(understanding, state) {
   }
   if (turnType === 'confirmation') {
     return { route: 'confirmation', intent, reason: 'confirmation' };
+  }
+  if (
+    turnType === 'preference_declined' ||
+    turnType === 'show_results_now' ||
+    understanding.searchNow
+  ) {
+    return { route: 'product', intent: 'product_recommendation', reason: 'search_now' };
   }
   if (turnType === 'cancellation' && intent !== 'leave_contact_details' && !explicitGoal.has(intent)) {
     return { route: 'continue_ai', intent: 'continue_with_ai', reason: 'cancellation' };
@@ -239,6 +276,7 @@ function resolveRoute(understanding, state) {
     'refund_status',
     'refund_not_received',
     'request_refund',
+    'refund_reason',
     'start_return',
     'exchange_item',
     'cancel_order',
@@ -252,6 +290,7 @@ function resolveRoute(understanding, state) {
     'store_policy_question',
     'leave_contact_details',
     'greeting',
+    'ai_identity_question',
   ]);
 
   if (turnType === 'new_intent' || (goalIntents.has(intent) && turnType !== 'field_response')) {
@@ -285,6 +324,8 @@ function mapIntentRoute(intent) {
     case 'refund_status':
     case 'refund_not_received':
       return 'refund_not_received';
+    case 'refund_reason':
+      return 'refund_reason';
     case 'request_refund':
     case 'start_return':
     case 'damaged_item':
@@ -305,6 +346,8 @@ function mapIntentRoute(intent) {
       return 'policy';
     case 'leave_contact_details':
       return 'contact_request';
+    case 'ai_identity_question':
+      return 'ai_identity';
     case 'greeting':
     case 'thank_you':
     case 'goodbye':
@@ -389,19 +432,27 @@ function trackingAnswer(card) {
   const ful = String(card.fulfillmentStatus || '').toLowerCase();
   const refunded = /refund/.test(fin);
   const cancelled = /cancel|void/.test(fin) || ful === 'cancelled';
+  const reasonFields = extractOrderReasonFields(card);
 
   if (refunded) {
     return {
       responseType: 'tracking_unavailable_refunded',
-      suggestedText: `Order #${card.orderNumber} does not have a shipment to track because it was refunded and restocked, so it will not ship.`,
+      suggestedText: buildTrackingRefundedText(card.orderNumber, card),
       includeCard: false,
       allowedFacts: {
         orderNumber: card.orderNumber,
         shipmentExists: false,
-        reason: 'refunded_restocked',
         financialStatus: card.financialStatus,
         fulfillmentStatus: card.fulfillmentStatus,
+        reasonDisplay: reasonFields.reasonDisplay,
+        reasonCustomerVisible: reasonFields.reasonCustomerVisible,
       },
+      verifiedReason: reasonFields.reasonCustomerVisible ? reasonFields.reasonDisplay : null,
+      forbiddenClaims: [
+        'The reason for the refund is',
+        'because it was restocked',
+        'consider this matter closed',
+      ],
     };
   }
   if (cancelled) {
@@ -440,7 +491,7 @@ function trackingAnswer(card) {
   }
   return {
     responseType: 'tracking_limited',
-    suggestedText: `Order #${card.orderNumber} shows fulfillment status “${card.fulfillmentStatus || 'unknown'}”, but live carrier tracking is not available yet.`,
+    suggestedText: `Order #${card.orderNumber} shows as ${card.fulfillmentStatus || 'in progress'}, but live carrier tracking is not available yet.`,
     includeCard: true,
     allowedFacts: {
       orderNumber: card.orderNumber,
@@ -496,11 +547,17 @@ async function handleTrack(company, session, state, config, understanding) {
     messageGoal: understanding.customerGoal || 'Answer shipping/tracking question',
     suggestedText: answer.suggestedText,
     allowedFacts: answer.allowedFacts,
+    verifiedReason: answer.verifiedReason || null,
+    deterministic: Boolean(answer.responseType?.includes('refunded') || answer.responseType?.includes('cancelled')),
     forbiddenClaims: [
       'Payment was returned',
       'Refund completed',
       'Money is in your account',
       'The financial status is',
+      'The reason for the refund is',
+      'because it was restocked',
+      'consider this matter closed',
+      ...(answer.forbiddenClaims || []),
     ],
     components: answer.includeCard ? [{ type: 'order_card', order: card }] : [],
     quickReplies: answer.responseType.includes('refund')
@@ -512,6 +569,79 @@ async function handleTrack(company, session, state, config, understanding) {
   });
   const msg = await emit(session, config, plan);
   return baseResult(session, [msg], { responsePlanType: answer.responseType });
+}
+
+async function handleRefundReason(company, session, state, config, understanding) {
+  setCurrentGoal(state, 'refund_reason', understanding.customerGoal || 'Explain refund reason');
+  let card = state.lastToolResults?.order_lookup?.card || null;
+  if (!card) {
+    const id = await ensureOrderIdentity(session, state, config, understanding);
+    if (id.blocked) return baseResult(session, id.messages);
+    const verification = await verifyOrderForSession(
+      session,
+      company,
+      state.collectedContext.orderNumber,
+      state.collectedContext.email,
+    );
+    if (verification?.order) {
+      card = enrichOrderCard(verification.order);
+      if (!state.lastToolResults || typeof state.lastToolResults !== 'object') {
+        state.lastToolResults = {};
+      }
+      state.lastToolResults.order_lookup = {
+        fingerprint: fingerprint([card.orderNumber, state.collectedContext.email]),
+        card,
+      };
+    }
+  }
+
+  if (!card) {
+    const plan = planResponse({
+      responseType: 'refund_reason_need_order',
+      suggestedText:
+        'I can check the refund status, but I need the order number and checkout email first.',
+      deterministic: true,
+      quickReplies: [{ id: 'handoff', label: 'Talk to support', action: 'handoff' }],
+    });
+    const msg = await emit(session, config, plan);
+    return baseResult(session, [msg], { responsePlanType: 'refund_reason_need_order' });
+  }
+
+  const reasonFields = extractOrderReasonFields(card);
+  const hasReason = Boolean(reasonFields.reasonCustomerVisible && reasonFields.reasonDisplay);
+  const body = hasReason
+    ? `Order #${String(card.orderNumber).replace(/^#+/, '')} was refunded. The recorded reason is: ${reasonFields.reasonDisplay}.`
+    : buildRefundReasonUnavailableText(card.orderNumber, card);
+
+  syncLegacyMirrors(session, state);
+  await session.save();
+  const plan = planResponse({
+    responseType: 'refund_reason',
+    messageGoal: 'State refund reason only if verified; otherwise say unavailable',
+    suggestedText: body,
+    deterministic: true,
+    answerKnown: hasReason,
+    answerUnavailableReason: hasReason ? null : 'refund_reason_not_present',
+    verifiedReason: hasReason ? reasonFields.reasonDisplay : null,
+    allowedFacts: {
+      orderNumber: card.orderNumber,
+      financialStatus: card.financialStatus,
+      fulfillmentStatus: card.fulfillmentStatus,
+      reasonDisplay: reasonFields.reasonDisplay,
+    },
+    forbiddenClaims: [
+      'The reason for the refund is that the item was refunded',
+      'The reason was that the item was restocked',
+      'because it was restocked',
+      'due to restock',
+    ],
+    quickReplies: [
+      { id: 'handoff', label: 'Talk to support', action: 'handoff' },
+    ],
+    customerFacingActions: hasReason ? [] : ['offer_handoff'],
+  });
+  const msg = await emit(session, config, plan);
+  return baseResult(session, [msg], { responsePlanType: 'refund_reason' });
 }
 
 async function handleRefundNotReceived(company, session, state, config, understanding) {
@@ -584,51 +714,94 @@ async function handleProduct(company, session, state, config, understanding) {
     reason: 'product',
   });
   mergeEntities(state, understanding.entities);
+
+  // Capture bare budget shorthand like "40k" into preferences
+  const budgetHint = parseBudgetShorthand(
+    understanding.entities?.budgetMax != null
+      ? String(understanding.entities.budgetMax)
+      : '',
+  );
+  if (understanding.entities?.budgetMax != null) {
+    state.collectedContext.productPreferences.budgetMax = Number(understanding.entities.budgetMax);
+  } else if (budgetHint != null) {
+    state.collectedContext.productPreferences.budgetMax = budgetHint;
+  }
+
+  const declined = {
+    searchNow: Boolean(understanding.searchNow) ||
+      understanding.turnType === 'show_results_now' ||
+      understanding.turnType === 'preference_declined',
+    declinedFields: understanding.declinedOptionalPreferences || [],
+  };
+  const searchNow = declined.searchNow;
+
+  if (searchNow || declined.declinedFields.length) {
+    const fields = [...declined.declinedFields];
+    const existing = Array.isArray(state.collectedContext.declinedOptionalPreferences)
+      ? state.collectedContext.declinedOptionalPreferences
+      : [];
+    state.collectedContext.declinedOptionalPreferences = [
+      ...new Set([...existing, ...fields, ...(searchNow ? ['style', 'material'] : [])]),
+    ];
+  }
+
   const prefs = state.collectedContext.productPreferences || {};
+  const declinedFields = state.collectedContext.declinedOptionalPreferences || [];
+  const currency = company.currency || 'USD';
+  const ready = isProductSearchReady(prefs, { searchNow, declined: declinedFields });
+
+  if (!ready) {
+    syncLegacyMirrors(session, state);
+    await session.save();
+    // Ask one relevant preference — avoid inventing catalogue categories
+    const suggestedText = prefs.occasion
+      ? 'What size and color are you looking for?'
+      : 'What are you shopping for? You can mention the occasion, size, color, or budget.';
+    const plan = planResponse({
+      responseType: 'product_need_prefs',
+      messageGoal: 'Ask one preference question',
+      suggestedText,
+      deterministic: true,
+      allowedFacts: { known: prefs },
+      mustNotAskAgain: declinedFields,
+    });
+    const msg = await emit(session, config, plan);
+    return baseResult(session, [msg], { responsePlanType: 'product_need_prefs' });
+  }
 
   const bits = [
     prefs.color,
     prefs.occasion,
     prefs.category,
     prefs.size,
-    prefs.style,
+    prefs.style && !declinedFields.includes('style') ? prefs.style : null,
     prefs.productQuery,
     understanding.entities.productQuery,
   ].filter(Boolean);
 
-  const enough =
-    bits.length >= 2 ||
-    (prefs.occasion && (prefs.size || prefs.color || prefs.budgetMax)) ||
-    (prefs.productQuery && String(prefs.productQuery).length > 3);
-
-  if (!enough) {
-    syncLegacyMirrors(session, state);
-    await session.save();
-    const plan = planResponse({
-      responseType: 'product_need_prefs',
-      messageGoal: 'Ask one broad preference question',
-      suggestedText:
-        'What are you shopping for? You can mention the occasion, style, size, color, or budget.',
-      allowedFacts: { known: prefs },
-    });
-    const msg = await emit(session, config, plan);
-    return baseResult(session, [msg], { responsePlanType: 'product_need_prefs' });
-  }
-
-  const q = bits.join(' ').slice(0, 120);
-  const products = await searchProducts(company._id, q, 4);
+  const q = bits.join(' ').slice(0, 120) || String(prefs.occasion || 'product');
+  const products = await searchProducts(company._id, q, 3);
   syncLegacyMirrors(session, state);
   await session.save();
 
   if (!products.length) {
     const plan = planResponse({
       responseType: 'product_no_results',
-      suggestedText:
-        "I couldn't find an exact match yet. Share another detail like budget, color, or style and I will search again.",
+      suggestedText: searchNow
+        ? "I searched with what you've shared, but I don't have matching products in the catalogue right now. I can connect you with support, or you can share a different color, size, or budget."
+        : "I couldn't find a close match with what you've shared. Share another detail like color or budget and I will search again.",
+      deterministic: true,
       allowedFacts: { query: q, prefs },
+      searchReady: true,
+      mustExecuteTool: true,
+      optionalFieldsDeclined: declinedFields,
+      mustNotAskAgain: declinedFields,
+      quickReplies: [
+        { id: 'handoff', label: 'Talk to support', action: 'handoff' },
+      ],
     });
     const msg = await emit(session, config, plan);
-    return baseResult(session, [msg]);
+    return baseResult(session, [msg], { responsePlanType: 'product_no_results' });
   }
 
   const cards = formatProductCards(products);
@@ -639,13 +812,30 @@ async function handleProduct(company, session, state, config, understanding) {
     fingerprint: fingerprint([q, prefs.size, prefs.color, prefs.budgetMax]),
     products: cards,
   };
+
+  const summary = summarizePrefsForCustomer(prefs, currency);
+  const intro = summary
+    ? `Sure. I'll use what you've shared: ${summary}.`
+    : 'Here are options that may fit.';
+
   const plan = planResponse({
     responseType: 'product_results',
     messageGoal: 'Present catalog matches without inventing stock',
-    suggestedText: 'Here are options that may fit. Tell me if you want a different size, color, or budget.',
-    allowedFacts: { query: q, count: cards.length, prefs },
+    suggestedText: `${intro} Tell me if you want a different size, color, or budget.`,
+    deterministic: true,
+    allowedFacts: {
+      query: q,
+      count: cards.length,
+      prefs,
+      budgetDisplay:
+        prefs.budgetMax != null ? formatBudgetMajor(prefs.budgetMax, currency) : null,
+    },
     forbiddenClaims: ['In stock forever', 'Arrives tomorrow'],
     components: [{ type: 'product_cards', products: cards }],
+    searchReady: true,
+    mustExecuteTool: true,
+    optionalFieldsDeclined: declinedFields,
+    mustNotAskAgain: declinedFields,
   });
   const msg = await emit(session, config, plan);
   return baseResult(session, [msg], { responsePlanType: 'product_results' });
@@ -721,14 +911,27 @@ async function handleHandoff(company, session, state, config, channelAi) {
         : HANDOFF_STATUSES.UNAVAILABLE;
     session.markModified('handoffState');
     await session.save();
-    const body = !availability.liveSupportEnabled
-      ? 'Live support is not available on this channel right now.'
-      : availability.reason === 'outside_business_hours'
-        ? `Our support team is currently offline.${next ? ` ${next}` : ''}`
-        : 'No support agents are available right now.';
+    let body;
+    if (!availability.liveSupportEnabled) {
+      body = 'Live support is not available on this channel right now.';
+    } else if (availability.reason === 'outside_business_hours') {
+      body = next
+        ? `Our support team is currently offline. ${next}`
+        : 'Our support team is currently offline.';
+    } else if (availability.reason === 'no_agents_online') {
+      body = 'No support agents are available right now.';
+    } else {
+      body = 'No support agents are available right now.';
+    }
     const plan = planResponse({
       responseType: 'agents_unavailable',
       suggestedText: body,
+      deterministic: true,
+      allowedFacts: {
+        reason: availability.reason,
+        nextOpening: availability.nextOpening?.displayText || null,
+        timezone: availability.timezone,
+      },
       quickReplies: [
         { id: 'contact', label: 'Leave contact details', action: 'start_contact_request' },
         { id: 'ai', label: 'Keep chatting with AI', action: 'cancel_handoff_and_continue_ai' },
@@ -875,21 +1078,71 @@ async function handleContactRequest(company, session, state, config, understandi
 
 async function handleClarification(session, state, config, understanding) {
   const last = state.lastResponsePlan || {};
+  const orderNumber =
+    last.allowedFacts?.orderNumber ||
+    state.verifiedContext?.orderNumber ||
+    state.collectedContext?.orderNumber ||
+    null;
+
+  let suggestedText;
+  if (
+    last.responseType === 'tracking_unavailable_refunded' ||
+    last.responseType === 'refund_reason'
+  ) {
+    suggestedText = buildClarificationRefundedText(orderNumber);
+  } else if (last.responseType === 'refund_not_received') {
+    suggestedText =
+      'It means the store marked or submitted a refund, but your bank or card provider may still be processing it before you see the money.';
+  } else {
+    suggestedText =
+      understanding.clarificationQuestion ||
+      'Happy to clarify. Which part was unclear: the order status, shipping, or refund?';
+  }
+
   const plan = planResponse({
     responseType: 'clarification',
-    messageGoal: 'Explain prior answer simply without repeating the same card dump',
-    suggestedText:
-      last.responseType === 'tracking_unavailable_refunded'
-        ? 'It means the store recorded a refund and will not ship that order, so there is no package tracking available.'
-        : last.responseType === 'refund_not_received'
-          ? 'It means the store marked or submitted a refund, but your bank or card provider may still be processing it before you see the money.'
-          : understanding.clarificationQuestion ||
-            'Happy to clarify. Which part was unclear: the order status, shipping, or refund?',
+    messageGoal: 'Explain prior answer simply without inventing reasons',
+    suggestedText,
+    deterministic: true,
     allowedFacts: last.allowedFacts || {},
+    verifiedReason: last.verifiedReason || null,
+    forbiddenClaims: [
+      'The reason for the refund is',
+      'because it was restocked',
+      'consider this matter closed',
+    ],
     components: [],
   });
   const msg = await emit(session, config, plan);
   return baseResult(session, [msg], { responsePlanType: 'clarification' });
+}
+
+async function handleAiIdentity(session, config, company) {
+  const agentName = config.content?.agentName || 'Support';
+  const storeName = company?.name || 'this store';
+  const askedBefore = session.workflowState?.lastResponsePlan?.responseType === 'ai_identity';
+  const body = askedBefore
+    ? buildAiIdentityFollowUp()
+    : buildAiIdentityReply({ agentName, storeName });
+  const plan = planResponse({
+    responseType: 'ai_identity',
+    messageGoal: 'Identify as store AI assistant without revealing providers or models',
+    suggestedText: body,
+    deterministic: true,
+    forbiddenClaims: [
+      'OpenAI',
+      'ChatGPT',
+      'Groq',
+      'Llama',
+      'Anthropic',
+      'Claude',
+      'language model',
+      'API',
+      'system prompt',
+    ],
+  });
+  const msg = await emit(session, config, plan);
+  return baseResult(session, [msg], { responsePlanType: 'ai_identity' });
 }
 
 async function handleRejection(company, session, state, config, understanding) {
@@ -967,43 +1220,58 @@ async function processConversationTurn({
   latestMessage,
   widgetAction = null,
   onStatus = null,
+  runtimeConfig = null,
+  authority = null,
+  precomputedUnderstanding = null,
+  precomputedRoute = null,
+  engineBuild = null,
 } = {}) {
   const requestId = crypto.randomBytes(8).toString('hex');
   const started = Date.now();
-  const config = mergeLiveChatConfig(company);
-  const channelAi = resolveChannelAiConfig(company, 'liveChat');
+  const config = runtimeConfig?.liveChatConfig || mergeLiveChatConfig(company);
+  const channelAi = runtimeConfig?.channelAi || resolveChannelAiConfig(company, 'liveChat');
+  const styleGuidance =
+    authority?.ownerStyleGuidance ||
+    runtimeConfig?.combinedBehavioralGuidance ||
+    channelAi.instructions ||
+    '';
   const text = String(latestMessage || '').trim();
 
   const state = ensureConversationState(session);
   ensureHandoffState(session);
+  session._assistantStyleGuidance = styleGuidance;
 
-  const understanding = await understandCustomerMessage(text, {
-    activeWorkflow: state.activeWorkflow,
-    workflowStep: state.workflowStep,
-    expectedFields: state.expectedFields,
-    currentGoal: state.currentGoal,
-    verifiedContext: state.verifiedContext,
-    collectedContext: state.collectedContext,
-    lastAssistantMessage: lastAssistantMessage(session),
-    lastResponsePlan: state.lastResponsePlan,
-    recentTurns: recentTurns(session, 10),
-  });
+  const understanding =
+    precomputedUnderstanding ||
+    (await understandCustomerMessage(text, {
+      activeWorkflow: state.activeWorkflow,
+      workflowStep: state.workflowStep,
+      expectedFields: state.expectedFields,
+      currentGoal: state.currentGoal,
+      verifiedContext: state.verifiedContext,
+      collectedContext: state.collectedContext,
+      lastAssistantMessage: lastAssistantMessage(session),
+      lastResponsePlan: state.lastResponsePlan,
+      recentTurns: recentTurns(session, 10),
+    }));
 
-  // Apply entities + corrections before routing
-  mergeEntities(state, understanding.entities, { isCorrection: understanding.isCorrection });
-  if (understanding.isCorrection || understanding.turnType === 'correction') {
-    applyCorrections(state, {
-      ...understanding.corrections,
-      orderNumber: understanding.entities.orderNumber,
-      email: understanding.entities.email,
-      phone: understanding.entities.phone,
-      productPreferences: {
-        size: understanding.entities.size,
-        color: understanding.entities.color,
-        occasion: understanding.entities.occasion,
-        budgetMax: understanding.entities.budgetMax,
-      },
-    });
+  // Apply entities + corrections before routing (skip if engine already applied)
+  if (!precomputedUnderstanding) {
+    mergeEntities(state, understanding.entities, { isCorrection: understanding.isCorrection });
+    if (understanding.isCorrection || understanding.turnType === 'correction') {
+      applyCorrections(state, {
+        ...understanding.corrections,
+        orderNumber: understanding.entities.orderNumber,
+        email: understanding.entities.email,
+        phone: understanding.entities.phone,
+        productPreferences: {
+          size: understanding.entities.size,
+          color: understanding.entities.color,
+          occasion: understanding.entities.occasion,
+          budgetMax: understanding.entities.budgetMax,
+        },
+      });
+    }
   }
 
   // Widget actions
@@ -1015,8 +1283,9 @@ async function processConversationTurn({
     forcedRoute = { route: 'handoff', intent: 'contact_support', reason: 'widget_action' };
   }
 
-  const route = forcedRoute || resolveRoute(understanding, state);
+  let route = precomputedRoute || forcedRoute || resolveRoute(understanding, state);
   if (
+    !precomputedUnderstanding &&
     !['correction', 'rejection', 'clarification', 'confirmation'].includes(route.route)
   ) {
     setCurrentGoal(state, route.intent || understanding.primaryIntent, understanding.customerGoal);
@@ -1038,16 +1307,36 @@ async function processConversationTurn({
     },
     resolvedRoute: route.route,
     routeReason: route.reason,
-    pipelineBuild: PIPELINE_BUILD,
+    pipelineBuild: engineBuild || PIPELINE_BUILD,
+    assistantConfigVersion: runtimeConfig?.assistantConfigVersion || null,
     legacyResponderCalled: false,
   };
 
   if (onStatus) onStatus('retrieving');
 
+  // Deterministic overrides from the raw customer message (beat LLM mislabels)
+  if (detectAiIdentityQuestion(text)) {
+    route = { route: 'ai_identity', intent: 'ai_identity_question', reason: 'ai_identity_override' };
+  } else if (detectWhyReasonQuestion(text)) {
+    route = { route: 'refund_reason', intent: 'refund_reason', reason: 'why_reason_override' };
+  } else if (detectPreferenceDeclined(text).searchNow) {
+    understanding.searchNow = true;
+    understanding.declinedOptionalPreferences = [
+      ...new Set([
+        ...(understanding.declinedOptionalPreferences || []),
+        ...detectPreferenceDeclined(text).declinedFields,
+      ]),
+    ];
+    route = { route: 'product', intent: 'product_recommendation', reason: 'search_now_override' };
+  }
+
   let result;
   switch (route.route) {
     case 'handoff':
       result = await handleHandoff(company, session, state, config, channelAi);
+      break;
+    case 'ai_identity':
+      result = await handleAiIdentity(session, config, company);
       break;
     case 'contact_request':
       result = await handleContactRequest(company, session, state, config, understanding, text);
@@ -1066,9 +1355,10 @@ async function processConversationTurn({
         result = await handleProduct(company, session, state, config, understanding);
       } else if (
         goalAfter === 'refund_not_received' ||
+        goalAfter === 'refund_reason' ||
         state.activeWorkflow === 'refund_investigation'
       ) {
-        result = await handleRefundNotReceived(company, session, state, config, understanding);
+        result = await handleRefundReason(company, session, state, config, understanding);
       } else if (
         goalAfter === 'request_refund' ||
         goalAfter === 'start_return' ||
@@ -1103,6 +1393,10 @@ async function processConversationTurn({
       if (onStatus) onStatus('checking_order');
       result = await handleTrack(company, session, state, config, understanding);
       break;
+    case 'refund_reason':
+      if (onStatus) onStatus('checking_order');
+      result = await handleRefundReason(company, session, state, config, understanding);
+      break;
     case 'refund_not_received':
       if (onStatus) onStatus('checking_order');
       result = await handleRefundNotReceived(company, session, state, config, understanding);
@@ -1130,6 +1424,7 @@ async function processConversationTurn({
       // Clarifying fallback — never silent legacy Groq
       const plan = planResponse({
         responseType: 'need_clarification',
+        deterministic: true,
         suggestedText:
           understanding.clarificationQuestion ||
           'I want to make sure I help with the right thing. Are you looking for order tracking, a refund, a return, or a product recommendation?',
@@ -1146,8 +1441,16 @@ async function processConversationTurn({
     }
   }
 
+  // Re-render is not applied to handlers that called emit() internally without style.
+  // When runtimeConfig is present, stamp ownerInstructions onto last plan for audits.
+  if (runtimeConfig && state.lastResponsePlan) {
+    state.lastResponsePlan.ownerInstructions = styleGuidance;
+    state.lastResponsePlan.assistantConfigVersion = runtimeConfig.assistantConfigVersion;
+  }
+
   syncLegacyMirrors(session, state);
   await session.save();
+  delete session._assistantStyleGuidance;
 
   debug.activeWorkflowAfter = state.activeWorkflow;
   debug.durationMs = Date.now() - started;
@@ -1159,7 +1462,7 @@ async function processConversationTurn({
     understanding,
     conversationState: state,
     turnDebug: debug,
-    orchestratorBuild: PIPELINE_BUILD,
+    orchestratorBuild: engineBuild || PIPELINE_BUILD,
   };
 }
 

@@ -378,6 +378,19 @@ const companySchema = new mongoose.Schema(
 
     // Multi-channel AI Agent — shared defaults (liveChat.ai) + optional per-channel overrides
     aiAgent: {
+      /** Monotonic version bumped when owner AI/knowledge/hours/integration config changes */
+      assistantConfigVersion: { type: Number, default: 1 },
+      assistantConfigVersionUpdatedAt: { type: Date },
+      assistantConfigVersionReason: { type: String },
+      /**
+       * Per-workspace engine selector (overrides global AI_CONVERSATION_PIPELINE when set):
+       * v2 | v3 | shadow | v1
+       */
+      assistantEngine: {
+        type: String,
+        enum: ['v1', 'v2', 'v3', 'shadow'],
+        default: undefined,
+      },
       enabledChannels: {
         liveChat: { type: Boolean, default: true },
         email: { type: Boolean, default: false },

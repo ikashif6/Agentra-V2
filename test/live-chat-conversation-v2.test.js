@@ -190,8 +190,12 @@ describe('trackingAnswer goal separation', () => {
     });
     assert.equal(answer.responseType, 'tracking_unavailable_refunded');
     assert.equal(answer.includeCard, false);
-    assert.match(answer.suggestedText, /does not have a shipment/i);
+    assert.equal(/\brestock/i.test(answer.suggestedText), false);
+    assert.match(answer.suggestedText, /refunded/i);
+    assert.match(answer.suggestedText, /shipment to track/i);
     assert.doesNotMatch(answer.suggestedText, /financial status is/i);
+    assert.doesNotMatch(answer.suggestedText, /because/i);
+    assert.doesNotMatch(answer.suggestedText, /matter closed/i);
   });
 
   it('reports not shipped for unfulfilled', () => {

@@ -189,6 +189,8 @@ function getAiAgentConfig(company, channelKey = null) {
     requireOrderVerification: Boolean(liveChat.behavior?.requireOrderVerification),
     handoffOnlyInBusinessHours: Boolean(liveChat.behavior?.handoffOnlyInBusinessHours),
     liveChatAiEnabled: liveChat.ai?.enabled !== false,
+    assistantConfigVersion: Number(stored.assistantConfigVersion) > 0 ? Number(stored.assistantConfigVersion) : 1,
+    assistantEngine: stored.assistantEngine || null,
   };
 
   if (channelKey && AI_CHANNEL_KEYS.includes(channelKey)) {
@@ -335,6 +337,24 @@ async function updateAiAgentConfig(company, body = {}) {
   company.markModified('aiAgent');
   company.markModified('liveChat');
   await company.save();
+  try {
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState === 1 && company._id) {
+      const { bumpAssistantConfigVersion } = require('./assistant-engine/assistant-config-version.service');
+      const { clearRuntimeConfigCache } = require('./assistant-engine/assistant-runtime-config.service');
+      await bumpAssistantConfigVersion(company._id, 'ai_agent_settings');
+      clearRuntimeConfigCache(String(company._id));
+      const refreshed = await require('../models/Company')
+        .findById(company._id)
+        .select('aiAgent.assistantConfigVersion');
+      if (refreshed?.aiAgent?.assistantConfigVersion != null) {
+        company.aiAgent = company.aiAgent || {};
+        company.aiAgent.assistantConfigVersion = refreshed.aiAgent.assistantConfigVersion;
+      }
+    }
+  } catch (err) {
+    console.warn('[ai-agent-config] version bump failed', err.message);
+  }
   return getAiAgentConfig(company);
 }
 

@@ -15,6 +15,17 @@ const {
 const { createKnowledgeFromDocument } = require('../services/live-chat-knowledge-upload.service');
 const { syncStoreProducts } = require('../services/product-sync.service');
 const { syncWidgetInstall, uninstallShopifyWidget } = require('../services/live-chat-shopify.service');
+const { bumpAssistantConfigVersion } = require('../services/assistant-engine/assistant-config-version.service');
+const { clearRuntimeConfigCache } = require('../services/assistant-engine/assistant-runtime-config.service');
+
+async function bumpConfigAfterWrite(companyId, reason) {
+  try {
+    await bumpAssistantConfigVersion(companyId, reason);
+    clearRuntimeConfigCache(String(companyId));
+  } catch (err) {
+    console.warn('[live-chat] assistant config version bump failed', err.message);
+  }
+}
 
 const STORE_SECRET_SELECT =
   '+storeIntegration.shopify.accessToken ' +
@@ -126,6 +137,10 @@ exports.updateSettings = async (req, res, next) => {
     }
 
     await company.save();
+
+    if (body.ai || body.behavior) {
+      await bumpConfigAfterWrite(company._id, 'live_chat_settings');
+    }
 
     if (body.syncProducts) {
       try {
@@ -246,6 +261,7 @@ exports.createKnowledge = async (req, res, next) => {
       active: req.body.active !== false,
       sortOrder: req.body.sortOrder ?? 0,
     });
+    await bumpConfigAfterWrite(req.company._id, 'knowledge_create');
     return response.created(res, { article }, 'Knowledge article created');
   } catch (err) {
     next(err);
@@ -257,6 +273,7 @@ exports.uploadKnowledgeDocument = async (req, res, next) => {
     const file = req.file;
     if (!file) return response.badRequest(res, 'Choose a PDF, TXT, MD, or CSV file');
     const result = await createKnowledgeFromDocument(req.company._id, file);
+    await bumpConfigAfterWrite(req.company._id, 'knowledge_import');
     return response.created(
       res,
       {
@@ -278,6 +295,7 @@ exports.updateKnowledge = async (req, res, next) => {
   try {
     const article = await updateKnowledge(req.company._id, req.params.id, req.body);
     if (!article) return response.notFound(res, 'Article not found');
+    await bumpConfigAfterWrite(req.company._id, 'knowledge_update');
     return response.success(res, { article }, 'Knowledge article updated');
   } catch (err) {
     if (err.statusCode === 400) return response.badRequest(res, err.message);
@@ -289,6 +307,7 @@ exports.deleteKnowledge = async (req, res, next) => {
   try {
     const article = await deleteKnowledge(req.company._id, req.params.id);
     if (!article) return response.notFound(res, 'Article not found');
+    await bumpConfigAfterWrite(req.company._id, 'knowledge_delete');
     return response.success(res, {}, 'Knowledge article deleted');
   } catch (err) {
     next(err);
@@ -299,6 +318,7 @@ exports.syncProducts = async (req, res, next) => {
   try {
     const company = await Company.findById(req.company._id).select(STORE_SECRET_SELECT);
     const result = await syncStoreProducts(company);
+    await bumpConfigAfterWrite(req.company._id, 'product_sync');
     return response.success(res, result, 'Products synced');
   } catch (err) {
     if (err.message && !err.statusCode) return response.badRequest(res, err.message);

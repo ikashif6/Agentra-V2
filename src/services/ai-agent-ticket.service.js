@@ -275,7 +275,8 @@ async function appendAiMessageAndSend(company, ticket, agentName, replyText) {
   ticket.messages.push({
     sender: sender._id,
     senderEmail: 'bot@agentra.local',
-    body: `[${agentName}] ${text}`,
+    senderName: agentName || undefined,
+    body: text,
     attachments: [],
     isInternal: false,
     isAi: true,

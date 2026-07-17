@@ -38,6 +38,10 @@ const {
 } = require('./live-chat-workflow.service');
 const { orchestrateTurn } = require('./live-chat-orchestrator.service');
 const { processConversationTurn } = require('./live-chat-conversation.service');
+const {
+  processTurn: processAssistantTurn,
+  resolveEngineMode,
+} = require('./assistant-engine/assistant-engine.service');
 
 const SUPPORT_PLAYBOOK = `You are a live store support agent for THIS store only.
 - Sound like a real human support rep: warm, clear, and brief (2–4 short sentences unless listing products).
@@ -456,12 +460,72 @@ async function processCustomerMessage(company, session, text, { onStatus, widget
     });
   }
 
-  // Authoritative conversational pipeline (v2) — no competing responders
+  // Authoritative conversational pipeline — v3 engine, v2 rollback, or legacy v1
   if (onStatus) onStatus('retrieving');
-  const useV2 =
-    String(process.env.AI_CONVERSATION_PIPELINE || 'v2').toLowerCase() !== 'v1';
+  const engineMode = resolveEngineMode(company);
 
-  if (useV2) {
+  if (engineMode === 'v3' || engineMode === 'shadow') {
+    const turned = await processAssistantTurn({
+      workspace: company,
+      channel: 'liveChat',
+      session,
+      message: trimmed,
+      widgetAction: widgetAction || null,
+      onStatus,
+      mode: engineMode,
+    });
+
+    if (engineMode === 'shadow') {
+      // Shadow: analysis only; v2 still answers customers
+      const v2 = await processConversationTurn({
+        company,
+        session,
+        latestMessage: trimmed,
+        widgetAction: widgetAction || null,
+        onStatus,
+      });
+      if (v2?.forceHandoff) {
+        const handoffResult = await attemptHumanHandoff(company, session, config, channelAi);
+        return {
+          ...handoffResult,
+          turnDebug: {
+            ...(v2.turnDebug || {}),
+            shadow: turned?.turnDebug || null,
+            handled: true,
+            legacyGroqCalled: false,
+            responsePlanType: 'force_handoff_queue',
+          },
+          orchestratorBuild: v2.orchestratorBuild,
+        };
+      }
+      if (v2?.handled) {
+        return {
+          ...v2,
+          turnDebug: {
+            ...(v2.turnDebug || {}),
+            shadow: turned?.turnDebug || null,
+          },
+        };
+      }
+    } else {
+      if (turned?.forceHandoff) {
+        const handoffResult = await attemptHumanHandoff(company, session, config, channelAi);
+        return {
+          ...handoffResult,
+          turnDebug: {
+            ...(turned.turnDebug || {}),
+            handled: true,
+            legacyGroqCalled: false,
+            responsePlanType: 'force_handoff_queue',
+          },
+          orchestratorBuild: turned.orchestratorBuild,
+        };
+      }
+      if (turned?.handled) {
+        return turned;
+      }
+    }
+  } else if (engineMode !== 'v1') {
     const turned = await processConversationTurn({
       company,
       session,

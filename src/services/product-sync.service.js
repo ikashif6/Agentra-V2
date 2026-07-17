@@ -101,9 +101,13 @@ async function syncStoreProducts(company, { limit = 100 } = {}) {
   let products = [];
 
   if (integration.provider === 'shopify') {
+    const accessToken = secrets.shopify.accessToken;
+    if (!accessToken) {
+      throw new Error('Shopify access token is missing. Disconnect and reconnect the store.');
+    }
     products = await fetchShopifyProducts(
       integration.shopify.shopDomain,
-      secrets.shopify.accessToken,
+      accessToken,
       limit,
     );
   } else if (integration.provider === 'woocommerce') {

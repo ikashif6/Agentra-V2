@@ -31,6 +31,7 @@ const {
   customWebhookAddress,
 } = require('../services/store-oauth.service');
 const { syncStoreOrders, findOrdersForCustomer } = require('../services/store-sync.service');
+const { syncStoreProducts } = require('../services/product-sync.service');
 const { cancelStoreOrder, fulfillStoreOrder, getStoreOrderDetail, runStoreOrderAction, updateStoreOrder } = require('../services/store-order-actions.service');
 const { logStoreConnected, logStoreDisconnected } = require('../services/activity.service');
 
@@ -48,6 +49,19 @@ function loadCompanyWithStoreSecrets(companyId) {
 
 function getIntegration(company) {
   return company.storeIntegration || {};
+}
+
+/**
+ * Patch storeIntegration fields without loading select:false secrets.
+ * Assigning company.storeIntegration from req.company (secrets omitted) wipes the token.
+ */
+function patchStoreIntegrationFields(companyId, fields) {
+  const $set = {};
+  for (const [key, value] of Object.entries(fields || {})) {
+    $set[`storeIntegration.${key}`] = value;
+  }
+  if (!Object.keys($set).length) return Promise.resolve();
+  return Company.updateOne({ _id: companyId }, { $set });
 }
 
 // Fire-and-forget initial sync so the connect request returns quickly.
@@ -546,18 +560,68 @@ exports.updateSettings = async (req, res, next) => {
       return response.badRequest(res, 'Connect a store before updating sync settings');
     }
     const { syncSettings } = req.body;
+    const nextSyncSettings = syncSettings
+      ? {
+          syncOrders: syncSettings.syncOrders !== false,
+          syncCustomers: syncSettings.syncCustomers !== false,
+          syncProducts: Boolean(syncSettings.syncProducts),
+        }
+      : integration.syncSettings;
+
     if (syncSettings) {
-      integration.syncSettings = {
-        syncOrders: syncSettings.syncOrders !== false,
-        syncCustomers: syncSettings.syncCustomers !== false,
-        syncProducts: Boolean(syncSettings.syncProducts),
-      };
+      // Only patch syncSettings — never replace storeIntegration (wipes select:false secrets).
+      await patchStoreIntegrationFields(company._id, { syncSettings: nextSyncSettings });
+      if (company.storeIntegration) {
+        company.storeIntegration.syncSettings = nextSyncSettings;
+      }
     }
-    company.storeIntegration = integration;
-    await company.save();
+
+    let productsSynced = null;
+    if (nextSyncSettings?.syncProducts) {
+      try {
+        const withSecrets = await loadCompanyWithStoreSecrets(company._id);
+        const productResult = await syncStoreProducts(withSecrets);
+        productsSynced = productResult.synced;
+        await patchStoreIntegrationFields(company._id, {
+          lastSyncAt: new Date(),
+          lastError: null,
+        });
+        if (company.storeIntegration) {
+          company.storeIntegration.lastError = null;
+          company.storeIntegration.lastSyncAt = new Date();
+        }
+        try {
+          const { bumpAssistantConfigVersion } = require('../services/assistant-engine/assistant-config-version.service');
+          const { clearRuntimeConfigCache } = require('../services/assistant-engine/assistant-runtime-config.service');
+          await bumpAssistantConfigVersion(company._id, 'product_sync');
+          clearRuntimeConfigCache(String(company._id));
+        } catch (bumpErr) {
+          console.warn('[store] assistant config version bump failed', bumpErr.message);
+        }
+      } catch (syncErr) {
+        await patchStoreIntegrationFields(company._id, { lastError: syncErr.message });
+        if (company.storeIntegration) {
+          company.storeIntegration.lastError = syncErr.message;
+        }
+      }
+    }
+
+    try {
+      const { bumpAssistantConfigVersion } = require('../services/assistant-engine/assistant-config-version.service');
+      const { clearRuntimeConfigCache } = require('../services/assistant-engine/assistant-runtime-config.service');
+      await bumpAssistantConfigVersion(company._id, 'store_settings');
+      clearRuntimeConfigCache(String(company._id));
+    } catch (err) {
+      console.warn('[store] assistant config version bump failed', err.message);
+    }
+
+    const fresh = await Company.findById(company._id).select('storeIntegration');
     return response.success(
       res,
-      { store: sanitizeStoreIntegration(company.storeIntegration) },
+      {
+        store: sanitizeStoreIntegration(fresh?.storeIntegration || company.storeIntegration),
+        productsSynced,
+      },
       'Store settings updated',
     );
   } catch (err) {
@@ -616,12 +680,10 @@ exports.testConnection = async (req, res, next) => {
     );
   } catch (err) {
     try {
-      const company = req.company;
-      const integration = getIntegration(company);
-      integration.status = 'error';
-      integration.lastError = err.message;
-      company.storeIntegration = integration;
-      await company.save();
+      await patchStoreIntegrationFields(req.company._id, {
+        status: 'error',
+        lastError: err.message,
+      });
     } catch {
       /* ignore secondary failure */
     }
@@ -644,6 +706,19 @@ exports.syncNow = async (req, res, next) => {
     }
 
     const result = await syncStoreOrders(company);
+    let productsSynced = null;
+    if (integration.syncSettings?.syncProducts) {
+      const productResult = await syncStoreProducts(company);
+      productsSynced = productResult.synced;
+      try {
+        const { bumpAssistantConfigVersion } = require('../services/assistant-engine/assistant-config-version.service');
+        const { clearRuntimeConfigCache } = require('../services/assistant-engine/assistant-runtime-config.service');
+        await bumpAssistantConfigVersion(company._id, 'product_sync');
+        clearRuntimeConfigCache(String(company._id));
+      } catch (bumpErr) {
+        console.warn('[store] assistant config version bump failed', bumpErr.message);
+      }
+    }
 
     integration.lastSyncAt = new Date();
     integration.lastError = null;
@@ -652,16 +727,18 @@ exports.syncNow = async (req, res, next) => {
 
     return response.success(
       res,
-      { store: sanitizeStoreIntegration(company.storeIntegration), synced: result.synced },
-      `Synced ${result.synced} orders`,
+      {
+        store: sanitizeStoreIntegration(company.storeIntegration),
+        synced: result.synced,
+        productsSynced,
+      },
+      productsSynced != null
+        ? `Synced ${result.synced} orders and ${productsSynced} products`
+        : `Synced ${result.synced} orders`,
     );
   } catch (err) {
     try {
-      const company = req.company;
-      const integration = getIntegration(company);
-      integration.lastError = err.message;
-      company.storeIntegration = integration;
-      await company.save();
+      await patchStoreIntegrationFields(req.company._id, { lastError: err.message });
     } catch {
       /* ignore */
     }

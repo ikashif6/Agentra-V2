@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { InboxReplyComposer } from "@/components/inbox/inbox-reply-composer";
-import { FormattedMessageBody } from "@/lib/format-message-body";
+import { FormattedMessageBody, extractTicketSenderPrefix, stripTicketSenderPrefix } from "@/lib/format-message-body";
 import { messageHtmlToPlain, isMessageHtml } from "@/lib/sanitize-message-html";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -78,7 +78,98 @@ const createSchema = z.object({
   ticket_title: z.string().min(1, "Title required").max(200),
   ticket_description: z.string().min(1, "Description required"),
 });
+
 type CreateForm = z.infer<typeof createSchema>;
+
+function customerEmailFromTicket(ticket: Ticket) {
+  const detailsEmail = ticket.details?.customerEmail?.trim();
+  if (detailsEmail) return detailsEmail;
+
+  const customer = ticket.peoples?.find((p) => p.role === "customer")?.user;
+  if (customer && typeof customer === "object" && customer.email) return customer.email;
+
+  if (ticket.createdBy && typeof ticket.createdBy === "object" && ticket.createdBy.email) {
+    return ticket.createdBy.email;
+  }
+
+  return "";
+}
+
+function customerLabel(ticket: Ticket) {
+  // Live-chat visitors identify by the email they entered — prefer that over stored first names.
+  const email = customerEmailFromTicket(ticket);
+  if ((ticket.source === "chatbot" || ticket.source === "chat") && email) return email;
+
+  const customer = ticket.peoples?.find((p) => p.role === "customer")?.user;
+  if (customer && typeof customer === "object") {
+    return formatUserDisplayName(customer, email || "Customer");
+  }
+  if (ticket.createdBy && typeof ticket.createdBy === "object") {
+    return formatUserDisplayName(ticket.createdBy, email || "Customer");
+  }
+  return email || "Customer";
+}
+
+function lastPreview(ticket: Ticket) {
+  const last = ticket.messages?.[ticket.messages.length - 1];
+  const raw = stripTicketSenderPrefix(last?.body ?? ticket.ticket_description ?? "");
+  const plain = isMessageHtml(raw) ? messageHtmlToPlain(raw) : raw;
+  return plain.replace(/\s+/g, " ").trim().slice(0, 120);
+}
+
+/** Agent / AI replies sit on the right; customer messages on the left. */
+function isSystemMessage(msg: TicketMessage) {
+  return Boolean(msg.isSystem || msg.contentType === "system_event");
+}
+
+function isOutboundMessage(msg: TicketMessage, currentUserId?: string) {
+  if (isSystemMessage(msg)) return false;
+  if (msg.isAi) return true;
+  const email = String(msg.senderEmail || "").toLowerCase();
+  if (email.includes("bot@agentra")) return true;
+  if (email.includes("system@agentra")) return false;
+
+  if (typeof msg.sender === "object" && msg.sender) {
+    if (currentUserId && msg.sender._id === currentUserId) return true;
+    if (["agent", "admin", "owner"].includes(msg.sender.role)) return true;
+  }
+
+  return false;
+}
+
+function messageSenderLabel(msg: TicketMessage) {
+  if (isSystemMessage(msg)) return "System";
+  if (msg.isAi || String(msg.senderEmail || "").toLowerCase().includes("bot@agentra")) {
+    const named =
+      msg.senderName?.trim() ||
+      extractTicketSenderPrefix(msg.body) ||
+      "";
+    if (named && !/customer|visitor/i.test(named)) {
+      return named;
+    }
+    return "Support Assistant";
+  }
+
+  const email =
+    msg.senderEmail ||
+    (typeof msg.sender === "object" && msg.sender ? msg.sender.email : "") ||
+    "";
+
+  // Customer / visitor bubbles: show the email they entered, not a stored first name.
+  if (typeof msg.sender === "object" && msg.sender?.role === "customer") {
+    return email || formatUserDisplayName(msg.sender, "Customer");
+  }
+  if (email && !["agent", "admin", "owner"].includes(
+    typeof msg.sender === "object" && msg.sender ? msg.sender.role : "",
+  )) {
+    return email;
+  }
+
+  if (typeof msg.sender === "object" && msg.sender) {
+    return formatUserDisplayName(msg.sender, email || "Agent");
+  }
+  return email || "Unknown";
+}
 
 // Channel filters shared by Inbox + AI Agent (ownership decides which surface lists them).
 const CHANNEL_FILTERS: { id: string; label: string; source?: TicketSource }[] = [
@@ -120,59 +211,6 @@ function hasTimeGap(prev?: string, current?: string) {
   if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return false;
   if (a.toDateString() !== b.toDateString()) return true;
   return b.getTime() - a.getTime() > 15 * 60 * 1000;
-}
-
-function customerLabel(ticket: Ticket) {
-  const customer = ticket.peoples?.find((p) => p.role === "customer")?.user;
-  if (customer && typeof customer === "object") {
-    return formatUserDisplayName(customer, "Customer");
-  }
-  if (ticket.createdBy && typeof ticket.createdBy === "object") {
-    return formatUserDisplayName(ticket.createdBy, ticket.createdBy.email || "Customer");
-  }
-  return "Customer";
-}
-
-function lastPreview(ticket: Ticket) {
-  const last = ticket.messages?.[ticket.messages.length - 1];
-  const raw = last?.body ?? ticket.ticket_description ?? "";
-  const plain = isMessageHtml(raw) ? messageHtmlToPlain(raw) : raw;
-  return plain.replace(/\s+/g, " ").trim().slice(0, 120);
-}
-
-/** Agent / AI replies sit on the right; customer messages on the left. */
-function isSystemMessage(msg: TicketMessage) {
-  return Boolean(msg.isSystem || msg.contentType === "system_event");
-}
-
-function isOutboundMessage(msg: TicketMessage, currentUserId?: string) {
-  if (isSystemMessage(msg)) return false;
-  if (msg.isAi) return true;
-  const email = String(msg.senderEmail || "").toLowerCase();
-  if (email.includes("bot@agentra")) return true;
-  if (email.includes("system@agentra")) return false;
-
-  if (typeof msg.sender === "object" && msg.sender) {
-    if (currentUserId && msg.sender._id === currentUserId) return true;
-    if (["agent", "admin", "owner"].includes(msg.sender.role)) return true;
-  }
-
-  return false;
-}
-
-function messageSenderLabel(msg: TicketMessage) {
-  if (isSystemMessage(msg)) return "System";
-  if (msg.isAi || String(msg.senderEmail || "").toLowerCase().includes("bot@agentra")) {
-    const tagged = String(msg.body || "").match(/^\[([^\]]+)\]\s*/);
-    if (tagged?.[1] && !/customer|visitor/i.test(tagged[1])) {
-      return tagged[1].replace(/\s*-\s*$/, "").trim() || "Support Assistant";
-    }
-    return "Support Assistant";
-  }
-  if (typeof msg.sender === "object" && msg.sender) {
-    return formatUserDisplayName(msg.sender, msg.senderEmail || "Agent");
-  }
-  return msg.senderEmail || "Unknown";
 }
 
 function systemEventLabel(msg: TicketMessage) {

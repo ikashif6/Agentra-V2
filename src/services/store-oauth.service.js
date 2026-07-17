@@ -247,7 +247,26 @@ function buildShopifyInstallUrl({
     );
   }
   const domain = normalizeShopDomain(shopDomain);
-  const customInstallUrl = buildShopifyCustomInstallUrl(domain);
+  let customInstallUrl;
+  try {
+    customInstallUrl = buildShopifyCustomInstallUrl(domain);
+  } catch (err) {
+    // A custom-distribution link is only required for the first installation.
+    // If Shopify's signed link has expired but the app remains installed, run
+    // OAuth again to recover a workspace token without asking the merchant to
+    // reinstall the app.
+    if (!/install link has expired/i.test(String(err?.message || ''))) {
+      throw err;
+    }
+    return buildShopifyAuthorizeUrl({
+      shopDomain: domain,
+      companyId,
+      subdomain,
+      userId,
+      returnOrigin,
+      returnPath,
+    });
+  }
   if (customInstallUrl) {
     return customInstallUrl;
   }
