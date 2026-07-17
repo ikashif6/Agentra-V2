@@ -851,13 +851,6 @@ exports.updateTicket = async (req, res, next) => {
             session.lastActivityAt = new Date();
             await session.save();
             broadcastToSession(String(company._id), session.sessionToken, {
-              type: 'system_event',
-              data: {
-                event: 'agent_joined',
-                agentName: agentDisplayName(assigneeUser),
-              },
-            });
-            broadcastToSession(String(company._id), session.sessionToken, {
               type: 'message',
               data: systemMsg,
             });

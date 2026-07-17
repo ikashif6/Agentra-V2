@@ -42,7 +42,7 @@ async function groqClassify(text) {
         {
           role: 'system',
           content:
-            'Classify the customer message into one intent: order_status, refund, cancel, product_search, policy, human_handoff, greeting, general. Reply with only the intent slug.',
+            'Classify the customer message into one intent: order_status, refund, cancel, product_search, policy, human_handoff, greeting, off_topic, general. Use off_topic for questions unrelated to this store (travel, hotels, news, other brands). Reply with only the intent slug.',
         },
         { role: 'user', content: String(text).slice(0, 500) },
       ],

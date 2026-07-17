@@ -8,6 +8,11 @@
     "dev": "nodemon src/server.js",
     "dev:client": "npm run dev --prefix client",
     "build": "vite build",
+    "test": "node --test test/**/*.test.js",
+    "test:live-chat": "node --test test/live-chat-orchestration.test.js test/live-chat-orchestration-extended.test.js test/live-chat-turn-route.test.js test/live-chat-conversation-sequence.test.js test/live-chat-conversation-v2.test.js",
+    "eval:live-chat": "node scripts/eval-live-chat.js",
+    "eval:live-chat:conversations": "node scripts/eval-live-chat-conversations.js",
+    "eval:live-chat:model": "node scripts/eval-live-chat-model.js",
     "build:widget": "npm run build --prefix widget",
     "dev:widget": "npm run dev --prefix widget"
   },

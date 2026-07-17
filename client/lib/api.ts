@@ -236,6 +236,7 @@ export const activityLogApi = {
 
 export const workspaceApi = {
   getBranding: () => api.get("/workspace/branding"),
+  getSetupStatus: () => api.get("/workspace/setup-status"),
   updateBranding: (data: {
     primaryColor?: string;
     theme?: "light" | "dark" | "system";

@@ -146,10 +146,14 @@ const companySchema = new mongoose.Schema(
       country: String,
     },
 
-    // Home setup checklist — steps only count done after intentional setup actions
+    // Home setup checklist — sticky done flags (once true, stay true) + completedAt
     setupChecklist: {
+      store: { type: Boolean, default: false },
+      channels: { type: Boolean, default: false },
+      ai: { type: Boolean, default: false },
       workspace: { type: Boolean, default: false },
       team: { type: Boolean, default: false },
+      completedAt: { type: Date },
     },
 
     // Plan & billing
@@ -313,13 +317,23 @@ const companySchema = new mongoose.Schema(
         },
         welcomeMessage: {
           type: String,
-          default: "I'm here to help with orders, products, and store questions.",
+          default:
+            "Hi! Welcome — I can help with orders, products, returns, and store questions. How can I help you today?",
         },
         emailGateTitle: { type: String, default: 'Start a conversation' },
         emailGateSubtitle: {
           type: String,
-          default: 'Enter your email so we can help you with your orders.',
+          default: 'Enter your email so we can follow up with you.',
         },
+        privacyNotice: {
+          type: String,
+          default:
+            'This chat is AI-powered for faster assistance. Chats are monitored and recorded.',
+        },
+        privacyPolicyLabel: { type: String, default: 'Privacy Policy' },
+        privacyPolicyUrl: { type: String, default: '' },
+        askAnythingLabel: { type: String, default: 'Ask me anything' },
+        followUpReplies: [{ type: String, trim: true }],
         offlineMessage: {
           type: String,
           default: 'Our team is currently away. The assistant can still help, or you can leave a message.',
@@ -338,7 +352,13 @@ const companySchema = new mongoose.Schema(
         instructions: { type: String, default: '' },
         escalationKeywords: {
           type: [String],
-          default: ['human', 'agent', 'representative', 'speak to someone', 'manager'],
+          default: [
+            'talk to a human',
+            'speak to someone',
+            'real person',
+            'human agent',
+            'connect me with an agent',
+          ],
         },
         allowedActions: {
           lookupOrder: { type: Boolean, default: true },

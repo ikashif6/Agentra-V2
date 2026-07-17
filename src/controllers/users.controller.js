@@ -242,6 +242,22 @@ exports.inviteUser = async (req, res, next) => {
       $set: { 'setupChecklist.team': true },
     });
 
+    // If every other setup step is already sticky-done, stamp completedAt
+    const fresh = await Company.findById(company._id).select('setupChecklist');
+    const c = fresh?.setupChecklist;
+    if (
+      c?.store
+      && c?.channels
+      && c?.ai
+      && c?.workspace
+      && c?.team
+      && !c?.completedAt
+    ) {
+      await Company.findByIdAndUpdate(company._id, {
+        $set: { 'setupChecklist.completedAt': new Date() },
+      });
+    }
+
     logUserInvited({ company, actor: req.user, target: user, req });
 
     return response.created(res, {

@@ -18,16 +18,300 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
   let isOpen = false;
   let inChat = false;
   let emailVerified = false;
+  let freeHandMode = false;
   let lastMessageTs = null;
   let messagesEl, inputEl, sendBtnEl, typingEl, badgeEl, processStepsEl;
   let tabHomeEl, tabChatEl, emailGateEl, emailInputEl, emailBtnEl, emailErrorEl;
+  let inputBarEl;
+  const seenMessageKeys = new Set();
+
+  function resetMessagesCanvas() {
+    if (!messagesEl) return;
+    const privacyText =
+      agentCfg?.privacyNotice ||
+      'This chat is AI-powered for faster assistance. Chats are monitored and recorded.';
+    const privacyLabel = agentCfg?.privacyPolicyLabel || 'Privacy Policy';
+    const privacyUrl = agentCfg?.privacyPolicyUrl || '';
+    const privacyLink = privacyUrl
+      ? '<a class="agt-privacy-link" href="' +
+        esc(privacyUrl) +
+        '" target="_blank" rel="noopener">' +
+        esc(privacyLabel) +
+        '</a>'
+      : '<span class="agt-privacy-link">' + esc(privacyLabel) + '</span>';
+
+    // Keep live status nodes across canvas resets (they live in the message list)
+    const keep = [];
+    if (processStepsEl) keep.push(processStepsEl);
+    if (typingEl) keep.push(typingEl);
+    keep.forEach(function (el) {
+      el.remove();
+    });
+
+    messagesEl.innerHTML =
+      '<div class="agt-chat-privacy" id="agt-chat-privacy">' +
+      '<div class="agt-privacy-note"><p>' +
+      esc(privacyText) +
+      ' ' +
+      privacyLink +
+      '</p></div></div>';
+
+    keep.forEach(function (el) {
+      messagesEl.appendChild(el);
+    });
+    processStepsEl?.classList.remove('visible');
+    if (typingEl) {
+      typingEl.classList.remove('visible');
+      typingEl.setAttribute('aria-hidden', 'true');
+    }
+    lastMessageTs = null;
+  }
+
+  function pinLiveIndicators() {
+    if (!messagesEl) return;
+    if (processStepsEl) messagesEl.appendChild(processStepsEl);
+    if (typingEl) messagesEl.appendChild(typingEl);
+  }
+
+  function historyStorageKey() {
+    return 'agentra_chat_history_' + (WIDGET_KEY || 'default');
+  }
+
+  function loadChatHistory() {
+    try {
+      const raw = localStorage.getItem(historyStorageKey());
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveChatHistoryEntry(entry) {
+    if (!entry?.sessionToken) return;
+    const list = loadChatHistory().filter(function (h) {
+      return h.sessionToken !== entry.sessionToken;
+    });
+    list.unshift(entry);
+    localStorage.setItem(historyStorageKey(), JSON.stringify(list.slice(0, 5)));
+    renderChatHistory();
+  }
+
+  function renderChatHistory() {
+    const listEl = document.getElementById('agt-history-list');
+    const emptyEl = document.getElementById('agt-history-empty');
+    if (!listEl) return;
+    const history = loadChatHistory().slice(0, 5);
+    listEl.querySelectorAll('.agt-history-item').forEach(function (el) {
+      el.remove();
+    });
+    if (!history.length) {
+      if (emptyEl) emptyEl.classList.remove('gone');
+      return;
+    }
+    if (emptyEl) emptyEl.classList.add('gone');
+    history.forEach(function (item) {
+      const row = document.createElement('div');
+      row.className = 'agt-history-item';
+      row.setAttribute('data-session', item.sessionToken || '');
+      const initial = esc(String(item.agentName || agentCfg?.agentName || 'C').charAt(0).toUpperCase());
+      const av = agentCfg?.faviconUrl
+        ? '<img src="' + esc(agentCfg.faviconUrl) + '" alt="">'
+        : initial;
+      const when = item.updatedAt
+        ? new Date(item.updatedAt).toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+          })
+        : '';
+      row.innerHTML =
+        '<div class="agt-history-av">' +
+        av +
+        '</div><div class="agt-history-text"><div class="agt-history-title">' +
+        esc(item.preview || 'Previous conversation') +
+        '</div><div class="agt-history-sub">' +
+        esc(when) +
+        (item.email ? ' · ' + esc(item.email) : '') +
+        '</div></div><span class="agt-history-chevron">' +
+        // chevron via CSS/text
+        '›</span>';
+      row.addEventListener('click', function () {
+        resumeChat(item.sessionToken, item.email);
+      });
+      listEl.appendChild(row);
+    });
+  }
+
+  function getQuickReplies() {
+    const list = agentCfg?.quickReplies;
+    return Array.isArray(list) && list.length
+      ? list.slice(0, 8)
+      : ['Where is my order?', 'Return or refund policy', 'Talk to a human', 'Product recommendations'];
+  }
+
+  function getAskAnythingLabel() {
+    return agentCfg?.askAnythingLabel || 'Ask me anything';
+  }
+
+  function isBotCollectingInfo(text) {
+    const t = String(text || '').toLowerCase();
+    return /order number|email address|share your|please (share|provide|confirm|enter|send)|what(?:'s| is) your|used when placing|double-check both|try again/i.test(
+      t,
+    );
+  }
+
+  function isAgentsOfflineReply(text) {
+    const t = String(text || '').toLowerCase();
+    return /don'?t have a teammate|no teammate|not online|no (one|agent).{0,20}online|currently away|when someone is available|team will see this chat/i.test(
+      t,
+    );
+  }
+
+  function isOfferingHumanConnect(text) {
+    const t = String(text || '').toLowerCase();
+    if (isAgentsOfflineReply(t)) return false;
+    return /(connect you with|would you like me to connect|i can connect you|talk to (a )?human|speak (to|with) (an? )?agent)/i.test(
+      t,
+    );
+  }
+
+  function isSimpleFollowUpPrompt(text) {
+    const raw = String(text || '').trim();
+    if (!raw || raw.length > 320) return false;
+    if (isBotCollectingInfo(raw)) return false;
+    if (isAgentsOfflineReply(raw)) return true;
+    if (isOfferingHumanConnect(raw)) return true;
+    const t = raw.toLowerCase();
+    if (
+      /(anything else|need (any )?more help|does that help|is there anything|glad i could|you(?:'re| are) all set|what else can i help)/i.test(
+        t,
+      )
+    ) {
+      return true;
+    }
+    // Short clear yes/no only
+    if (raw.length <= 120 && /\?\s*$/.test(raw) && !/order|email|number|tracking|looking for/i.test(t)) {
+      return true;
+    }
+    return false;
+  }
+
+  function buildContextualFollowUps(botText) {
+    if (!isSimpleFollowUpPrompt(botText)) return [];
+    const items = [];
+
+    if (isAgentsOfflineReply(botText)) {
+      items.push({ label: 'Keep helping me', message: 'Please keep helping me here' });
+      items.push({ label: 'Leave a note for the team', message: 'Please leave a note for your team' });
+    } else if (isOfferingHumanConnect(botText)) {
+      items.push({ label: 'Yes, connect me', message: 'Yes, please connect me with an agent' });
+      items.push({ label: 'No, keep helping here', message: 'No, please keep helping me here' });
+    } else if (/(anything else|more help|does that help|all set|what else can i help)/i.test(botText)) {
+      items.push({ label: 'All set, thanks', message: 'All set, thank you' });
+      items.push({ label: 'I still need help', message: 'I still need help' });
+    } else {
+      // Very short yes/no prompts only
+      items.push({ label: 'Yes', message: 'Yes' });
+      items.push({ label: 'No', message: 'No' });
+    }
+
+    items.push({
+      action: 'ask-anything',
+      label: freeHandMode ? 'Something else…' : 'Type my own reply',
+    });
+    return items;
+  }
+
+  function setFreeHandMode(on) {
+    freeHandMode = Boolean(on);
+    if (inputBarEl) inputBarEl.classList.toggle('gone', !freeHandMode);
+    if (freeHandMode) {
+      messagesEl?.querySelectorAll('.agt-choice-stack').forEach(function (el) {
+        el.remove();
+      });
+      resizeComposerInput();
+      inputEl?.focus();
+    }
+  }
+
+  function appendInlineChoices(items) {
+    if (!messagesEl || !items?.length) return;
+    messagesEl.querySelectorAll('.agt-choice-stack').forEach(function (el) {
+      el.remove();
+    });
+    const wrap = document.createElement('div');
+    wrap.className = 'agt-choice-stack';
+    wrap.innerHTML = items
+      .map(function (item) {
+        if (typeof item === 'string') {
+          return (
+            '<button type="button" class="agt-choice-btn" data-msg="' +
+            esc(item) +
+            '">' +
+            esc(item) +
+            '</button>'
+          );
+        }
+        if (item.action === 'ask-anything') {
+          return (
+            '<button type="button" class="agt-choice-btn" data-action="ask-anything">' +
+            esc(item.label || getAskAnythingLabel()) +
+            '</button>'
+          );
+        }
+        return (
+          '<button type="button" class="agt-choice-btn" data-msg="' +
+          esc(item.message || item.label || '') +
+          '">' +
+          esc(item.label || item.message || '') +
+          '</button>'
+        );
+      })
+      .join('');
+    messagesEl.appendChild(wrap);
+    pinLiveIndicators();
+    scrollMessages();
+  }
+
+  function appendStarterChoices() {
+    appendInlineChoices(
+      getQuickReplies()
+        .map(function (label) {
+          return { label: label, message: label };
+        })
+        .concat([{ action: 'ask-anything', label: getAskAnythingLabel() }]),
+    );
+  }
 
   const STATUS_LABELS = {
-    retrieving: 'Searching knowledge base…',
-    checking_order: 'Checking your order…',
+    retrieving: 'Searching knowledge…',
+    checking_order: 'Looking up your order…',
     searching_products: 'Finding products…',
-    thinking: 'Generating your answer…',
+    thinking: 'Replying…',
   };
+
+  function messageKey(msg) {
+    if (!msg || typeof msg !== 'object') return '';
+    if (msg._id) return String(msg._id);
+    if (msg.id) return String(msg.id);
+    return [
+      msg.role || '',
+      msg.contentType || '',
+      String(msg.body || '').trim(),
+      msg.sentAt || '',
+      msg.senderName || '',
+    ].join('|');
+  }
+
+  function markMessageSeen(msg) {
+    const key = messageKey(msg);
+    if (!key) return false;
+    if (seenMessageKeys.has(key)) return true;
+    seenMessageKeys.add(key);
+    return false;
+  }
 
   function uid() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -92,7 +376,8 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
           const msg = JSON.parse(ev.data);
           if (msg.type === 'message' && msg.data) renderServerMessage(msg.data);
           if (msg.type === 'system_event' && msg.data?.event === 'agent_joined') {
-            addSystemEvent(msg.data.agentName + ' joined the chat');
+            clearConnectingIndicator();
+            addSystemEvent((msg.data.agentName || 'An agent') + ' joined the chat');
           }
           if (msg.type === 'status' && msg.data?.status) {
             showProcessStatus(msg.data.status);
@@ -109,54 +394,243 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     }
   }
 
+  function syncLiveIndicatorPad() {
+    pinLiveIndicators();
+    updateCustomScrollbar();
+  }
+
   function showProcessStatus(status) {
     if (!processStepsEl || !agentCfg?.behavior?.retrievalIndicator) return;
     const label = STATUS_LABELS[status] || 'Working on it…';
     processStepsEl.querySelector('.agt-process-label').textContent = label;
     processStepsEl.classList.add('visible');
+    if (typingEl) {
+      typingEl.classList.remove('visible');
+      typingEl.setAttribute('aria-hidden', 'true');
+    }
+    pinLiveIndicators();
+    scrollMessages();
   }
 
   function hideProcessStatus() {
     processStepsEl?.classList.remove('visible');
+    updateCustomScrollbar();
   }
 
   function toggleTyping(show) {
     if (!typingEl) return;
+    if (show && processStepsEl?.classList.contains('visible')) {
+      return;
+    }
     typingEl.classList.toggle('visible', show);
-    if (show) scrollMessages();
-  }
-
-  function scrollMessages() {
-    if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
-
-  function addDateSepIfNeeded(ts) {
-    if (!messagesEl) return;
-    const label = formatDayLabel(ts);
-    const lastSep = messagesEl.querySelector('.agt-date-sep:last-of-type');
-    if (!lastSep || lastSep.textContent !== label) {
-      const sep = document.createElement('div');
-      sep.className = 'agt-date-sep';
-      sep.textContent = label;
-      messagesEl.appendChild(sep);
+    typingEl.setAttribute('aria-hidden', show ? 'false' : 'true');
+    if (show) {
+      pinLiveIndicators();
+      scrollMessages();
+    } else {
+      updateCustomScrollbar();
     }
   }
 
-  function formatDayLabel(d) {
+  function resizeComposerInput() {
+    if (!inputEl) return;
+    const MIN = 36;
+    const MAX = 96;
+    // Keep a stable single-line size; only grow when content truly wraps / has newlines.
+    inputEl.style.lineHeight = '20px';
+    inputEl.style.height = MIN + 'px';
+    inputEl.style.overflowY = 'hidden';
+    if (!inputEl.value) return;
+
+    // Force layout, then measure. Cap runaway scrollHeight from browser quirks.
+    void inputEl.offsetHeight;
+    const needed = inputEl.scrollHeight;
+    if (needed <= MIN + 2) return;
+
+    const next = Math.min(Math.max(needed, MIN), MAX);
+    inputEl.style.height = next + 'px';
+    if (next >= MAX) inputEl.style.overflowY = 'auto';
+  }
+
+  function scrollMessages() {
+    if (messagesEl) {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      updateCustomScrollbar();
+    }
+  }
+
+  function updateCustomScrollbar() {
+    const rail = document.getElementById('agt-scroll');
+    const thumb = document.getElementById('agt-scroll-thumb');
+    const wrap = messagesEl && messagesEl.parentElement;
+    if (!messagesEl || !rail || !thumb || !wrap) return;
+
+    const viewH = messagesEl.clientHeight;
+    const scrollH = messagesEl.scrollHeight;
+    const maxScroll = Math.max(0, scrollH - viewH);
+
+    if (maxScroll <= 2) {
+      rail.classList.remove('is-visible');
+      thumb.style.height = '0px';
+      return;
+    }
+
+    const railH = rail.clientHeight || viewH;
+    const thumbH = Math.max(28, Math.round((viewH / scrollH) * railH));
+    const maxThumbTop = Math.max(0, railH - thumbH);
+    const thumbTop = maxScroll === 0 ? 0 : Math.round((messagesEl.scrollTop / maxScroll) * maxThumbTop);
+
+    thumb.style.height = thumbH + 'px';
+    thumb.style.transform = 'translateY(' + thumbTop + 'px)';
+    rail.classList.add('is-visible');
+  }
+
+  function wireCustomScrollbar() {
+    const rail = document.getElementById('agt-scroll');
+    const thumb = document.getElementById('agt-scroll-thumb');
+    const wrap = messagesEl && messagesEl.parentElement;
+    if (!messagesEl || !rail || !thumb || !wrap) return;
+
+    let hideTimer = null;
+    let dragging = false;
+    let dragStartY = 0;
+    let dragStartScroll = 0;
+    let touchStartY = 0;
+    let touchStartScroll = 0;
+
+    function maxScrollTop() {
+      return Math.max(0, messagesEl.scrollHeight - messagesEl.clientHeight);
+    }
+
+    function setScrollTop(next) {
+      const max = maxScrollTop();
+      messagesEl.scrollTop = Math.max(0, Math.min(max, next));
+      updateCustomScrollbar();
+      flashScrolling();
+    }
+
+    function flashScrolling() {
+      wrap.classList.add('is-scrolling');
+      if (hideTimer) clearTimeout(hideTimer);
+      hideTimer = setTimeout(function () {
+        wrap.classList.remove('is-scrolling');
+      }, 800);
+    }
+
+    // overflow:hidden kills native scrollbar chrome (Windows arrows). Drive scroll ourselves.
+    messagesEl.addEventListener('wheel', function (e) {
+      if (maxScrollTop() <= 0) return;
+      e.preventDefault();
+      setScrollTop(messagesEl.scrollTop + e.deltaY);
+    }, { passive: false });
+
+    messagesEl.addEventListener('touchstart', function (e) {
+      if (!e.touches || !e.touches.length) return;
+      touchStartY = e.touches[0].clientY;
+      touchStartScroll = messagesEl.scrollTop;
+    }, { passive: true });
+
+    messagesEl.addEventListener('touchmove', function (e) {
+      if (!e.touches || !e.touches.length || maxScrollTop() <= 0) return;
+      e.preventDefault();
+      const dy = touchStartY - e.touches[0].clientY;
+      setScrollTop(touchStartScroll + dy);
+    }, { passive: false });
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(function () {
+        updateCustomScrollbar();
+      });
+      ro.observe(messagesEl);
+      ro.observe(wrap);
+    }
+
+    thumb.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      dragging = true;
+      thumb.classList.add('is-dragging');
+      dragStartY = e.clientY;
+      dragStartScroll = messagesEl.scrollTop;
+      wrap.classList.add('is-scrolling');
+
+      function onMove(ev) {
+        if (!dragging) return;
+        const viewH = messagesEl.clientHeight;
+        const scrollH = messagesEl.scrollHeight;
+        const maxScroll = Math.max(0, scrollH - viewH);
+        const railH = rail.clientHeight || viewH;
+        const thumbH = thumb.offsetHeight || 28;
+        const maxThumbTop = Math.max(1, railH - thumbH);
+        const delta = ev.clientY - dragStartY;
+        setScrollTop(dragStartScroll + (delta / maxThumbTop) * maxScroll);
+      }
+
+      function onUp() {
+        dragging = false;
+        thumb.classList.remove('is-dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        flashScrolling();
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    // Click on rail jumps thumb
+    rail.addEventListener('mousedown', function (e) {
+      if (e.target === thumb) return;
+      const rect = rail.getBoundingClientRect();
+      const viewH = messagesEl.clientHeight;
+      const scrollH = messagesEl.scrollHeight;
+      const maxScroll = Math.max(0, scrollH - viewH);
+      const railH = rail.clientHeight || viewH;
+      const thumbH = thumb.offsetHeight || 28;
+      const maxThumbTop = Math.max(1, railH - thumbH);
+      const y = e.clientY - rect.top - thumbH / 2;
+      setScrollTop((Math.max(0, Math.min(maxThumbTop, y)) / maxThumbTop) * maxScroll);
+    });
+
+    updateCustomScrollbar();
+  }
+
+  const TIME_GAP_MS = 15 * 60 * 1000;
+
+  function formatIntervalLabel(d) {
     const dt = d instanceof Date ? d : new Date(d);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dDay = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
-    if (dDay.getTime() === today.getTime()) return 'Today';
-    return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    if (Number.isNaN(dt.getTime())) return '';
+    const time = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    const sameDay = dt.toDateString() === new Date().toDateString();
+    if (sameDay) return time;
+    return (
+      dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + time
+    );
+  }
+
+  function addTimeSepIfNeeded(ts) {
+    if (!messagesEl) return;
+    const at = ts instanceof Date ? ts : new Date(ts);
+    if (Number.isNaN(at.getTime())) return;
+    const shouldShow =
+      !lastMessageTs ||
+      lastMessageTs.toDateString() !== at.toDateString() ||
+      at.getTime() - lastMessageTs.getTime() > TIME_GAP_MS;
+    if (shouldShow) {
+      const sep = document.createElement('div');
+      sep.className = 'agt-date-sep';
+      sep.textContent = formatIntervalLabel(at);
+      messagesEl.appendChild(sep);
+    }
+    lastMessageTs = at;
   }
 
   function addCustomerMessage(text) {
-    addDateSepIfNeeded(new Date());
+    addTimeSepIfNeeded(new Date());
     const row = document.createElement('div');
     row.className = 'agt-msg-row customer';
     row.innerHTML = '<div class="agt-bubble">' + esc(text) + '</div>';
     messagesEl.appendChild(row);
+    pinLiveIndicators();
     scrollMessages();
   }
 
@@ -165,31 +639,329 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     el.className = 'agt-system-event';
     el.textContent = text;
     messagesEl.appendChild(el);
+    pinLiveIndicators();
     scrollMessages();
   }
 
+  function clearConnectingIndicator() {
+    if (!messagesEl) return;
+    messagesEl.querySelectorAll('.agt-connecting').forEach(function (el) {
+      el.remove();
+    });
+  }
+
+  function addConnectingIndicator(text) {
+    clearConnectingIndicator();
+    const el = document.createElement('div');
+    el.className = 'agt-connecting';
+    el.innerHTML =
+      '<span class="agt-status-ring" aria-hidden="true"></span><span>' +
+      esc(text || 'Connecting with an agent…') +
+      '</span>';
+    messagesEl.appendChild(el);
+    pinLiveIndicators();
+    scrollMessages();
+  }
+
+  function applyHandoffState(handoffState, clearConnectingFlag) {
+    if (clearConnectingFlag) {
+      clearConnectingIndicator();
+      return;
+    }
+    if (!handoffState || !handoffState.display) return;
+    if (handoffState.display.removeStatusComponent || handoffState.display.showSpinner === false) {
+      if (
+        handoffState.status === 'cancelled_by_customer' ||
+        handoffState.status === 'unavailable' ||
+        handoffState.status === 'outside_business_hours' ||
+        handoffState.status === 'offered' ||
+        handoffState.status === 'not_requested'
+      ) {
+        clearConnectingIndicator();
+      }
+    }
+    if (handoffState.display.showSpinner) {
+      addConnectingIndicator('Connecting with an agent…');
+    }
+  }
+
+  function formatMoney(currency, amount) {
+    if (amount == null || amount === '') return '';
+    const n = Number(amount);
+    const code = currency || '';
+    if (!Number.isFinite(n)) return (code ? code + ' ' : '') + String(amount);
+    const formatted = n.toLocaleString(undefined, {
+      minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
+      maximumFractionDigits: 2,
+    });
+    return (code ? code + ' ' : '$') + formatted;
+  }
+
+  function orderStepIndex(status) {
+    const s = String(status || '').toLowerCase();
+    if (/deliver|complete/.test(s)) return 3;
+    if (/ship|transit/.test(s)) return 2;
+    if (/pack|process|ready|partial/.test(s)) return 1;
+    if (/fulfill/.test(s) && !/unfulfill/.test(s)) return 3;
+    return 0;
+  }
+
+  function buildOrderOutcome(kind, label) {
+    const title =
+      kind === 'refunded'
+        ? 'Marked refunded by store'
+        : kind === 'cancelled'
+          ? 'Order cancelled'
+          : 'Order update';
+    const detail =
+      kind === 'refunded'
+        ? 'The store marked this order as refunded. That does not by itself confirm when funds will appear in your account.'
+        : kind === 'cancelled'
+          ? 'This order is cancelled and will not ship.'
+          : label;
+    return (
+      '<div class="agt-order-outcome agt-order-outcome-' +
+      esc(kind) +
+      '">' +
+      '<div class="agt-order-outcome-title">' +
+      esc(title) +
+      '</div>' +
+      '<div class="agt-order-outcome-detail">' +
+      esc(detail) +
+      '</div></div>'
+    );
+  }
+
+  function buildOrderStepper(activeIdx) {
+    const steps = ['Placed', 'Packed', 'Shipped', 'Delivered'];
+    return (
+      '<div class="agt-order-stepper">' +
+      steps
+        .map(function (label, i) {
+          const cls = i < activeIdx ? 'done' : i === activeIdx ? 'active' : '';
+          return (
+            '<div class="agt-order-step ' +
+            cls +
+            '"><span class="agt-order-step-dot"></span><span class="agt-order-step-label">' +
+            label +
+            '</span></div>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
   function buildOrderCard(payload) {
-    const status = payload.fulfillmentStatus || payload.financialStatus || 'Processing';
+    const fulfillment = payload.fulfillmentStatus || '';
+    const financial = payload.financialStatus || '';
+    const fin = String(financial).toLowerCase();
+    const ful = String(fulfillment).toLowerCase();
+    const isRefunded = /refund/.test(fin);
+    const isCancelled = /cancel|void/.test(fin) || ful === 'cancelled';
+    const badgeRaw = financial || fulfillment || 'Update';
+    const badge = String(badgeRaw).replace(/_/g, ' ');
+    const total =
+      payload.totalDisplay ||
+      formatMoney(payload.currency, payload.totalPrice != null ? payload.totalPrice : payload.total);
     const items = (payload.lineItems || [])
+      .slice(0, 4)
       .map(function (li) {
-        return '<div style="font-size:12px;color:#555;">' + esc(li.title) + ' × ' + (li.quantity || 1) + '</div>';
+        return (
+          '<div class="agt-order-item">' +
+          esc(li.title) +
+          ' × ' +
+          (li.quantity || 1) +
+          '</div>'
+        );
       })
       .join('');
-    const tracking = payload.tracking?.url
-      ? '<a class="agt-order-track-btn" href="' +
-        esc(payload.tracking.url) +
-        '" target="_blank" rel="noopener"><i class="fa-solid fa-truck"></i> Track shipment</a>'
-      : '';
+
+    let middle = '';
+    if (isRefunded) {
+      middle = buildOrderOutcome('refunded');
+    } else if (isCancelled) {
+      middle = buildOrderOutcome('cancelled');
+    } else {
+      middle = buildOrderStepper(orderStepIndex(fulfillment || financial));
+    }
+
+    const tracking =
+      !isRefunded && !isCancelled && payload.tracking?.url
+        ? '<a class="agt-order-track-btn" href="' +
+          esc(payload.tracking.url) +
+          '" target="_blank" rel="noopener">Track shipment</a>'
+        : '';
+
     return (
       '<div class="agt-order-card">' +
-      '<div class="agt-order-num"><i class="fa-solid fa-receipt"></i> ' +
-      esc(payload.orderNumber || '') +
+      '<div class="agt-order-top">' +
+      '<div><div class="agt-order-id">' +
+      esc(payload.orderNumber ? 'Order ' + payload.orderNumber : 'Order update') +
       '</div>' +
-      '<div class="agt-order-status-row"><span class="agt-order-status-dot"></span><span class="agt-order-status-label">' +
-      esc(status) +
+      (total ? '<div class="agt-order-total">' + esc(total) + '</div>' : '') +
+      '</div>' +
+      '<span class="agt-order-badge' +
+      (isRefunded ? ' is-refunded' : isCancelled ? ' is-cancelled' : '') +
+      '">' +
+      esc(badge) +
       '</span></div>' +
-      items +
+      middle +
+      (items ? '<div class="agt-order-items">' + items + '</div>' : '') +
       tracking +
+      '</div>'
+    );
+  }
+
+  function buildInputForm(payload) {
+    if (!payload || !payload.fields || !payload.fields.length) return '';
+    const summary =
+      Array.isArray(payload.summaryLines) && payload.summaryLines.length
+        ? '<div class="agt-form-summary">' +
+          payload.summaryLines
+            .map(function (line) {
+              return '<div class="agt-form-summary-line">' + esc(line) + '</div>';
+            })
+            .join('') +
+          '</div>'
+        : '';
+    const fieldsHtml = payload.fields
+      .map(function (f) {
+        if (f.type === 'hidden') {
+          return (
+            '<input type="hidden" class="agt-form-input" name="' +
+            esc(f.name) +
+            '" value="' +
+            esc(f.value || '') +
+            '" />'
+          );
+        }
+        const type = f.type || 'text';
+        const req = f.required ? ' required' : '';
+        const ph = f.placeholder ? ' placeholder="' + esc(f.placeholder) + '"' : '';
+        const ac = f.autocomplete ? ' autocomplete="' + esc(f.autocomplete) + '"' : '';
+        const im = f.inputMode ? ' inputmode="' + esc(f.inputMode) + '"' : '';
+        return (
+          '<label class="agt-form-field">' +
+          '<span class="agt-form-label">' +
+          esc(f.label || f.name) +
+          (f.required ? '' : ' <em>(optional)</em>') +
+          '</span>' +
+          '<input class="agt-form-input" type="' +
+          esc(type) +
+          '" name="' +
+          esc(f.name) +
+          '"' +
+          ph +
+          ac +
+          im +
+          req +
+          ' />' +
+          '</label>'
+        );
+      })
+      .join('');
+    const title = payload.title
+      ? '<div class="agt-form-title">' + esc(payload.title) + '</div>'
+      : '';
+    const actionAttrs =
+      (payload._actionId ? ' data-action-id="' + esc(payload._actionId) + '"' : '') +
+      (payload._confirmationToken
+        ? ' data-confirm-token="' + esc(payload._confirmationToken) + '"'
+        : '');
+    return (
+      '<form class="agt-input-form" data-form-id="' +
+      esc(payload.formId || 'form') +
+      '"' +
+      actionAttrs +
+      ' novalidate>' +
+      title +
+      summary +
+      fieldsHtml +
+      '<button type="submit" class="agt-form-submit">' +
+      esc(payload.submitLabel || 'Submit') +
+      '</button>' +
+      '</form>'
+    );
+  }
+
+  function formatFormValuesMessage(formId, values, formEl) {
+    if (formId === 'action_confirm' || (formEl && formEl.getAttribute('data-action-id'))) {
+      const actionId = (formEl && formEl.getAttribute('data-action-id')) || values.actionId;
+      const token =
+        (formEl && formEl.getAttribute('data-confirm-token')) || values.confirmationToken;
+      if (/^\s*yes\s*$/i.test(values.confirmPayload || '') || values.confirmPayload) {
+        return 'Yes, create the return\nactionId:' + actionId + '\nconfirmationToken:' + token;
+      }
+    }
+    if (formId === 'return_reason') {
+      return values.returnReason || '';
+    }
+    if (formId === 'refund_method') {
+      return 'refundMethod:' + (values.refundMethod || '');
+    }
+    if (formId === 'select_return_item') {
+      return values.selectedLineItemId || '';
+    }
+    if (formId === 'contact_request') {
+      const parts = [];
+      if (values.email) parts.push(values.email);
+      if (values.phone) parts.push(values.phone);
+      return parts.join(', ') || 'contact request';
+    }
+    if (formId === 'order_lookup') {
+      const parts = [];
+      if (values.orderNumber) {
+        parts.push('Order #' + String(values.orderNumber).replace(/^#/, '').trim());
+      }
+      if (values.email) parts.push(String(values.email).trim());
+      return parts.join(', ');
+    }
+    if (formId === 'shipping_address') {
+      const lines = ['New shipping address:'];
+      if (values.name) lines.push('Name: ' + values.name);
+      if (values.address1) lines.push('Address: ' + values.address1);
+      if (values.address2) lines.push('Address 2: ' + values.address2);
+      if (values.city) lines.push('City: ' + values.city);
+      if (values.province) lines.push('State: ' + values.province);
+      if (values.zip) lines.push('ZIP: ' + values.zip);
+      if (values.country) lines.push('Country: ' + values.country);
+      if (values.phone) lines.push('Phone: ' + values.phone);
+      return lines.join('\n');
+    }
+    return Object.keys(values)
+      .filter(function (k) {
+        return values[k];
+      })
+      .map(function (k) {
+        return k + ': ' + values[k];
+      })
+      .join('\n');
+  }
+
+  function disableInputForm(form) {
+    if (!form) return;
+    form.classList.add('is-submitted');
+    form.querySelectorAll('input, button').forEach(function (el) {
+      el.disabled = true;
+    });
+  }
+
+  function buildChoiceStack(choices) {
+    if (!choices || !choices.length) return '';
+    return (
+      '<div class="agt-choice-stack">' +
+      choices
+        .map(function (c) {
+          return (
+            '<button type="button" class="agt-choice-btn" data-msg="' +
+            esc(c) +
+            '">' +
+            esc(c) +
+            '</button>'
+          );
+        })
+        .join('') +
       '</div>'
     );
   }
@@ -221,13 +993,49 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     );
   }
 
+  function agentAvatarHtml() {
+    const url = agentCfg?.faviconUrl || agentCfg?.logoUrl || '';
+    const name = agentCfg?.agentName || 'Assistant';
+    if (url) {
+      return (
+        '<div class="agt-agent-av"><img src="' +
+        esc(url) +
+        '" alt=""></div>'
+      );
+    }
+    const initial = esc(String(name).charAt(0).toUpperCase() || 'A');
+    return '<div class="agt-agent-av agt-agent-av-fallback">' + initial + '</div>';
+  }
+
+  function agentMessageShell(name, bodyHtml, extraHtml) {
+    return (
+      '<div class="agt-agent-row">' +
+      agentAvatarHtml() +
+      '<div class="agt-agent-col">' +
+      '<div class="agt-msg-meta"><span class="agt-msg-name">' +
+      esc(name) +
+      '</span></div>' +
+      (bodyHtml || '') +
+      (extraHtml || '') +
+      '</div></div>'
+    );
+  }
+
   function addAgentMessage(msg) {
+    if (markMessageSeen(msg)) return;
     hideProcessStatus();
     toggleTyping(false);
     const at = msg.sentAt ? new Date(msg.sentAt) : new Date();
-    addDateSepIfNeeded(at);
+    addTimeSepIfNeeded(at);
 
     if (msg.contentType === 'system_event') {
+      if (msg.payload?.type === 'handoff_requested') {
+        addConnectingIndicator(msg.body || 'Connecting with an agent…');
+        return;
+      }
+      if (msg.payload?.type === 'agent_joined') {
+        clearConnectingIndicator();
+      }
       addSystemEvent(msg.body || 'Update');
       return;
     }
@@ -235,40 +1043,51 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     const row = document.createElement('div');
     row.className = 'agt-msg-row agent';
     const name = msg.senderName || agentCfg?.agentName || 'Assistant';
-    let inner = '';
+    const bodyHtml = msg.body
+      ? '<div class="agt-bubble">' + formatAgentText(msg.body) + '</div>'
+      : '';
 
     if (msg.contentType === 'order_card' && msg.payload) {
-      inner =
-        '<div class="agt-agent-row"><div class="agt-agent-av"><i class="fa-solid fa-robot"></i></div><div class="agt-msg-meta">' +
-        esc(name) +
-        '</div></div>' +
-        (msg.body ? '<div class="agt-bubble">' + formatAgentText(msg.body) + '</div>' : '') +
-        buildOrderCard(msg.payload);
+      row.innerHTML = agentMessageShell(name, bodyHtml, buildOrderCard(msg.payload));
     } else if (msg.contentType === 'product_cards' && msg.payload?.products) {
-      inner =
-        '<div class="agt-agent-row"><div class="agt-agent-av"><i class="fa-solid fa-robot"></i></div><div class="agt-msg-meta">' +
-        esc(name) +
-        '</div></div>' +
-        (msg.body ? '<div class="agt-bubble">' + formatAgentText(msg.body) + '</div>' : '') +
-        buildProductGrid(msg.payload.products);
+      row.innerHTML = agentMessageShell(name, bodyHtml, buildProductGrid(msg.payload.products));
+    } else if (msg.contentType === 'input_form' && msg.payload?.fields) {
+      row.innerHTML = agentMessageShell(name, bodyHtml, buildInputForm(msg.payload));
     } else {
-      inner =
-        '<div class="agt-agent-row"><div class="agt-agent-av"><i class="fa-solid fa-robot"></i></div><div class="agt-msg-meta">' +
-        esc(name) +
-        '</div></div>' +
-        '<div class="agt-bubble">' +
-        formatAgentText(msg.body || '') +
-        '</div>';
+      row.innerHTML = agentMessageShell(
+        name,
+        '<div class="agt-bubble">' + formatAgentText(msg.body || '') + '</div>',
+      );
     }
 
-    row.innerHTML = inner;
     messagesEl.appendChild(row);
+    if (
+      msg.role === 'bot' &&
+      msg.contentType === 'text' &&
+      msg.body &&
+      freeHandMode
+    ) {
+      const followUps = buildContextualFollowUps(msg.body);
+      if (followUps.length) {
+        appendInlineChoices(followUps);
+      } else {
+        messagesEl.querySelectorAll('.agt-choice-stack').forEach(function (el) {
+          el.remove();
+        });
+      }
+    }
+    pinLiveIndicators();
     scrollMessages();
   }
 
   function renderServerMessage(msg) {
-    if (msg.role === 'customer') addCustomerMessage(msg.body);
-    else addAgentMessage(msg);
+    if (!msg) return;
+    if (msg.role === 'customer') {
+      // Visitor already paints their own bubble optimistically.
+      markMessageSeen(msg);
+      return;
+    }
+    addAgentMessage(msg);
   }
 
   function clearEmailError() {
@@ -301,7 +1120,11 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     document.getElementById('agt-chat-header')?.style.setProperty('display', 'flex');
     tabChatEl?.classList.add('active');
     tabHomeEl?.classList.remove('active');
-    inputEl?.focus();
+    if (freeHandMode) {
+      setFreeHandMode(true);
+    } else if (inputBarEl) {
+      inputBarEl.classList.add('gone');
+    }
   }
 
   async function startChatWithEmail(email) {
@@ -317,12 +1140,26 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       sessionToken = data.sessionToken;
       visitorEmail = email;
       emailVerified = true;
-      messagesEl.innerHTML = '';
+      freeHandMode = false;
+      seenMessageKeys.clear();
+      resetMessagesCanvas();
       (data.messages || []).forEach(function (m) {
         renderServerMessage(m);
       });
+      const preview =
+        (data.messages || []).find(function (m) {
+          return m.role === 'bot' && m.body;
+        })?.body || 'New conversation';
+      saveChatHistoryEntry({
+        sessionToken: sessionToken,
+        email: email,
+        preview: String(preview).slice(0, 80),
+        agentName: agentCfg?.agentName,
+        updatedAt: new Date().toISOString(),
+      });
       connectWebSocket();
       showChatScreen();
+      appendStarterChoices();
     } catch (err) {
       showEmailError(err.message || 'Could not start chat');
     } finally {
@@ -330,12 +1167,81 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     }
   }
 
+  async function resumeChat(token, email) {
+    if (!token) return;
+    try {
+      const data = await api('/session/' + encodeURIComponent(token));
+      sessionToken = token;
+      visitorEmail = email || data?.session?.visitorEmail || visitorEmail;
+      emailVerified = true;
+      freeHandMode = true;
+      seenMessageKeys.clear();
+      resetMessagesCanvas();
+      (data.session?.messages || []).forEach(function (m) {
+        if (m.role === 'customer') {
+          addCustomerMessage(m.body || '');
+          markMessageSeen(m);
+        } else {
+          renderServerMessage(m);
+        }
+      });
+      connectWebSocket();
+      setFreeHandMode(true);
+      showChatScreen();
+    } catch (err) {
+      showEmailGate();
+      showEmailError(err.message || 'Could not open that chat');
+    }
+  }
+
+  function startNewChat() {
+    if (ws) {
+      try {
+        ws.close();
+      } catch {
+        // ignore
+      }
+      ws = null;
+    }
+    sessionToken = null;
+    freeHandMode = false;
+    seenMessageKeys.clear();
+    resetMessagesCanvas();
+    if (inputEl) {
+      inputEl.value = '';
+      sendBtnEl && (sendBtnEl.disabled = true);
+    }
+    if (inputBarEl) inputBarEl.classList.add('gone');
+    if (emailVerified && visitorEmail) {
+      startChatWithEmail(visitorEmail);
+    } else {
+      showEmailGate();
+    }
+  }
+
   async function sendMessage(text) {
     const trimmed = String(text || '').trim();
     if (!trimmed || !sessionToken) return;
+    // Choosing a suggestion or typing enters free-hand thereafter
+    setFreeHandMode(true);
+    document.querySelectorAll('.agt-choice-stack').forEach(function (el) {
+      el.remove();
+    });
+    document.querySelectorAll('.agt-input-form:not(.is-submitted)').forEach(function (form) {
+      disableInputForm(form);
+    });
+
+    // Declining handoff must clear connecting UI immediately (before server round-trip)
+    if (
+      /keep helping|don'?t connect|continue with (the )?ai|no[,.]?\s+(please\s+)?keep/i.test(trimmed)
+    ) {
+      clearConnectingIndicator();
+    }
+
     addCustomerMessage(trimmed);
     inputEl.value = '';
     sendBtnEl.disabled = true;
+    resizeComposerInput();
     toggleTyping(true);
     showProcessStatus('thinking');
     try {
@@ -343,18 +1249,49 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
         sessionToken: sessionToken,
         message: trimmed,
       });
+      if (data && (data.widgetBuild || data.orchestratorBuild)) {
+        console.info('[Agentra builds]', {
+          widgetBuild: data.widgetBuild || '2026-07-16-01',
+          orchestratorBuild: data.orchestratorBuild,
+          turnDebug: data.turnDebug || null,
+        });
+      }
       toggleTyping(false);
       hideProcessStatus();
+      applyHandoffState(data.handoffState, data.clearConnecting);
       (data.messages || []).forEach(function (m) {
         addAgentMessage(m);
       });
-      if (data.handoff) {
-        addSystemEvent('Connecting you with a support agent…');
+      saveChatHistoryEntry({
+        sessionToken: sessionToken,
+        email: visitorEmail,
+        preview: trimmed.slice(0, 80),
+        agentName: agentCfg?.agentName,
+        updatedAt: new Date().toISOString(),
+      });
+      // Only show connecting when backend explicitly requested a real handoff queue
+      if (
+        data.handoff &&
+        data.handoffState &&
+        data.handoffState.display &&
+        data.handoffState.display.showSpinner
+      ) {
+        if (
+          !(data.messages || []).some(function (m) {
+            return m.payload?.type === 'handoff_requested';
+          })
+        ) {
+          addConnectingIndicator('Connecting with an agent…');
+        }
       }
     } catch (err) {
       toggleTyping(false);
       hideProcessStatus();
-      addAgentMessage({ role: 'bot', body: err.message || 'Something went wrong. Please try again.', senderName: agentCfg?.agentName });
+      addAgentMessage({
+        role: 'bot',
+        body: err.message || 'Something went wrong. Please try again.',
+        senderName: agentCfg?.agentName,
+      });
     } finally {
       sendBtnEl.disabled = !inputEl.value.trim();
     }
@@ -390,12 +1327,15 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     emailInputEl = document.getElementById('agt-email-input');
     emailBtnEl = document.getElementById('agt-email-btn');
     emailErrorEl = document.getElementById('agt-email-error');
+    inputBarEl = document.getElementById('agt-input-bar');
+    wireCustomScrollbar();
 
     function openPanel() {
       isOpen = true;
       panel.classList.add('open');
       launcher.classList.add('open');
       badgeEl?.classList.remove('show');
+      renderChatHistory();
     }
     function closePanel() {
       isOpen = false;
@@ -417,6 +1357,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       document.getElementById('agt-chat-header')?.style.setProperty('display', 'none');
       if (emailInputEl) delete emailInputEl.dataset.initialMsg;
       inChat = false;
+      renderChatHistory();
     });
 
     tabChatEl?.addEventListener('click', function () {
@@ -428,10 +1369,54 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       tabHomeEl?.click();
     });
 
+    document.getElementById('agt-new-chat-btn')?.addEventListener('click', function () {
+      startNewChat();
+    });
+
     document.querySelectorAll('.agt-qr-item').forEach(function (el) {
       el.addEventListener('click', function () {
         goToChat(el.getAttribute('data-msg'));
       });
+    });
+
+    messagesEl?.addEventListener('click', function (ev) {
+      const btn = ev.target && ev.target.closest ? ev.target.closest('.agt-choice-btn') : null;
+      if (!btn) return;
+      if (btn.getAttribute('data-action') === 'ask-anything') {
+        setFreeHandMode(true);
+        return;
+      }
+      const msg = btn.getAttribute('data-msg');
+      if (msg) sendMessage(msg);
+    });
+
+    messagesEl?.addEventListener('submit', function (ev) {
+      const form = ev.target && ev.target.closest ? ev.target.closest('.agt-input-form') : null;
+      if (!form || form.classList.contains('is-submitted')) return;
+      ev.preventDefault();
+      const formId = form.getAttribute('data-form-id') || 'form';
+      const values = {};
+      let valid = true;
+      form.querySelectorAll('.agt-form-input').forEach(function (input) {
+        const val = String(input.value || '').trim();
+        if (input.required && !val) {
+          valid = false;
+          input.classList.add('is-invalid');
+        } else {
+          input.classList.remove('is-invalid');
+          if (val) values[input.name] = val;
+        }
+      });
+      if (!valid) return;
+      if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
+        const emailInput = form.querySelector('[name="email"]');
+        if (emailInput) emailInput.classList.add('is-invalid');
+        return;
+      }
+      const msg = formatFormValuesMessage(formId, values, form);
+      if (!msg) return;
+      disableInputForm(form);
+      sendMessage(msg);
     });
 
     document.getElementById('agt-send-msg-card')?.addEventListener('click', function () {
@@ -456,8 +1441,10 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
 
     inputEl?.addEventListener('input', function () {
       sendBtnEl.disabled = !inputEl.value.trim();
-      inputEl.style.height = 'auto';
-      inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+      resizeComposerInput();
+    });
+    inputEl?.addEventListener('focus', function () {
+      resizeComposerInput();
     });
 
     sendBtnEl?.addEventListener('click', function () {
@@ -470,6 +1457,8 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
         sendMessage(inputEl.value);
       }
     });
+
+    renderChatHistory();
   }
 
   function mount(cfgData) {

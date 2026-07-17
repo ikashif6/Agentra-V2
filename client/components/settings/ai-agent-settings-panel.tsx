@@ -109,6 +109,14 @@ const EMPTY_OVERRIDES: Record<ChannelKey, ChannelOverride> = {
   tiktok: null,
 };
 
+type TabId = "defaults" | "channels" | "knowledge";
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: "defaults", label: "Defaults" },
+  { id: "channels", label: "Channels" },
+  { id: "knowledge", label: "Knowledge" },
+];
+
 const DEFAULT_SETTINGS: AiAgentSettings = {
   enabledChannels: {
     liveChat: true,
@@ -183,6 +191,7 @@ function effectiveActions(defaults: AllowedActions, override: ChannelOverride): 
 }
 
 export default function AiAgentSettingsPanel() {
+  const [tab, setTab] = useState<TabId>("defaults");
   const [settings, setSettings] = useState<AiAgentSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -334,312 +343,336 @@ export default function AiAgentSettingsPanel() {
   if (!settings) return null;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/30 px-3 py-1 text-xs font-medium text-muted-foreground">
+    <div className="w-full min-w-0 space-y-6">
+      <header className="space-y-2">
+        <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/30 px-3 py-1 text-xs font-medium text-muted-foreground">
           <Sparkles className="size-3.5" />
           Multi-channel AI
         </div>
         <h2 className="text-xl font-bold text-foreground">AI Agent</h2>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+        <p className="max-w-2xl text-sm text-muted-foreground">
           Shared knowledge across channels. Tune tone, length, and permissions per channel — email can
           stay long and formal while social stays short.
         </p>
+      </header>
+
+      <div className="flex flex-wrap gap-2 border-b border-border/60 pb-2">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+              tab === t.id
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <section className="overflow-hidden rounded-xl border border-border/80 bg-card">
-        <div className="border-b border-border/60 px-5 py-4">
-          <p className="text-sm font-medium text-foreground">Shared defaults</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Used on every channel unless you add a channel override below.
-          </p>
-        </div>
-        <div className="space-y-5 px-5 py-5">
-          <div className="space-y-2">
-            <Label htmlFor="ai-default-instructions">Default instructions</Label>
-            <Textarea
-              id="ai-default-instructions"
-              rows={4}
-              value={settings.defaults.instructions}
-              disabled={saving}
-              placeholder="Brand voice, policies, and must/must-not rules for all channels."
-              onChange={(e) =>
-                setSettings((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        defaults: { ...prev.defaults, instructions: e.target.value },
-                      }
-                    : prev,
-                )
-              }
-            />
+      {tab === "defaults" ? (
+        <section className="overflow-hidden rounded-xl border border-border/80 bg-card">
+          <div className="border-b border-border/60 px-5 py-4">
+            <p className="text-sm font-medium text-foreground">Shared defaults</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Used on every channel unless you add a channel override under Channels.
+            </p>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="ai-max-refund">Max auto-refund amount (USD)</Label>
-            <Input
-              id="ai-max-refund"
-              type="number"
-              min={0}
-              disabled={saving}
-              value={settings.defaults.allowedActions.maxRefundAmount ?? 100}
-              onChange={(e) =>
-                setSettings((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        defaults: {
-                          ...prev.defaults,
-                          allowedActions: {
-                            ...prev.defaults.allowedActions,
-                            maxRefundAmount: Number(e.target.value),
-                          },
-                        },
-                      }
-                    : prev,
-                )
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            {ACTION_TOGGLES.map(([key, label]) => (
-              <div
-                key={key}
-                className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
-              >
-                <span className="text-sm">{label}</span>
-                <Switch
-                  checked={Boolean(settings.defaults.allowedActions[key])}
-                  disabled={saving}
-                  onCheckedChange={(v) =>
-                    setSettings((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            defaults: {
-                              ...prev.defaults,
-                              allowedActions: {
-                                ...prev.defaults.allowedActions,
-                                [key]: v,
-                              },
+          <div className="space-y-5 px-5 py-5">
+            <div className="space-y-2">
+              <Label htmlFor="ai-default-instructions">Default instructions</Label>
+              <Textarea
+                id="ai-default-instructions"
+                rows={4}
+                value={settings.defaults.instructions}
+                disabled={saving}
+                placeholder="Brand voice, policies, and must/must-not rules for all channels."
+                onChange={(e) =>
+                  setSettings((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          defaults: { ...prev.defaults, instructions: e.target.value },
+                        }
+                      : prev,
+                  )
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ai-max-refund">Max auto-refund amount (USD)</Label>
+              <Input
+                id="ai-max-refund"
+                type="number"
+                min={0}
+                disabled={saving}
+                value={settings.defaults.allowedActions.maxRefundAmount ?? 100}
+                onChange={(e) =>
+                  setSettings((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          defaults: {
+                            ...prev.defaults,
+                            allowedActions: {
+                              ...prev.defaults.allowedActions,
+                              maxRefundAmount: Number(e.target.value),
                             },
-                          }
-                        : prev,
-                    )
-                  }
-                />
-              </div>
-            ))}
-          </div>
-          <Button disabled={saving} onClick={() => void saveDefaults()}>
-            {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-            Save defaults
-          </Button>
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-xl border border-border/80 bg-card">
-        <div className="border-b border-border/60 px-5 py-4">
-          <p className="text-sm font-medium text-foreground">Deploy on channels</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Turn AI on per channel, then expand to override instructions and permissions. Built-in
-            style guidance still applies (e.g. longer email, shorter Instagram).
-          </p>
-        </div>
-        <ul className="divide-y divide-border/60">
-          {CHANNEL_OPTIONS.map((channel) => {
-            const on = Boolean(settings.enabledChannels[channel.key]);
-            const isOpen = expanded === channel.key;
-            const override = settings.channelOverrides[channel.key];
-            const customized = hasChannelCustomization(override);
-            const actions = effectiveActions(settings.defaults.allowedActions, override);
-            const placeholder =
-              settings.instructionPlaceholders?.[channel.key] ||
-              "Optional. Leave blank to use shared defaults.";
-
-            return (
-              <li key={channel.key}>
-                <div className="flex items-start justify-between gap-4 px-5 py-4">
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-left"
-                    onClick={() => setExpanded(isOpen ? null : channel.key)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-foreground">{channel.label}</p>
-                      {customized ? (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                          Customized
-                        </span>
-                      ) : null}
-                      <ChevronDown
-                        className={cn(
-                          "size-4 shrink-0 text-muted-foreground transition-transform",
-                          isOpen && "rotate-180",
-                        )}
-                      />
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{channel.description}</p>
-                    {channel.requires ? (
-                      <p className="mt-1 text-[11px] text-muted-foreground/80">{channel.requires}</p>
-                    ) : null}
-                  </button>
+                          },
+                        }
+                      : prev,
+                  )
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              {ACTION_TOGGLES.map(([key, label]) => (
+                <div
+                  key={key}
+                  className="flex items-center justify-between rounded-lg border border-border/60 px-3 py-2"
+                >
+                  <span className="text-sm">{label}</span>
                   <Switch
-                    checked={on}
+                    checked={Boolean(settings.defaults.allowedActions[key])}
                     disabled={saving}
-                    onCheckedChange={(checked) => toggleChannel(channel.key, checked)}
-                    aria-label={`Enable AI on ${channel.label}`}
+                    onCheckedChange={(v) =>
+                      setSettings((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              defaults: {
+                                ...prev.defaults,
+                                allowedActions: {
+                                  ...prev.defaults.allowedActions,
+                                  [key]: v,
+                                },
+                              },
+                            }
+                          : prev,
+                      )
+                    }
                   />
                 </div>
+              ))}
+            </div>
+            <Button disabled={saving} onClick={() => void saveDefaults()}>
+              {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              Save defaults
+            </Button>
+          </div>
+        </section>
+      ) : null}
 
-                {isOpen ? (
-                  <div className="space-y-4 border-t border-border/50 bg-muted/20 px-5 py-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <Label htmlFor={`ai-instructions-${channel.key}`}>
-                          {channel.label} instructions
-                        </Label>
-                        {override?.instructions !== undefined ? (
-                          <button
-                            type="button"
-                            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                            disabled={saving}
-                            onClick={() => void clearChannelInstructions(channel.key)}
-                          >
-                            Use defaults
-                          </button>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground">Inheriting defaults</span>
-                        )}
-                      </div>
-                      <Textarea
-                        id={`ai-instructions-${channel.key}`}
-                        rows={4}
-                        disabled={saving}
-                        value={draftInstructions[channel.key]}
-                        placeholder={placeholder}
-                        onChange={(e) =>
-                          setDraftInstructions((prev) => ({
-                            ...prev,
-                            [channel.key]: e.target.value,
-                          }))
-                        }
-                        onBlur={() => void saveChannelInstructions(channel.key)}
-                      />
-                    </div>
+      {tab === "channels" ? (
+        <section className="overflow-hidden rounded-xl border border-border/80 bg-card">
+          <div className="border-b border-border/60 px-5 py-4">
+            <p className="text-sm font-medium text-foreground">Deploy on channels</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Turn AI on per channel, then expand to override instructions and permissions. Built-in
+              style guidance still applies (e.g. longer email, shorter Instagram).
+            </p>
+          </div>
+          <ul className="divide-y divide-border/60">
+            {CHANNEL_OPTIONS.map((channel) => {
+              const on = Boolean(settings.enabledChannels[channel.key]);
+              const isOpen = expanded === channel.key;
+              const override = settings.channelOverrides[channel.key];
+              const customized = hasChannelCustomization(override);
+              const actions = effectiveActions(settings.defaults.allowedActions, override);
+              const placeholder =
+                settings.instructionPlaceholders?.[channel.key] ||
+                "Optional. Leave blank to use shared defaults.";
 
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium">Allowed actions</p>
-                        {override?.allowedActions && Object.keys(override.allowedActions).length ? (
-                          <button
-                            type="button"
-                            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                            disabled={saving}
-                            onClick={() => void resetChannelActions(channel.key)}
-                          >
-                            Reset actions
-                          </button>
+              return (
+                <li key={channel.key}>
+                  <div className="flex items-start justify-between gap-4 px-5 py-4">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => setExpanded(isOpen ? null : channel.key)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-foreground">{channel.label}</p>
+                        {customized ? (
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            Customized
+                          </span>
                         ) : null}
+                        <ChevronDown
+                          className={cn(
+                            "size-4 shrink-0 text-muted-foreground transition-transform",
+                            isOpen && "rotate-180",
+                          )}
+                        />
                       </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{channel.description}</p>
+                      {channel.requires ? (
+                        <p className="mt-1 text-[11px] text-muted-foreground/80">{channel.requires}</p>
+                      ) : null}
+                    </button>
+                    <Switch
+                      checked={on}
+                      disabled={saving}
+                      onCheckedChange={(checked) => toggleChannel(channel.key, checked)}
+                      aria-label={`Enable AI on ${channel.label}`}
+                    />
+                  </div>
+
+                  {isOpen ? (
+                    <div className="space-y-4 border-t border-border/50 bg-muted/20 px-5 py-4">
                       <div className="space-y-2">
-                        <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background px-3 py-2">
-                          <span className="text-sm">Max refund (USD)</span>
-                          <Input
-                            type="number"
-                            min={0}
-                            className="h-8 w-24"
-                            disabled={saving}
-                            value={actions.maxRefundAmount ?? 100}
-                            onChange={(e) => {
-                              const n = Number(e.target.value);
-                              setSettings((prev) => {
-                                if (!prev) return prev;
-                                const prevOverride = prev.channelOverrides[channel.key] || {};
-                                return {
-                                  ...prev,
-                                  channelOverrides: {
-                                    ...prev.channelOverrides,
-                                    [channel.key]: {
-                                      ...prevOverride,
-                                      allowedActions: {
-                                        ...(prevOverride.allowedActions || {}),
-                                        maxRefundAmount: n,
+                        <div className="flex items-center justify-between gap-2">
+                          <Label htmlFor={`ai-instructions-${channel.key}`}>
+                            {channel.label} instructions
+                          </Label>
+                          {override?.instructions !== undefined ? (
+                            <button
+                              type="button"
+                              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                              disabled={saving}
+                              onClick={() => void clearChannelInstructions(channel.key)}
+                            >
+                              Use defaults
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">Inheriting defaults</span>
+                          )}
+                        </div>
+                        <Textarea
+                          id={`ai-instructions-${channel.key}`}
+                          rows={4}
+                          disabled={saving}
+                          value={draftInstructions[channel.key]}
+                          placeholder={placeholder}
+                          onChange={(e) =>
+                            setDraftInstructions((prev) => ({
+                              ...prev,
+                              [channel.key]: e.target.value,
+                            }))
+                          }
+                          onBlur={() => void saveChannelInstructions(channel.key)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium">Allowed actions</p>
+                          {override?.allowedActions && Object.keys(override.allowedActions).length ? (
+                            <button
+                              type="button"
+                              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                              disabled={saving}
+                              onClick={() => void resetChannelActions(channel.key)}
+                            >
+                              Reset actions
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background px-3 py-2">
+                            <span className="text-sm">Max refund (USD)</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              className="h-8 w-24"
+                              disabled={saving}
+                              value={actions.maxRefundAmount ?? 100}
+                              onChange={(e) => {
+                                const n = Number(e.target.value);
+                                setSettings((prev) => {
+                                  if (!prev) return prev;
+                                  const prevOverride = prev.channelOverrides[channel.key] || {};
+                                  return {
+                                    ...prev,
+                                    channelOverrides: {
+                                      ...prev.channelOverrides,
+                                      [channel.key]: {
+                                        ...prevOverride,
+                                        allowedActions: {
+                                          ...(prevOverride.allowedActions || {}),
+                                          maxRefundAmount: n,
+                                        },
                                       },
                                     },
-                                  },
-                                };
-                              });
-                            }}
-                            onBlur={() =>
-                              void setChannelAction(
-                                channel.key,
-                                "maxRefundAmount",
-                                Number(actions.maxRefundAmount ?? 100),
-                              )
-                            }
-                          />
-                        </div>
-                        {ACTION_TOGGLES.map(([actionKey, label]) => {
-                          const overridden =
-                            override?.allowedActions?.[actionKey] !== undefined &&
-                            override?.allowedActions?.[actionKey] !== null;
-                          return (
-                            <div
-                              key={actionKey}
-                              className="flex items-center justify-between rounded-lg border border-border/60 bg-background px-3 py-2"
-                            >
-                              <div>
-                                <span className="text-sm">{label}</span>
-                                {overridden ? (
-                                  <span className="ml-2 text-[10px] text-muted-foreground">override</span>
-                                ) : null}
+                                  };
+                                });
+                              }}
+                              onBlur={() =>
+                                void setChannelAction(
+                                  channel.key,
+                                  "maxRefundAmount",
+                                  Number(actions.maxRefundAmount ?? 100),
+                                )
+                              }
+                            />
+                          </div>
+                          {ACTION_TOGGLES.map(([actionKey, label]) => {
+                            const overridden =
+                              override?.allowedActions?.[actionKey] !== undefined &&
+                              override?.allowedActions?.[actionKey] !== null;
+                            return (
+                              <div
+                                key={actionKey}
+                                className="flex items-center justify-between rounded-lg border border-border/60 bg-background px-3 py-2"
+                              >
+                                <div>
+                                  <span className="text-sm">{label}</span>
+                                  {overridden ? (
+                                    <span className="ml-2 text-[10px] text-muted-foreground">override</span>
+                                  ) : null}
+                                </div>
+                                <Switch
+                                  checked={Boolean(actions[actionKey])}
+                                  disabled={saving}
+                                  onCheckedChange={(v) => void setChannelAction(channel.key, actionKey, v)}
+                                />
                               </div>
-                              <Switch
-                                checked={Boolean(actions[actionKey])}
-                                disabled={saving}
-                                onCheckedChange={(v) => void setChannelAction(channel.key, actionKey, v)}
-                              />
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
+
+                      {customized ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={saving}
+                          onClick={() => void clearChannelAll(channel.key)}
+                        >
+                          Clear all {channel.label} overrides
+                        </Button>
+                      ) : null}
                     </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
-                    {customized ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={saving}
-                        onClick={() => void clearChannelAll(channel.key)}
-                      >
-                        Clear all {channel.label} overrides
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      <section className="overflow-hidden rounded-xl border border-border/80 bg-card">
-        <div className="border-b border-border/60 px-5 py-4">
-          <p className="text-sm font-medium text-foreground">Knowledge articles</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Shared with{" "}
-            <Link href="/settings?item=chat" className="underline underline-offset-2">
-              Channels › Live chat
-            </Link>
-            . Changes in either place update the same documents.
-          </p>
-        </div>
-        <div className="px-5 py-5">
-          <KnowledgeArticlesSection description="" />
-        </div>
-      </section>
+      {tab === "knowledge" ? (
+        <section className="overflow-hidden rounded-xl border border-border/80 bg-card">
+          <div className="border-b border-border/60 px-5 py-4">
+            <p className="text-sm font-medium text-foreground">Knowledge articles</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Shared with{" "}
+              <Link href="/settings?item=chat" className="underline underline-offset-2">
+                Channels › Live chat
+              </Link>
+              . Changes in either place update the same documents.
+            </p>
+          </div>
+          <div className="px-5 py-5">
+            <KnowledgeArticlesSection description="" />
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

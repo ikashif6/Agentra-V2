@@ -11,7 +11,7 @@ const chatMessageSchema = new Schema(
     body: { type: String, default: '' },
     contentType: {
       type: String,
-      enum: ['text', 'order_card', 'product_cards', 'sources', 'system_event'],
+      enum: ['text', 'order_card', 'product_cards', 'sources', 'system_event', 'input_form'],
       default: 'text',
     },
     payload: { type: Schema.Types.Mixed },
@@ -36,6 +36,14 @@ const chatSessionSchema = new Schema(
     ticket: { type: Schema.Types.ObjectId, ref: 'Ticket', index: true },
     sessionToken: { type: String, required: true, unique: true, index: true },
     visitorEmail: { type: String, required: true, lowercase: true, trim: true },
+    /** Email confirmed in-chat for order lookups (may differ from pre-chat gate email). */
+    orderLookupEmail: { type: String, lowercase: true, trim: true },
+    /** Order number collected while waiting for the matching email (or vice versa). */
+    pendingOrderNumber: { type: String, trim: true },
+    /** Deterministic workflow state (entities, steps) — not LLM memory. */
+    workflowState: { type: Schema.Types.Mixed, default: () => ({}) },
+    /** Human handoff state machine — sole source of truth for connecting UI. */
+    handoffState: { type: Schema.Types.Mixed, default: () => ({}) },
     status: {
       type: String,
       enum: ['active', 'waiting_human', 'with_human', 'closed'],

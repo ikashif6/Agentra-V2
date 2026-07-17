@@ -22,9 +22,16 @@ const DEFAULT_LIVE_CHAT = {
     agentName: 'Support Assistant',
     welcomeTitle: 'Hi there 👋\nHow can we help?',
     welcomeSubtitle: 'Ask about orders, products, returns & store support.',
-    welcomeMessage: "I'm here to help with orders, products, and store questions.",
+    welcomeMessage:
+      "Hi! Welcome. I can help with orders, products, returns, and store questions. How can I help you today?",
     emailGateTitle: 'Start a conversation',
-    emailGateSubtitle: 'Enter your email so we can help you with your orders.',
+    emailGateSubtitle: 'Enter your email so we can follow up with you.',
+    privacyNotice:
+      'This chat is AI-powered for faster assistance. Chats are monitored and recorded.',
+    privacyPolicyLabel: 'Privacy Policy',
+    privacyPolicyUrl: '',
+    askAnythingLabel: 'Ask me anything',
+    followUpReplies: ['Yes, thank you', 'No, I need more help'],
     offlineMessage:
       'Our team is currently away. The assistant can still help, or you can leave a message.',
     quickReplies: [
@@ -44,7 +51,13 @@ const DEFAULT_LIVE_CHAT = {
   ai: {
     enabled: true,
     instructions: '',
-    escalationKeywords: ['human', 'agent', 'representative', 'speak to someone', 'manager'],
+    escalationKeywords: [
+      'talk to a human',
+      'speak to someone',
+      'real person',
+      'human agent',
+      'connect me with an agent',
+    ],
     allowedActions: {
       lookupOrder: true,
       cancelOrder: false,
@@ -209,16 +222,25 @@ function buildPublicWidgetConfig(company, req) {
     welcomeMsg: config.content.welcomeMessage,
     emailGateTitle: config.content.emailGateTitle,
     emailGateSubtitle: config.content.emailGateSubtitle,
+    privacyNotice: config.content.privacyNotice,
+    privacyPolicyLabel: config.content.privacyPolicyLabel,
+    privacyPolicyUrl: config.content.privacyPolicyUrl || '',
+    askAnythingLabel: config.content.askAnythingLabel || 'Ask me anything',
+    followUpReplies: (config.content.followUpReplies || []).slice(0, 6),
     offlineMessage: config.content.offlineMessage,
-    quickReplies: (config.content.quickReplies || []).slice(0, 4),
+    quickReplies: (config.content.quickReplies || []).slice(0, 8),
     showBranding: config.appearance.showBranding,
     behavior: config.behavior,
-    teamAgents: mapLiveChatAgents(company, apiOrigin).slice(0, 5).map((a) => ({
-      initials: a.initials,
-      name: a.fullName,
-      avatarUrl: a.avatar || null,
-      color: a.color,
-    })),
+    teamAgents: mapLiveChatAgents(company, apiOrigin)
+      .filter((a) => a.isOnline)
+      .slice(0, 5)
+      .map((a) => ({
+        initials: a.initials,
+        name: a.fullName,
+        avatarUrl: a.avatar || null,
+        color: a.color,
+        isOnline: true,
+      })),
     isActive: Boolean(config.enabled && config.ai?.enabled),
     wsUrl: `${apiOrigin.replace(/^http/, 'ws')}/api/v1/widget/ws`,
   };
@@ -264,8 +286,24 @@ function connectedStoreDomains(company) {
   return [];
 }
 
+function isLocalPlaygroundOrigin(origin) {
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase();
+    return (
+      hostname === 'localhost'
+      || hostname === '127.0.0.1'
+      || hostname === '[::1]'
+      || hostname.endsWith('.localhost')
+    );
+  } catch {
+    return false;
+  }
+}
+
 function isOriginAllowed(company, origin) {
   if (!origin) return true;
+  // Local playground (/chatbot) embeds the real widget against the connected store.
+  if (isLocalPlaygroundOrigin(origin)) return true;
   // Access is gated by widgetKey; domain list is a soft bound to the connected store.
   const allowed = connectedStoreDomains(company);
   if (!allowed.length) return true;

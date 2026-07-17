@@ -130,6 +130,19 @@ async function updateWorkspaceBranding(company, body = {}) {
 
   if (!company.setupChecklist) company.setupChecklist = {};
   company.setupChecklist.workspace = true;
+
+  const checklist = company.setupChecklist;
+  if (
+    checklist.store
+    && checklist.channels
+    && checklist.ai
+    && checklist.workspace
+    && checklist.team
+    && !checklist.completedAt
+  ) {
+    company.setupChecklist.completedAt = new Date();
+  }
+
   company.markModified('branding');
   company.markModified('setupChecklist');
   await company.save();

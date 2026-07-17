@@ -16,6 +16,12 @@ router.get(
   workspaceController.getBranding,
 );
 
+router.get(
+  '/setup-status',
+  authorize('owner', 'admin'),
+  workspaceController.getSetupStatus,
+);
+
 router.patch(
   '/branding',
   authorize('owner', 'admin'),

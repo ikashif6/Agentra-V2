@@ -22,7 +22,15 @@ const start = async () => {
     console.log(`\n🚀 Agentra API running on 0.0.0.0:${PORT}`);
     console.log(`   Environment : ${process.env.NODE_ENV || 'development'}`);
     console.log(`   Base domain : ${process.env.APP_BASE_DOMAIN || 'agentraa.com'}`);
-    console.log(`   Health check: http://0.0.0.0:${PORT}/api/v1/health\n`);
+    console.log(`   Health check: http://0.0.0.0:${PORT}/api/v1/health`);
+    try {
+      const orchPath = require.resolve('./services/live-chat-orchestrator.service');
+      const { ORCHESTRATOR_BUILD } = require('./services/live-chat-turn-route.service');
+      console.log(`   Live chat orchestrator loaded: ${orchPath}`);
+      console.log(`   Live chat workflow version: ${ORCHESTRATOR_BUILD}\n`);
+    } catch (e) {
+      console.log(`   Live chat orchestrator: failed to resolve (${e.message})\n`);
+    }
   });
 
   const { attachWebSocketServer } = require('./services/live-chat-websocket.service');

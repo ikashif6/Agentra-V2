@@ -120,7 +120,10 @@ exports.sendMessage = async (req, res, next) => {
       }
     };
 
-    const result = await processCustomerMessage(company, session, req.body?.message, { onStatus });
+    const result = await processCustomerMessage(company, session, req.body?.message, {
+      onStatus,
+      widgetAction: req.body?.action || req.body?.widgetAction || null,
+    });
 
     const customer = await require('../services/live-chat-session.service').findOrCreateCustomerByEmail(
       company,
@@ -156,12 +159,29 @@ exports.sendMessage = async (req, res, next) => {
       const ticketId = session.ticket._id || session.ticket;
       const { scheduleTicketIntelligence } = require('../services/ticket-intelligence.service');
       scheduleTicketIntelligence(company._id, ticketId, { force: true });
+
+      // Assign an online live-chat agent immediately (does not wait on Helpdesk auto-routing)
+      try {
+        const Ticket = require('../models/Ticket');
+        const { maybeAutoAssignTicket } = require('../services/ticket-routing.service');
+        const ticket = await Ticket.findById(ticketId);
+        if (ticket && !ticket.assigned_agent) {
+          await maybeAutoAssignTicket(company, ticket, { urgency: 'high' });
+        }
+      } catch (assignErr) {
+        console.warn('[live-chat] handoff assign skipped:', assignErr.message);
+      }
     }
 
     return response.success(res, {
       messages: result.messages,
       handoff: result.handoff,
+      handoffState: result.handoffState || null,
+      clearConnecting: Boolean(result.clearConnecting),
       sessionStatus: session.status,
+      orchestratorBuild: result.orchestratorBuild || require('../services/live-chat-turn-route.service').ORCHESTRATOR_BUILD,
+      turnDebug: result.turnDebug || null,
+      widgetBuild: '2026-07-16-01',
     });
   } catch (err) {
     if (err.message && !err.statusCode) return response.badRequest(res, err.message);

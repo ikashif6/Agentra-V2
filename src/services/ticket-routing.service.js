@@ -11,7 +11,9 @@ async function maybeAutoAssignTicket(company, ticket, intelligence = {}) {
   }
 
   let agentIds = [];
-  const liveChatAgents = (company.liveChat?.agents || []).map((id) => String(id));
+  const liveChatAgents = (company.liveChat?.agents || [])
+    .map((id) => String(id && id._id ? id._id : id))
+    .filter(Boolean);
   const isChat = ticket.source === 'chatbot' || ticket.source === 'chat';
 
   if (isChat && liveChatAgents.length) {
@@ -55,15 +57,24 @@ async function maybeAutoAssignTicket(company, ticket, intelligence = {}) {
     .select('_id isOnline firstName lastName')
     .lean();
 
-  candidates.sort((a, b) => {
-    if (urgencyBoost) {
+  // Live chat: only assign agents who are online (sidebar presence). Never fake a join.
+  let pool = candidates;
+  if (isChat) {
+    pool = candidates.filter((c) => c.isOnline);
+    if (!pool.length) {
+      return { skipped: true, reason: 'no_online_agents' };
+    }
+  }
+
+  pool.sort((a, b) => {
+    if (!isChat && urgencyBoost) {
       const onlineDiff = Number(Boolean(b.isOnline)) - Number(Boolean(a.isOnline));
       if (onlineDiff !== 0) return onlineDiff;
     }
     return (countMap.get(String(a._id)) || 0) - (countMap.get(String(b._id)) || 0);
   });
 
-  const chosen = candidates[0];
+  const chosen = pool[0];
   if (!chosen) return { skipped: true, reason: 'no_agents' };
 
   ticket.assigned_agent = chosen._id;
@@ -84,6 +95,12 @@ async function maybeAutoAssignTicket(company, ticket, intelligence = {}) {
       const ChatSession = require('../models/ChatSession');
       const { agentDisplayName } = require('./ticket-system-events.service');
       const { broadcastToSession } = require('./live-chat-websocket.service');
+      const {
+        HANDOFF_STATUSES,
+        ACTIVE_RESPONDERS,
+        ensureHandoffState,
+        setHandoffStatus,
+      } = require('./live-chat-workflow.service');
       const sessions = await ChatSession.find({
         company: company._id,
         ticket: ticket._id,
@@ -91,8 +108,35 @@ async function maybeAutoAssignTicket(company, ticket, intelligence = {}) {
       });
       const joinBody = `${agentDisplayName(chosen)} has joined the conversation`;
       for (const session of sessions) {
+        const hs = ensureHandoffState(session);
+        // Ignore late assignment after customer cancelled handoff
+        if (
+          hs.status === HANDOFF_STATUSES.CANCELLED_BY_CUSTOMER ||
+          hs.status === HANDOFF_STATUSES.CANCELLED_BY_SYSTEM
+        ) {
+          continue;
+        }
+
         session.status = 'with_human';
         session.assignedAgent = chosen._id;
+        setHandoffStatus(session, HANDOFF_STATUSES.AGENT_JOINED, {
+          assignedAgentId: String(chosen._id),
+          joinedAt: new Date().toISOString(),
+          activeResponder: ACTIVE_RESPONDERS.HUMAN,
+        });
+        // If transition blocked (e.g. from not_requested), force join fields
+        if (session.handoffState?.status !== HANDOFF_STATUSES.AGENT_JOINED) {
+          session.handoffState = {
+            ...hs,
+            status: HANDOFF_STATUSES.AGENT_JOINED,
+            assignedAgentId: String(chosen._id),
+            joinedAt: new Date().toISOString(),
+            activeResponder: ACTIVE_RESPONDERS.HUMAN,
+            version: (hs.version || 0) + 1,
+          };
+          session.markModified('handoffState');
+        }
+
         const systemMsg = {
           role: 'system',
           body: joinBody,
@@ -104,13 +148,7 @@ async function maybeAutoAssignTicket(company, ticket, intelligence = {}) {
         session.messages.push(systemMsg);
         session.lastActivityAt = new Date();
         await session.save();
-        broadcastToSession(String(company._id), session.sessionToken, {
-          type: 'system_event',
-          data: {
-            event: 'agent_joined',
-            agentName: agentDisplayName(chosen),
-          },
-        });
+        // Single WS payload — avoids duplicate "Franklin joined" lines in the widget
         broadcastToSession(String(company._id), session.sessionToken, {
           type: 'message',
           data: systemMsg,

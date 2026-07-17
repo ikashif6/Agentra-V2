@@ -57,10 +57,26 @@ async function createChatTicket(company, customer, email, firstMessage) {
   return ticket;
 }
 
+function sanitizeCustomerFacingText(text) {
+  return String(text || '')
+    .replace(/\u2014|\u2013/g, ',') // em/en dash → comma
+    .replace(/\s*,\s*,+/g, ',')
+    .replace(/\s+--\s+/g, ', ')
+    .replace(/(^|[^\-])--([^\-]|$)/g, '$1, $2')
+    .replace(/\s+,/g, ',')
+    .replace(/,\s*/g, ', ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 async function appendSessionMessage(session, message) {
+  let body = message.body || '';
+  if ((message.role === 'bot' || message.role === 'system') && body) {
+    body = sanitizeCustomerFacingText(body);
+  }
   session.messages.push({
     role: message.role,
-    body: message.body || '',
+    body,
     contentType: message.contentType || 'text',
     payload: message.payload,
     senderName: message.senderName,
@@ -153,11 +169,23 @@ async function getSessionByToken(sessionToken) {
   return ChatSession.findOne({ sessionToken }).populate('ticket').populate('assignedAgent');
 }
 
-async function verifyOrderForSession(session, company, orderNumber) {
+/**
+ * Verify an order using BOTH order number and email in one query.
+ * Never look up by order number alone — that would leak whether an order exists.
+ */
+async function verifyOrderForSession(session, company, orderNumber, email) {
   const StoreOrder = require('../models/StoreOrder');
-  const normalizedNumber = String(orderNumber).replace(/^#/, '').trim();
+  const normalizedNumber = String(orderNumber || '').replace(/^#/, '').trim();
+  const normalizedEmail = String(email || '').toLowerCase().trim();
+
+  if (!normalizedNumber || !normalizedEmail) {
+    return { verified: false, reason: 'missing_details' };
+  }
+
+  // Combined query only — identical failure for wrong number, wrong email, or both.
   const order = await StoreOrder.findOne({
     company: company._id,
+    'customer.email': normalizedEmail,
     $or: [
       { externalId: normalizedNumber },
       { orderNumber: new RegExp(`${normalizedNumber}$`, 'i') },
@@ -166,22 +194,23 @@ async function verifyOrderForSession(session, company, orderNumber) {
   }).lean();
 
   if (!order) {
-    return { verified: false, reason: 'not_found' };
+    // Clear pending pair so the next attempt must re-supply both (avoids retrying a bad email).
+    session.pendingOrderNumber = undefined;
+    session.orderLookupEmail = undefined;
+    await session.save();
+    return { verified: false, reason: 'no_match' };
   }
 
-  const orderEmail = (order.customer?.email || '').toLowerCase().trim();
-  if (orderEmail !== session.visitorEmail) {
-    return { verified: false, reason: 'email_mismatch' };
-  }
-
+  session.orderLookupEmail = normalizedEmail;
+  session.pendingOrderNumber = undefined;
   const existing = session.verifiedOrders.find((v) => v.externalId === order.externalId);
   if (!existing) {
     session.verifiedOrders.push({
       externalId: order.externalId,
       orderNumber: order.orderNumber || order.name,
     });
-    await session.save();
   }
+  await session.save();
 
   return { verified: true, order };
 }
@@ -198,4 +227,5 @@ module.exports = {
   verifyOrderForSession,
   isOrderVerified,
   findOrCreateCustomerByEmail,
+  sanitizeCustomerFacingText,
 };

@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -170,12 +171,17 @@ app.get('/widget-loader.js', async (req, res, next) => {
       return;
     }
     const apiBase = `${req.protocol}://${req.get('host')}/api/v1/widget`;
-    const widgetJs = `${req.protocol}://${req.get('host')}/widget.js`;
+    const widgetFile = path.join(__dirname, '../widget/dist/widget.js');
+    let bust = String(Date.now());
+    try {
+      bust = String(fs.statSync(widgetFile).mtimeMs | 0);
+    } catch (_) { /* ignore */ }
+    const widgetJs = `${req.protocol}://${req.get('host')}/widget.js?v=${bust}`;
     const body = `(function(){window.AgentraConfig={widgetKey:${JSON.stringify(widgetKey)},apiBase:${JSON.stringify(apiBase)}};var s=document.createElement("script");s.src=${JSON.stringify(widgetJs)};s.async=true;document.head.appendChild(s);})();`;
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.send(body);
   } catch (err) {
     next(err);
@@ -188,6 +194,7 @@ app.get('/widget.js', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(file, (err) => {
     if (err) next(err);
   });

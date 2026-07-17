@@ -27,6 +27,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/ai-agent": "AI Agent",
   "/ai-agents": "AI Agent",
   "/live-chat": "AI Agent",
+  "/chatbot": "Chatbot",
   "/analytics": "Analytics",
   "/departments": "Departments",
   "/teams": "Teams",
