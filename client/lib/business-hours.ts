@@ -71,7 +71,6 @@ export const BUSINESS_HOURS_TARGETS = [
   { id: "email", label: "Email" },
   { id: "chat", label: "Live chat" },
   { id: "whatsapp", label: "WhatsApp" },
-  { id: "tiktok", label: "TikTok" },
   { id: "instagram", label: "Instagram" },
   { id: "facebook", label: "Facebook" },
 ] as const;

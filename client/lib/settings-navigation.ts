@@ -91,7 +91,6 @@ export const SETTINGS_SECTIONS: SettingsNavSection[] = [
       { id: "email", label: "Email", description: "Inbound and outbound mail", configOnly: true },
       { id: "chat", label: "Live chat", description: "Website widget conversations", configOnly: true },
       { id: "whatsapp", label: "WhatsApp", description: "Connect WhatsApp Business", configOnly: true },
-      { id: "tiktok", label: "TikTok", description: "Social messaging on TikTok", configOnly: true },
       { id: "instagram", label: "Instagram", description: "Direct messages on Instagram", configOnly: true },
       { id: "facebook", label: "Facebook", description: "Messenger and page inbox", configOnly: true },
     ],

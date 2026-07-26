@@ -54,7 +54,6 @@ export const NOTIFICATION_SECTIONS: NotificationSection[] = [
       { id: "channel_whatsapp", label: "WhatsApp" },
       { id: "channel_instagram", label: "Instagram" },
       { id: "channel_facebook", label: "Facebook" },
-      { id: "channel_tiktok", label: "TikTok" },
     ],
   },
   {

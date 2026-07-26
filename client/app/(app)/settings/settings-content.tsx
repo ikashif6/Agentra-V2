@@ -22,10 +22,6 @@ import BusinessHoursPanel from "@/components/settings/business-hours-panel";
 import LiveChatSettingsPanel from "@/components/settings/live-chat-settings-panel";
 import AiAgentSettingsPanel from "@/components/settings/ai-agent-settings-panel";
 import HelpdeskAiSettingsPanel from "@/components/settings/helpdesk-ai-settings-panel";
-import {
-  AccountPlaceholderPanel,
-  ChannelPlaceholderPanel,
-} from "@/components/settings/settings-placeholders";
 import BillingPanel from "@/components/settings/billing-panel";
 import AccessPermissionsPanel from "@/components/settings/access-permissions-panel";
 import UsersSettingsPanel from "@/components/settings/users-settings-panel";
@@ -98,13 +94,6 @@ export default function SettingsContent() {
         return canConfig ? <LiveChatSettingsPanel /> : null;
       case "whatsapp":
         return canConfig ? <WhatsAppSettingsPanel /> : null;
-      case "tiktok":
-        return canConfig ? (
-          <ChannelPlaceholderPanel
-            title="TikTok"
-            description="Reply to TikTok direct messages alongside other channels"
-          />
-        ) : null;
       case "instagram":
         return canConfig ? <InstagramSettingsPanel /> : null;
       case "facebook":

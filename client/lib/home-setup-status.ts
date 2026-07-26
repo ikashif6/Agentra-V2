@@ -22,7 +22,7 @@ export const WORKSPACE_SETUP_STEPS: Omit<SetupStep, "done">[] = [
     duration: "5 mins",
     href: "/setup?step=channels",
     action: "Connect channels",
-    includes: ["Email", "Live chat", "WhatsApp", "Instagram", "Facebook", "TikTok"],
+    includes: ["Email", "Live chat", "WhatsApp", "Instagram", "Facebook"],
   },
   {
     id: "ai",

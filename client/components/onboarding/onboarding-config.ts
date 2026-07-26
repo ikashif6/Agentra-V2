@@ -39,7 +39,6 @@ export const CHANNEL_OPTIONS: { id: string; label: string }[] = [
   { id: "instagram", label: "Instagram" },
   { id: "facebook", label: "Facebook" },
   { id: "whatsapp", label: "WhatsApp" },
-  { id: "tiktok", label: "TikTok" },
 ];
 
 export const VOLUME_OPTIONS = [

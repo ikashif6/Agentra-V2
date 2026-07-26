@@ -179,7 +179,6 @@ const CHANNEL_FILTERS: { id: string; label: string; source?: TicketSource }[] = 
   { id: "facebook", label: "Facebook", source: "facebook" },
   { id: "instagram", label: "Instagram", source: "instagram" },
   { id: "whatsapp", label: "WhatsApp", source: "whatsapp" },
-  { id: "tiktok", label: "TikTok", source: "tiktok" },
 ];
 
 function formatRelative(str: string) {

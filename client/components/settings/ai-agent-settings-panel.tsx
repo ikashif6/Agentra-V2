@@ -83,12 +83,6 @@ const CHANNEL_OPTIONS: {
     description: "Reply to WhatsApp Business conversations.",
     requires: "Connect WhatsApp under Channels › WhatsApp.",
   },
-  {
-    key: "tiktok",
-    label: "TikTok",
-    description: "Reply to TikTok business messages.",
-    requires: "Connect TikTok under Channels › TikTok.",
-  },
 ];
 
 const ACTION_TOGGLES = [

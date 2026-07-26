@@ -17,7 +17,6 @@ import FacebookSettingsPanel from "@/components/settings/facebook-settings-panel
 import CustomizeWorkspacePanel from "@/components/settings/customize-workspace-panel";
 import NewUserPanel from "@/components/settings/new-user-panel";
 import NewTeamPanel from "@/components/settings/new-team-panel";
-import { ChannelPlaceholderPanel } from "@/components/settings/settings-placeholders";
 import {
   resolveSetupStepId,
   resolveSetupTaskId,
@@ -292,13 +291,6 @@ function SetupPanelHost({
       return <InstagramSettingsPanel returnTo={returnTo} />;
     case "facebook":
       return <FacebookSettingsPanel returnTo={returnTo} />;
-    case "tiktok":
-      return (
-        <ChannelPlaceholderPanel
-          title="TikTok"
-          description="Reply to TikTok direct messages alongside other channels"
-        />
-      );
     case "customize":
       return <CustomizeWorkspacePanel onUpdated={() => void onRefreshStatus?.()} />;
     case "invite-user":

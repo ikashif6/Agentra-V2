@@ -97,14 +97,6 @@ export const WORKSPACE_SETUP_FLOW: WorkspaceSetupStep[] = [
         action: "Connect Facebook",
         panel: "facebook",
       },
-      {
-        id: "tiktok",
-        title: "TikTok",
-        description: "Reply to TikTok business messages.",
-        href: "/settings?item=tiktok",
-        action: "Connect TikTok",
-        panel: "tiktok",
-      },
     ],
   },
   {
