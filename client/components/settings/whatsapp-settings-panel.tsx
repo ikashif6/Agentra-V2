@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { whatsappChannelApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
 import type {
@@ -79,6 +81,10 @@ export default function WhatsAppSettingsPanel() {
   const [connecting, setConnecting] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [manualConnecting, setManualConnecting] = useState(false);
+  const [manualAccessToken, setManualAccessToken] = useState("");
+  const [manualWabaId, setManualWabaId] = useState("");
+  const [manualPhoneNumberId, setManualPhoneNumberId] = useState("");
 
   // Session info streamed from the Embedded Signup popup (waba_id + phone_number_id).
   const sessionRef = useRef<{ wabaId?: string; phoneNumberId?: string }>({});
@@ -231,6 +237,32 @@ export default function WhatsAppSettingsPanel() {
       toast.error(message);
     } finally {
       setDisconnecting(false);
+    }
+  };
+
+  const connectManual = async () => {
+    const accessToken = manualAccessToken.trim();
+    const wabaId = manualWabaId.trim();
+    const phoneNumberId = manualPhoneNumberId.trim();
+    if (!accessToken || !wabaId || !phoneNumberId) {
+      toast.error("Paste the access token, WABA ID, and phone number ID from Meta.");
+      return;
+    }
+    setManualConnecting(true);
+    try {
+      const { data } = await whatsappChannelApi.connectManual({
+        accessToken,
+        wabaId,
+        phoneNumberId,
+      });
+      setWhatsapp(data.data.whatsapp ?? DEFAULT_WHATSAPP);
+      setManualAccessToken("");
+      toast.success("WhatsApp connected (test number)");
+    } catch (err: unknown) {
+      const { message } = getApiError(err, "Could not connect WhatsApp");
+      toast.error(message);
+    } finally {
+      setManualConnecting(false);
     }
   };
 
@@ -398,6 +430,56 @@ export default function WhatsAppSettingsPanel() {
               {whatsapp.lastError}
             </p>
           ) : null}
+        </div>
+
+        <div className="mt-6 rounded-xl border border-border/70 bg-card p-5 text-left">
+          <p className="text-sm font-medium text-foreground">Connect Meta test number</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Use this while Embedded Signup is blocked. Paste values from Meta → WhatsApp →
+            API Setup / Try it out, then reply from your phone to open a ticket in Agentra.
+          </p>
+          <div className="mt-4 space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="wa-access-token">Temporary access token</Label>
+              <Input
+                id="wa-access-token"
+                type="password"
+                autoComplete="off"
+                value={manualAccessToken}
+                onChange={(e) => setManualAccessToken(e.target.value)}
+                placeholder="Paste Meta temporary access token"
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="wa-waba-id">WhatsApp Business Account ID</Label>
+                <Input
+                  id="wa-waba-id"
+                  value={manualWabaId}
+                  onChange={(e) => setManualWabaId(e.target.value)}
+                  placeholder="e.g. 3852349935059466"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="wa-phone-id">Phone number ID</Label>
+                <Input
+                  id="wa-phone-id"
+                  value={manualPhoneNumberId}
+                  onChange={(e) => setManualPhoneNumberId(e.target.value)}
+                  placeholder="e.g. 1060962130426709"
+                />
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void connectManual()}
+              disabled={manualConnecting}
+            >
+              {manualConnecting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              Link test number
+            </Button>
+          </div>
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-3">

@@ -318,6 +318,8 @@ export const whatsappChannelApi = {
   getConfig: () => api.get("/channels/whatsapp/config", { baseURL: FACEBOOK_API_BASE }),
   connect: (payload: { code: string; wabaId: string; phoneNumberId: string }) =>
     api.post("/channels/whatsapp/connect", payload, { baseURL: FACEBOOK_API_BASE }),
+  connectManual: (payload: { accessToken: string; wabaId: string; phoneNumberId: string }) =>
+    api.post("/channels/whatsapp/connect-manual", payload, { baseURL: FACEBOOK_API_BASE }),
   disconnect: () => api.delete("/channels/whatsapp", { baseURL: FACEBOOK_API_BASE }),
 };
 
