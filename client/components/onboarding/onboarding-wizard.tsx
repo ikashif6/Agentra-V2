@@ -80,9 +80,7 @@ export function OnboardingWizard() {
   };
 
   return (
-    <div className="onboarding-shell relative min-h-svh overflow-hidden">
-      <div className="onboarding-shell-grid pointer-events-none absolute inset-0" aria-hidden />
-
+    <div className="relative min-h-svh overflow-hidden bg-white">
       <div className="absolute left-6 top-6 z-20 sm:left-8 sm:top-8">
         <AuthLogo href="/dashboard" />
       </div>

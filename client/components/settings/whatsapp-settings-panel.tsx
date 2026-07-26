@@ -189,7 +189,13 @@ export default function WhatsAppSettingsPanel() {
   );
 
   const startConnect = useCallback(() => {
-    if (!window.FB || !config?.configId) {
+    if (!config?.configId) {
+      toast.error(
+        "WhatsApp Embedded Signup isn’t configured. Add META_WA_CONFIG_ID to the server environment, then restart.",
+      );
+      return;
+    }
+    if (!window.FB || !sdkReady) {
       toast.error("WhatsApp signup isn't ready yet. Please wait a moment and retry.");
       return;
     }
@@ -212,7 +218,7 @@ export default function WhatsAppSettingsPanel() {
         extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
       },
     );
-  }, [config?.configId, finishConnect]);
+  }, [config?.configId, finishConnect, sdkReady]);
 
   const disconnect = async () => {
     setDisconnecting(true);

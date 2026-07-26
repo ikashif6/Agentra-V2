@@ -8,7 +8,6 @@ import {
   cacheWorkspaceBranding,
   readCachedWorkspaceBranding,
   effectiveWorkspaceBranding,
-  normalizeWorkspaceBranding,
 } from "@/lib/workspace-branding";
 
 export default function WorkspaceThemeProvider({ children }: { children: React.ReactNode }) {
@@ -18,6 +17,7 @@ export default function WorkspaceThemeProvider({ children }: { children: React.R
   useEffect(() => {
     const cached = readCachedWorkspaceBranding();
     if (cached) applyWorkspaceBranding(cached);
+    else applyWorkspaceBranding({ theme: "light" });
   }, []);
 
   useEffect(() => {
@@ -31,16 +31,6 @@ export default function WorkspaceThemeProvider({ children }: { children: React.R
     if (!user) return;
     void syncWorkspaceBranding();
   }, [user?._id, syncWorkspaceBranding]);
-
-  useEffect(() => {
-    const branding = effectiveWorkspaceBranding(user, company);
-    if (!branding || branding.theme !== "system") return;
-
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => applyWorkspaceBranding(normalizeWorkspaceBranding(branding));
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, [user, company]);
 
   return children;
 }

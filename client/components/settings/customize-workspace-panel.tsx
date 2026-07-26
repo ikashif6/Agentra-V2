@@ -566,7 +566,7 @@ export default function CustomizeWorkspacePanel({ onUpdated }: CustomizeWorkspac
         <div className="border-b border-border/60 px-5 py-4">
           <p className="text-sm font-medium text-foreground">Appearance</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Choose light, dark, or match your system setting.
+            Choose light or dark. Light is the default — your device dark mode is not applied automatically.
           </p>
         </div>
         <div className="grid gap-3 p-5 sm:grid-cols-3">

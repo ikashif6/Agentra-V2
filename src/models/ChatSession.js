@@ -44,6 +44,12 @@ const chatSessionSchema = new Schema(
     workflowState: { type: Schema.Types.Mixed, default: () => ({}) },
     /** Human handoff state machine — sole source of truth for connecting UI. */
     handoffState: { type: Schema.Types.Mixed, default: () => ({}) },
+    /** Standalone Chatbot AI Agent conversation mapping (bridge only). */
+    chatbotBridge: {
+      conversationId: { type: String },
+      sessionToken: { type: String },
+      workspaceId: { type: String },
+    },
     status: {
       type: String,
       enum: ['active', 'waiting_human', 'with_human', 'closed'],

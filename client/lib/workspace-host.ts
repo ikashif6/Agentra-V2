@@ -2,9 +2,9 @@ const BASE_DOMAIN = process.env.NEXT_PUBLIC_APP_BASE_DOMAIN ?? "agentraa.com";
 
 // The app's public entry point (login / workspace discovery). The apex
 // (agentraa.com) is reserved for the marketing site, so the app lives on
-// `portal.<base>` by default.
+// `app.<base>` by default.
 const PORTAL_HOST =
-  process.env.NEXT_PUBLIC_APP_PORTAL_HOST ?? `portal.${BASE_DOMAIN}`;
+  process.env.NEXT_PUBLIC_APP_PORTAL_HOST ?? `app.${BASE_DOMAIN}`;
 
 export const MAIN_LOGIN_URL = `https://${PORTAL_HOST}/auth/login`;
 

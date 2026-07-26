@@ -53,8 +53,8 @@ describe('Shopify reconnect URL', () => {
       }),
     );
 
-    assert.equal(url.origin, 'https://example.myshopify.com');
-    assert.equal(url.pathname, '/admin/oauth/authorize');
+    assert.equal(url.origin, 'https://admin.shopify.com');
+    assert.equal(url.pathname, '/store/example/oauth/authorize');
     assert.equal(url.searchParams.get('client_id'), 'client-id');
     assert.ok(url.searchParams.get('state'));
   });
@@ -78,6 +78,8 @@ describe('Shopify reconnect URL', () => {
       }),
     );
 
-    assert.equal(url.pathname, '/admin/oauth/install_custom_app');
+    assert.equal(url.origin, 'https://admin.shopify.com');
+    assert.equal(url.pathname, '/oauth/install_custom_app');
+    assert.equal(url.searchParams.get('no_redirect'), 'true');
   });
 });

@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const {
   configuredShopifyScriptTagsScope,
   shopifyScopesIncludeScriptTags,
+  isHttpsPublicApiUrl,
+  getApiBaseUrl,
 } = require('./store-oauth.service');
 
 const DEFAULT_LIVE_CHAT = {
@@ -9,7 +11,7 @@ const DEFAULT_LIVE_CHAT = {
   appearance: {
     brandColor: '#2563eb',
     backgroundColor: '#ffffff',
-    fontFamily: 'Sora',
+    fontFamily: 'Plus Jakarta Sans',
     logoSize: 'medium',
     logoWidth: 120,
     logoHeight: 40,
@@ -152,23 +154,31 @@ function sanitizeLiveChatForSettings(company, apiBase) {
 <script src="${apiBase.replace(/\/api\/v1$/, '')}/widget.js" async></script>`
     : null;
 
+  const storeConnected =
+    company.storeIntegration?.provider === 'shopify' &&
+    company.storeIntegration?.status === 'connected';
+  const hasScriptScope =
+    configuredShopifyScriptTagsScope() &&
+    shopifyScopesIncludeScriptTags(company.storeIntegration?.shopify?.scope);
+  const httpsReady = isHttpsPublicApiUrl();
+  let autoInstallBlockedReason = null;
+  if (storeConnected && hasScriptScope && !httpsReady) {
+    autoInstallBlockedReason =
+      'One-click Shopify install needs a public HTTPS API URL. Local http://localhost cannot be injected into Shopify. Use the embed code below, or set APP_API_URL to your HTTPS tunnel / production API.';
+  } else if (storeConnected && !hasScriptScope) {
+    autoInstallBlockedReason =
+      'Reconnect your Shopify store so Agentra gets the write_script_tags permission, then try one-click install again.';
+  }
+
   return {
     enabled: Boolean(config.enabled),
     widgetKey,
     widgetInstalled: Boolean(company.liveChat?.widgetInstalled),
     installMethod: company.liveChat?.installMethod || null,
-    canAutoInstall:
-      company.storeIntegration?.provider === 'shopify' &&
-      company.storeIntegration?.status === 'connected' &&
-      configuredShopifyScriptTagsScope() &&
-      shopifyScopesIncludeScriptTags(company.storeIntegration?.shopify?.scope),
-    shopifyAutoInstallPending:
-      company.storeIntegration?.provider === 'shopify' &&
-      company.storeIntegration?.status === 'connected' &&
-      !(
-        configuredShopifyScriptTagsScope() &&
-        shopifyScopesIncludeScriptTags(company.storeIntegration?.shopify?.scope)
-      ),
+    canAutoInstall: storeConnected && hasScriptScope && httpsReady,
+    shopifyAutoInstallPending: storeConnected && !hasScriptScope,
+    autoInstallBlockedReason,
+    apiPublicBase: getApiBaseUrl(),
     shopifyGrantedScope: company.storeIntegration?.shopify?.scope || null,
     storeProvider: company.storeIntegration?.provider || null,
     storeConnected: company.storeIntegration?.status === 'connected',

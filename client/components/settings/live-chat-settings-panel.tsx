@@ -51,12 +51,12 @@ function userToLiveChatAgent(user: User, index: number): LiveChatAgent {
 }
 
 const WIDGET_FONTS = [
-  "Sora",
+  "Plus Jakarta Sans",
   "Inter",
   "DM Sans",
   "Outfit",
   "Manrope",
-  "Plus Jakarta Sans",
+  "Sora",
   "Nunito Sans",
   "Poppins",
   "Rubik",
@@ -74,7 +74,7 @@ function loadGoogleFont(family: string) {
   link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name).replace(
     /%20/g,
     "+",
-  )}:wght@400;500;600;700&display=swap`;
+  )}:wght@400..800&display=swap`;
   document.head.appendChild(link);
 }
 
@@ -435,7 +435,9 @@ export default function LiveChatSettingsPanel() {
                   ? settings.appearance.fontFamily
                   : WIDGET_FONTS[0]
               }
-              style={{ fontFamily: `'${settings.appearance.fontFamily || "Sora"}', system-ui, sans-serif` }}
+              style={{
+                fontFamily: `'${settings.appearance.fontFamily || "Plus Jakarta Sans"}', system-ui, sans-serif`,
+              }}
               onChange={(e) => {
                 loadGoogleFont(e.target.value);
                 setSettings({
@@ -656,6 +658,21 @@ export default function LiveChatSettingsPanel() {
               placeholder="Ask about orders, products, returns & store support."
             />
           </Field>
+          <Field
+            label="Store display name"
+            hint="Shown on the “Leave us a message” card and in the home header when no logo is set."
+          >
+            <Input
+              value={settings.content.storeDisplayName ?? ""}
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  content: { ...settings.content, storeDisplayName: e.target.value },
+                })
+              }
+              placeholder="Your store name"
+            />
+          </Field>
           <Field label="Agent display name">
             <Input
               value={settings.content.agentName ?? ""}
@@ -690,6 +707,52 @@ export default function LiveChatSettingsPanel() {
               }
             />
           </Field>
+          <Field
+            label="Privacy notice"
+            hint="Shown on the email gate and at the top of chat. Keep this short and clear."
+          >
+            <Textarea
+              rows={3}
+              value={
+                settings.content.privacyNotice ??
+                "This chat is AI-powered for faster assistance. Chats are monitored and recorded."
+              }
+              onChange={(e) =>
+                setSettings({
+                  ...settings,
+                  content: { ...settings.content, privacyNotice: e.target.value },
+                })
+              }
+              placeholder="This chat is AI-powered for faster assistance. Chats are monitored and recorded."
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Privacy policy label" hint="Link text next to the notice">
+              <Input
+                value={settings.content.privacyPolicyLabel ?? "Privacy Policy"}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    content: { ...settings.content, privacyPolicyLabel: e.target.value },
+                  })
+                }
+                placeholder="Privacy Policy"
+              />
+            </Field>
+            <Field label="Privacy policy URL" hint="Your store’s privacy policy page">
+              <Input
+                type="url"
+                value={settings.content.privacyPolicyUrl ?? ""}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    content: { ...settings.content, privacyPolicyUrl: e.target.value },
+                  })
+                }
+                placeholder="https://yourstore.com/policies/privacy-policy"
+              />
+            </Field>
+          </div>
           <Button disabled={saving} onClick={() => void save()}>
             {saving ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
             Save appearance

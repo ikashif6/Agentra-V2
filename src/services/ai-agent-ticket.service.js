@@ -31,7 +31,7 @@ const SUPPORT_PLAYBOOK = `You are Agentra's ecommerce support assistant.
 - Do not discuss competitors or unrelated topics.`;
 
 const STORE_SECRET_SELECT =
-  '+storeIntegration.shopify.accessToken ' +
+  '+storeIntegration.shopify.accessToken +storeIntegration.shopify.refreshToken ' +
   '+storeIntegration.woocommerce.consumerKey ' +
   '+storeIntegration.woocommerce.consumerSecret ' +
   '+storeIntegration.custom.apiKey';

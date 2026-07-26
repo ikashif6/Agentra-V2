@@ -26,6 +26,7 @@ import {
   type SetupPanelId,
   type WorkspaceSetupStepId,
 } from "@/lib/workspace-setup";
+import { SITE_LEGAL } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 type WorkspaceSetupWizardProps = {
@@ -49,10 +50,16 @@ export function WorkspaceSetupWizard({
   const isLast = stepIndex === WORKSPACE_SETUP_FLOW.length - 1;
   const progress = ((stepIndex + 1) / WORKSPACE_SETUP_FLOW.length) * 100;
   const completed = useMemo(() => new Set(completedIds), [completedIds]);
-  const stepDone = completed.has(step.id);
   const activeTask = step.tasks.find((task) => task.id === taskId) ?? step.tasks[0];
   const showTaskTabs = step.tasks.length > 1;
   const returnTo = setupStepHref(stepId, showTaskTabs ? activeTask.id : undefined);
+  const taskIndex = Math.max(
+    0,
+    step.tasks.findIndex((task) => task.id === activeTask.id),
+  );
+  const nextTask =
+    taskIndex >= 0 && taskIndex < step.tasks.length - 1 ? step.tasks[taskIndex + 1] : null;
+  const nextStep = !isLast ? WORKSPACE_SETUP_FLOW[stepIndex + 1] : null;
 
   useEffect(() => {
     const refresh = () => {
@@ -74,7 +81,7 @@ export function WorkspaceSetupWizard({
     router.replace(setupStepHref(id, task), { scroll: false });
   };
 
-  const goNext = () => {
+  const goNextStep = () => {
     if (isLast) {
       router.push("/dashboard");
       return;
@@ -82,27 +89,63 @@ export function WorkspaceSetupWizard({
     goTo(WORKSPACE_SETUP_FLOW[stepIndex + 1].id);
   };
 
+  /** Advance to the next tab in this step, or the next major step when on the last tab. */
+  const goNextTask = () => {
+    if (nextTask) {
+      goTo(stepId, nextTask.id);
+      return;
+    }
+    goNextStep();
+  };
+
+  /** Skip the current tab (or major step when this is the last tab). */
+  const skipForNow = () => {
+    goNextTask();
+  };
+
   const goBack = () => {
+    if (taskIndex > 0) {
+      goTo(stepId, step.tasks[taskIndex - 1].id);
+      return;
+    }
     if (stepIndex === 0) {
       router.push("/dashboard");
       return;
     }
-    goTo(WORKSPACE_SETUP_FLOW[stepIndex - 1].id);
+    const prev = WORKSPACE_SETUP_FLOW[stepIndex - 1];
+    const prevTask = prev.tasks[prev.tasks.length - 1];
+    goTo(prev.id, prev.tasks.length > 1 ? prevTask.id : undefined);
   };
 
-  return (
-    <div className="onboarding-shell relative min-h-svh overflow-x-hidden">
-      <div className="onboarding-shell-grid pointer-events-none absolute inset-0" aria-hidden />
+  const primaryLabel = nextTask
+    ? `Next: ${nextTask.title}`
+    : nextStep
+      ? `Next: ${nextStep.label}`
+      : "Finish";
 
-      <header className="relative z-20 flex items-center justify-between px-5 py-5 sm:px-8">
+  const skipLabel = nextTask || nextStep ? "Skip for now" : "Skip & finish";
+
+  return (
+    <div className="relative min-h-svh overflow-x-hidden bg-white">
+      <header className="relative z-20 flex items-center justify-between gap-3 px-5 py-5 sm:px-8">
         <AuthLogo href="/dashboard" />
-        <button
-          type="button"
-          onClick={() => router.push("/dashboard")}
-          className="text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-        >
-          Exit to home
-        </button>
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard")}
+            className="text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            Exit to home
+          </button>
+          <a
+            href={SITE_LEGAL.getHelp}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            Get help
+          </a>
+        </div>
       </header>
 
       <div className="relative z-10 mx-auto w-full max-w-4xl px-4 pb-16 pt-2 sm:px-6">
@@ -196,26 +239,24 @@ export function WorkspaceSetupWizard({
               className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="size-3.5" />
-              {stepIndex === 0 ? "Back to home" : "Previous step"}
+              {stepIndex === 0 && taskIndex === 0 ? "Back to home" : "Previous"}
             </button>
             <div className="flex flex-wrap items-center justify-end gap-2.5">
-              {!stepDone ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={goNext}
-                  className={cn("h-10 font-semibold", authRadiusClass)}
-                >
-                  Skip for now
-                </Button>
-              ) : null}
               <Button
                 type="button"
-                onClick={goNext}
+                variant="outline"
+                onClick={skipForNow}
+                className={cn("h-10 font-semibold", authRadiusClass)}
+              >
+                {skipLabel}
+              </Button>
+              <Button
+                type="button"
+                onClick={goNextTask}
                 className={cn("h-10 gap-1 px-4 font-semibold", authRadiusClass)}
               >
-                {isLast ? "Finish" : "Continue"}
-                {!isLast ? <ArrowRight className="size-3.5" /> : null}
+                {primaryLabel}
+                {nextTask || nextStep ? <ArrowRight className="size-3.5" /> : null}
               </Button>
             </div>
           </div>

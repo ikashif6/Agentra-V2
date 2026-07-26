@@ -3,16 +3,109 @@ const { encryptSecret, decryptSecret } = require('../utils/crypto');
 
 const SHOPIFY_API_VERSION = '2024-10';
 
-function normalizeShopDomain(input) {
+function stripHostInput(input) {
   let domain = String(input || '').trim().toLowerCase();
-  domain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  domain = domain.replace(/^https?:\/\//, '');
+  domain = domain.split('/')[0].split('?')[0].split('#')[0];
+  domain = domain.replace(/^www\./, '');
+  return domain;
+}
+
+function normalizeShopDomain(input) {
+  let domain = stripHostInput(input);
   if (!domain.includes('.')) {
     domain = `${domain}.myshopify.com`;
   }
   if (!domain.endsWith('.myshopify.com')) {
     throw new Error('Enter a valid Shopify store domain (e.g. your-store.myshopify.com)');
   }
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(domain)) {
+    throw new Error('Enter a valid Shopify store domain (e.g. your-store.myshopify.com)');
+  }
   return domain;
+}
+
+function extractMyshopifyDomain(text) {
+  if (!text) return null;
+  const patterns = [
+    /([a-z0-9][a-z0-9-]*\.myshopify\.com)/i,
+    /"permanent_domain"\s*:\s*"([a-z0-9][a-z0-9-]*\.myshopify\.com)"/i,
+    /"myshopifyDomain"\s*:\s*"([a-z0-9][a-z0-9-]*\.myshopify\.com)"/i,
+    /Shopify\.shop\s*=\s*"([^"]+)"/i,
+  ];
+  for (const pattern of patterns) {
+    const match = String(text).match(pattern);
+    if (!match?.[1]) continue;
+    try {
+      const raw = match[1].includes('.') ? match[1] : `${match[1]}.myshopify.com`;
+      return normalizeShopDomain(raw);
+    } catch {
+      /* try next pattern */
+    }
+  }
+  return null;
+}
+
+async function fetchTextWithTimeout(url, { timeoutMs = 8000, redirect = 'follow' } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      redirect,
+      signal: controller.signal,
+      headers: {
+        Accept: 'text/html,application/json,*/*',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    const text = await res.text().catch(() => '');
+    return { res, text };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Accept either `store.myshopify.com` or a custom storefront domain and resolve
+ * to the permanent Shopify shop domain required for OAuth.
+ */
+async function resolveShopifyShopDomain(input) {
+  const host = stripHostInput(input);
+  if (!host) {
+    throw new Error('Enter your Shopify domain or storefront URL');
+  }
+
+  try {
+    return normalizeShopDomain(host);
+  } catch {
+    /* custom domain — try resolve below */
+  }
+
+  const candidates = [
+    `https://${host}/`,
+    `https://www.${host}/`,
+    `https://${host}/admin`,
+    `https://www.${host}/admin`,
+    `http://${host}/`,
+  ];
+
+  for (const url of candidates) {
+    try {
+      const { res, text } = await fetchTextWithTimeout(url);
+      const fromLocation = extractMyshopifyDomain(res.url || '');
+      if (fromLocation) return fromLocation;
+      const fromBody = extractMyshopifyDomain(text);
+      if (fromBody) return fromBody;
+    } catch {
+      /* try next candidate */
+    }
+  }
+
+  throw new Error(
+    'Could not resolve that storefront to a Shopify shop. Enter your *.myshopify.com domain (Settings → Domains in Shopify admin).',
+  );
 }
 
 function normalizeStoreUrl(input) {
@@ -148,6 +241,9 @@ function encryptStoreIntegration(integration) {
   if (integration.shopify?.accessToken) {
     integration.shopify.accessToken = encryptSecret(integration.shopify.accessToken);
   }
+  if (integration.shopify?.refreshToken) {
+    integration.shopify.refreshToken = encryptSecret(integration.shopify.refreshToken);
+  }
   if (integration.woocommerce) {
     if (integration.woocommerce.consumerKey) {
       integration.woocommerce.consumerKey = encryptSecret(integration.woocommerce.consumerKey);
@@ -188,6 +284,7 @@ function getStoreSecrets(integration) {
     shopify: {
       shopDomain: integration?.shopify?.shopDomain,
       accessToken: readSecret(integration?.shopify?.accessToken, enc),
+      refreshToken: readSecret(integration?.shopify?.refreshToken, enc),
     },
     woocommerce: {
       consumerKey: readSecret(integration?.woocommerce?.consumerKey, enc),
@@ -715,12 +812,13 @@ function sanitizeStoreIntegration(integration) {
       syncSettings: {
         syncOrders: true,
         syncCustomers: true,
-        syncProducts: false,
+        syncProducts: true,
       },
     };
   }
 
   const plain = integration.toObject?.() ?? integration;
+  const syncSettings = plain.syncSettings || {};
 
   return {
     provider: plain.provider || null,
@@ -754,10 +852,10 @@ function sanitizeStoreIntegration(integration) {
           features: plain.custom.features || undefined,
         }
       : undefined,
-    syncSettings: plain.syncSettings || {
-      syncOrders: true,
-      syncCustomers: true,
-      syncProducts: false,
+    syncSettings: {
+      syncOrders: syncSettings.syncOrders !== false,
+      syncCustomers: syncSettings.syncCustomers !== false,
+      syncProducts: syncSettings.syncProducts !== false,
     },
   };
 }
@@ -765,6 +863,7 @@ function sanitizeStoreIntegration(integration) {
 module.exports = {
   SHOPIFY_API_VERSION,
   normalizeShopDomain,
+  resolveShopifyShopDomain,
   normalizeStoreUrl,
   testShopifyConnection,
   testWooCommerceConnection,

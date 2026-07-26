@@ -1,7 +1,6 @@
-import { PORTAL_ORIGIN } from "@/lib/legal";
-
 export const SITE_LEGAL = {
-  helpCenter: "https://agentraa.com/help",
-  privacyPolicy: `${PORTAL_ORIGIN}/privacy`,
-  termsAndConditions: `${PORTAL_ORIGIN}/terms`,
+  helpCenter: "https://help.agentraa.com/",
+  getHelp: "https://agentraa.com/get-help",
+  privacyPolicy: "https://agentraa.com/privacy-policy/",
+  termsAndConditions: "https://agentraa.com/terms-conditions/",
 } as const;

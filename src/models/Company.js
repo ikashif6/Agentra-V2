@@ -257,6 +257,10 @@ const companySchema = new mongoose.Schema(
       shopify: {
         shopDomain: { type: String },
         accessToken: { type: String, select: false },
+        /** Expiring offline token refresh (Shopify public apps). */
+        refreshToken: { type: String, select: false },
+        accessTokenExpiresAt: { type: Date },
+        refreshTokenExpiresAt: { type: Date },
         scope: { type: String },
         shopName: { type: String },
       },
@@ -281,7 +285,7 @@ const companySchema = new mongoose.Schema(
       syncSettings: {
         syncOrders: { type: Boolean, default: true },
         syncCustomers: { type: Boolean, default: true },
-        syncProducts: { type: Boolean, default: false },
+        syncProducts: { type: Boolean, default: true },
       },
     },
 
@@ -296,7 +300,7 @@ const companySchema = new mongoose.Schema(
       appearance: {
         brandColor: { type: String, default: '#2563eb' },
         backgroundColor: { type: String, default: '#ffffff' },
-        fontFamily: { type: String, default: 'Sora' },
+        fontFamily: { type: String, default: 'Plus Jakarta Sans' },
         logoUrl: { type: String },
         faviconUrl: { type: String },
         logoSize: { type: String, enum: ['small', 'medium', 'large'], default: 'medium' },

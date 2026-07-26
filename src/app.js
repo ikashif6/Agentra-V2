@@ -200,6 +200,84 @@ app.get('/widget.js', (req, res, next) => {
   });
 });
 
+// Settings panel live preview — same widget.js, driven by postMessage config
+app.get('/widget-preview', (req, res) => {
+  const widgetFile = path.join(__dirname, '../widget/dist/widget.js');
+  let bust = String(Date.now());
+  try {
+    bust = String(fs.statSync(widgetFile).mtimeMs | 0);
+  } catch (_) {
+    /* ignore */
+  }
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agentra widget preview</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #e8ecf0;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .stage {
+      position: absolute;
+      inset: 0;
+      padding: 16px;
+      pointer-events: none;
+      opacity: 0.55;
+    }
+    .stage .bar { height: 10px; width: 80px; border-radius: 999px; background: rgba(255,255,255,0.85); margin-bottom: 12px; }
+    .stage .line { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.55); margin-bottom: 8px; }
+    .stage .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 20px; }
+    .stage .card { height: 80px; border-radius: 12px; background: rgba(255,255,255,0.65); }
+  </style>
+</head>
+<body>
+  <div class="stage" aria-hidden="true">
+    <div class="bar"></div>
+    <div class="line" style="width:70%"></div>
+    <div class="line" style="width:45%"></div>
+    <div class="grid">
+      <div class="card"></div><div class="card"></div>
+      <div class="card"></div><div class="card"></div>
+    </div>
+  </div>
+  <script>
+    window.AgentraConfig = { preview: true, previewConfig: { enabled: true } };
+    window.addEventListener('message', function (event) {
+      var data = event && event.data;
+      if (!data || data.type !== 'agentra-preview-config') return;
+      if (window.AgentraWidgetPreview && typeof window.AgentraWidgetPreview.update === 'function') {
+        window.AgentraWidgetPreview.update(data.config || {});
+      } else {
+        window.__agentraPreviewPending = data.config || {};
+      }
+    });
+    var _ready = setInterval(function () {
+      if (!window.AgentraWidgetPreview) return;
+      clearInterval(_ready);
+      if (window.__agentraPreviewPending) {
+        window.AgentraWidgetPreview.update(window.__agentraPreviewPending);
+        window.__agentraPreviewPending = null;
+      }
+    }, 40);
+  </script>
+  <script src="/widget.js?v=${bust}" async></script>
+</body>
+</html>`;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  // Embedded from the Agentra dashboard (different origin in local/dev).
+  res.removeHeader('X-Frame-Options');
+  res.setHeader('Content-Security-Policy', "frame-ancestors *");
+  res.send(html);
+});
+
 // ─── Shopify Partner "App URL" entry ──────────────────────────────────────────
 // Custom distribution installs land on App URL (often API root) with shop+hmac.
 app.get('/', (req, res, next) => {

@@ -1,7 +1,7 @@
 const BASE_DOMAIN = process.env.NEXT_PUBLIC_APP_BASE_DOMAIN ?? "agentraa.com";
 
 export const PORTAL_HOST =
-  process.env.NEXT_PUBLIC_APP_PORTAL_HOST ?? `portal.${BASE_DOMAIN}`;
+  process.env.NEXT_PUBLIC_APP_PORTAL_HOST ?? `app.${BASE_DOMAIN}`;
 
 export const PORTAL_ORIGIN = `https://${PORTAL_HOST}`;
 

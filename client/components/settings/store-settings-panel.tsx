@@ -41,7 +41,7 @@ const PROVIDER_COPY: Record<
     title: "Connect Shopify",
     subtitle: "Authorize Agentra from your Shopify admin — no tokens to copy.",
     steps: [
-      "Enter your store domain (e.g. your-brand.myshopify.com).",
+      "Enter your *.myshopify.com domain or your public storefront URL.",
       "Click Connect Shopify and approve access in the Shopify window.",
       "You're done — orders sync automatically into the inbox.",
     ],
@@ -154,7 +154,7 @@ export default function StoreSettingsPanel({ returnTo }: StoreSettingsPanelProps
     setStore({
       provider: null,
       status: "disconnected",
-      syncSettings: { syncOrders: true, syncCustomers: true, syncProducts: false },
+      syncSettings: { syncOrders: true, syncCustomers: true, syncProducts: true },
     });
     setStep("choose");
     setProvider(null);
@@ -381,11 +381,14 @@ function ProviderConnectForm({
         {/* Shopify — one-click OAuth */}
         {provider === "shopify" ? (
           <div className="space-y-4">
-            <Field label="Shopify store domain" hint="e.g. your-brand.myshopify.com">
+            <Field
+              label="Shopify store domain"
+              hint="*.myshopify.com or your storefront URL (e.g. shop.yourbrand.com)"
+            >
               <Input
                 value={shopDomain}
                 onChange={(e) => setShopDomain(e.target.value)}
-                placeholder="your-brand.myshopify.com"
+                placeholder="your-brand.myshopify.com or shop.yourbrand.com"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && shopDomain.trim()) {
                     e.preventDefault();

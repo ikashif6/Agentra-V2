@@ -10,7 +10,7 @@ const { processCustomerMessage } = require('../services/live-chat-ai.service');
 const { isTeamAvailableNow } = require('../services/live-chat-hours.service');
 
 const STORE_SECRET_SELECT =
-  '+storeIntegration.shopify.accessToken ' +
+  '+storeIntegration.shopify.accessToken +storeIntegration.shopify.refreshToken ' +
   '+storeIntegration.woocommerce.consumerKey ' +
   '+storeIntegration.woocommerce.consumerSecret ' +
   '+storeIntegration.custom.apiKey';

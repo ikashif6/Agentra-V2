@@ -122,7 +122,7 @@ const userSchema = new mongoose.Schema(
         volume: { type: Number, default: 70, min: 0, max: 100 },
         rules: { type: Object, default: undefined },
       },
-      theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
+      theme: { type: String, enum: ['light', 'dark', 'system'], default: 'light' },
       timezone: { type: String, default: 'UTC' },
       dateFormat: { type: String, enum: ['DMY', 'MDY'], default: 'MDY' },
       timeFormat: { type: String, enum: ['12h', '24h'], default: '12h' },

@@ -11,6 +11,7 @@ const {
   encryptStoreIntegration,
   getStoreSecrets,
   normalizeShopDomain,
+  resolveShopifyShopDomain,
 } = require('../services/store.service');
 const { fetchCustomCapabilities } = require('../services/custom-store.service');
 const {
@@ -37,6 +38,7 @@ const { logStoreConnected, logStoreDisconnected } = require('../services/activit
 
 const SECRET_SELECT =
   '+storeIntegration.shopify.accessToken ' +
+  '+storeIntegration.shopify.refreshToken ' +
   '+storeIntegration.woocommerce.consumerKey ' +
   '+storeIntegration.woocommerce.consumerSecret ' +
   '+storeIntegration.woocommerce.webhookSecret ' +
@@ -67,13 +69,45 @@ function patchStoreIntegrationFields(companyId, fields) {
 // Fire-and-forget initial sync so the connect request returns quickly.
 function runBackgroundSync(companyId) {
   loadCompanyWithStoreSecrets(companyId)
-    .then((company) => (company ? syncStoreOrders(company) : null))
+    .then(async (company) => {
+      if (!company) return null;
+      const orders = await syncStoreOrders(company);
+      let productsSynced = null;
+      if (company.storeIntegration?.syncSettings?.syncProducts !== false) {
+        const productResult = await syncStoreProducts(company);
+        productsSynced = productResult.synced;
+        try {
+          const { bumpAssistantConfigVersion } = require('../services/assistant-engine/assistant-config-version.service');
+          const { clearRuntimeConfigCache } = require('../services/assistant-engine/assistant-runtime-config.service');
+          await bumpAssistantConfigVersion(company._id, 'product_sync');
+          clearRuntimeConfigCache(String(company._id));
+        } catch (bumpErr) {
+          console.warn('[store] assistant config version bump failed', bumpErr.message);
+        }
+      }
+      await patchStoreIntegrationFields(company._id, {
+        lastSyncAt: new Date(),
+        lastError: null,
+      });
+      return { orders, productsSynced };
+    })
     .then((result) => {
-      if (result?.synced != null) {
-        console.log(`[store sync] company=${companyId} synced=${result.synced}`);
+      if (result?.orders?.synced != null) {
+        console.log(
+          `[store sync] company=${companyId} orders=${result.orders.synced}` +
+            (result.productsSynced != null ? ` products=${result.productsSynced}` : ''),
+        );
       }
     })
     .catch((err) => console.error('[store sync]', err.message));
+}
+
+function defaultSyncSettings(overrides = {}) {
+  return {
+    syncOrders: overrides.syncOrders !== false,
+    syncCustomers: overrides.syncCustomers !== false,
+    syncProducts: overrides.syncProducts !== false,
+  };
 }
 
 /**
@@ -115,11 +149,7 @@ exports.connect = async (req, res, next) => {
       lastError: null,
       encrypted: false,
       webhooksRegistered: false,
-      syncSettings: {
-        syncOrders: syncSettings?.syncOrders !== false,
-        syncCustomers: syncSettings?.syncCustomers !== false,
-        syncProducts: Boolean(syncSettings?.syncProducts),
-      },
+      syncSettings: defaultSyncSettings(syncSettings),
     };
 
     if (provider === 'shopify') {
@@ -216,10 +246,11 @@ exports.shopifyOAuthUrl = async (req, res, next) => {
     if (!shopDomain) {
       return response.badRequest(res, 'shopDomain is required');
     }
+    const resolvedShopDomain = await resolveShopifyShopDomain(shopDomain);
     const returnOrigin = req.query.returnOrigin || req.headers.origin;
     const returnPath = typeof req.query.returnPath === 'string' ? req.query.returnPath : null;
     const url = buildShopifyInstallUrl({
-      shopDomain,
+      shopDomain: resolvedShopDomain,
       companyId: req.company._id,
       subdomain: req.company.subdomain,
       userId: req.user._id,
@@ -228,7 +259,7 @@ exports.shopifyOAuthUrl = async (req, res, next) => {
     });
 
     if (usesCustomInstallFlow()) {
-      const domain = normalizeShopDomain(shopDomain);
+      const domain = resolvedShopDomain;
       req.company.storeIntegration = {
         provider: 'shopify',
         status: 'pending',
@@ -242,11 +273,7 @@ exports.shopifyOAuthUrl = async (req, res, next) => {
             typeof returnOrigin === 'string' && returnOrigin.trim() ? returnOrigin.trim() : null,
           pendingReturnPath: returnPath,
         },
-        syncSettings: req.company.storeIntegration?.syncSettings || {
-          syncOrders: true,
-          syncCustomers: true,
-          syncProducts: false,
-        },
+        syncSettings: req.company.storeIntegration?.syncSettings || defaultSyncSettings(),
       };
       req.company.markModified('storeIntegration');
       await req.company.save();
@@ -395,7 +422,8 @@ exports.shopifyOAuthCallback = async (req, res, next) => {
     }
 
     try {
-      const { accessToken, scope } = await exchangeShopifyCode(String(shop), String(code));
+      const token = await exchangeShopifyCode(String(shop), String(code));
+      const { accessToken, scope } = token;
       const shopName = await fetchShopifyShopName({ shopDomain: String(shop), accessToken });
       const webhooksRegistered = await registerShopifyWebhooks({
         shopDomain: String(shop),
@@ -411,12 +439,16 @@ exports.shopifyOAuthCallback = async (req, res, next) => {
         lastError: null,
         encrypted: false,
         webhooksRegistered,
-        shopify: { shopDomain: String(shop), accessToken, scope, shopName },
-        syncSettings: company.storeIntegration?.syncSettings || {
-          syncOrders: true,
-          syncCustomers: true,
-          syncProducts: false,
+        shopify: {
+          shopDomain: String(shop),
+          accessToken,
+          refreshToken: token.refreshToken || undefined,
+          accessTokenExpiresAt: token.accessTokenExpiresAt || undefined,
+          refreshTokenExpiresAt: token.refreshTokenExpiresAt || undefined,
+          scope,
+          shopName,
         },
+        syncSettings: company.storeIntegration?.syncSettings || defaultSyncSettings(),
       };
       encryptStoreIntegration(integration);
       company.storeIntegration = integration;
@@ -528,11 +560,7 @@ exports.wooOAuthCallback = async (req, res, next) => {
       encrypted: false,
       webhooksRegistered,
       woocommerce: { storeUrl, consumerKey, consumerSecret, webhookSecret, storeName },
-      syncSettings: company.storeIntegration?.syncSettings || {
-        syncOrders: true,
-        syncCustomers: true,
-        syncProducts: false,
-      },
+      syncSettings: company.storeIntegration?.syncSettings || defaultSyncSettings(),
     };
     encryptStoreIntegration(integration);
     company.storeIntegration = integration;
@@ -561,11 +589,7 @@ exports.updateSettings = async (req, res, next) => {
     }
     const { syncSettings } = req.body;
     const nextSyncSettings = syncSettings
-      ? {
-          syncOrders: syncSettings.syncOrders !== false,
-          syncCustomers: syncSettings.syncCustomers !== false,
-          syncProducts: Boolean(syncSettings.syncProducts),
-        }
+      ? defaultSyncSettings(syncSettings)
       : integration.syncSettings;
 
     if (syncSettings) {
@@ -577,7 +601,7 @@ exports.updateSettings = async (req, res, next) => {
     }
 
     let productsSynced = null;
-    if (nextSyncSettings?.syncProducts) {
+    if (nextSyncSettings?.syncProducts !== false) {
       try {
         const withSecrets = await loadCompanyWithStoreSecrets(company._id);
         const productResult = await syncStoreProducts(withSecrets);
@@ -707,7 +731,7 @@ exports.syncNow = async (req, res, next) => {
 
     const result = await syncStoreOrders(company);
     let productsSynced = null;
-    if (integration.syncSettings?.syncProducts) {
+    if (integration.syncSettings?.syncProducts !== false) {
       const productResult = await syncStoreProducts(company);
       productsSynced = productResult.synced;
       try {
@@ -894,7 +918,7 @@ exports.updateOrder = async (req, res, next) => {
 exports.disconnect = async (req, res, next) => {
   try {
     const company = await Company.findById(req.company._id).select(
-      '+storeIntegration.shopify.accessToken',
+      '+storeIntegration.shopify.accessToken +storeIntegration.shopify.refreshToken',
     );
     const integration = company.storeIntegration;
 
@@ -926,7 +950,7 @@ exports.disconnect = async (req, res, next) => {
 
     company.storeIntegration = {
       status: 'disconnected',
-      syncSettings: { syncOrders: true, syncCustomers: true, syncProducts: false },
+      syncSettings: { syncOrders: true, syncCustomers: true, syncProducts: true },
     };
     await company.save();
 

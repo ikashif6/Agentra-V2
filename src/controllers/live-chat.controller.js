@@ -29,6 +29,7 @@ async function bumpConfigAfterWrite(companyId, reason) {
 
 const STORE_SECRET_SELECT =
   '+storeIntegration.shopify.accessToken ' +
+  '+storeIntegration.shopify.refreshToken ' +
   '+storeIntegration.woocommerce.consumerKey ' +
   '+storeIntegration.woocommerce.consumerSecret ' +
   '+storeIntegration.custom.apiKey';

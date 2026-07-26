@@ -42,6 +42,10 @@ const {
   processTurn: processAssistantTurn,
   resolveEngineMode,
 } = require('./assistant-engine/assistant-engine.service');
+const {
+  isChatbotEngineEnabled,
+  processChatbotEngineTurn,
+} = require('./chatbot-bridge/bridge.service');
 
 const SUPPORT_PLAYBOOK = `You are a live store support agent for THIS store only.
 - Sound like a real human support rep: warm, clear, and brief (2–4 short sentences unless listing products).
@@ -460,8 +464,18 @@ async function processCustomerMessage(company, session, text, { onStatus, widget
     });
   }
 
-  // Authoritative conversational pipeline — v3 engine, v2 rollback, or legacy v1
+  // Standalone ecommerce chatbot (Chatbot AI Agent) — config/data/handoff from Agentra
+  if (isChatbotEngineEnabled(company)) {
+    if (onStatus) onStatus('retrieving');
+    return processChatbotEngineTurn(company, session, trimmed, {
+      onStatus,
+      widgetAction,
+    });
+  }
+
+  // Authoritative conversational pipeline — v3, v2 rollback, or legacy v1
   if (onStatus) onStatus('retrieving');
+
   const engineMode = resolveEngineMode(company);
 
   if (engineMode === 'v3' || engineMode === 'shadow') {

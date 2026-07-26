@@ -48,10 +48,6 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         isFlatCanvas && "app-shell-flat",
       )}
     >
-      {!isFlatCanvas ? (
-        <div className="app-shell-grid pointer-events-none absolute inset-0" aria-hidden />
-      ) : null}
-
       <CriticalAlertBanner />
 
       <div className="relative z-[1] flex min-h-0 min-w-0 flex-1 overflow-hidden">

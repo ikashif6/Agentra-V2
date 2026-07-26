@@ -3,7 +3,12 @@ const { htmlToPlainText } = require('./facebook.service');
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v21.0';
 
 function isWhatsAppConfigured() {
-  return Boolean(process.env.META_APP_ID && process.env.META_APP_SECRET);
+  // Embedded Signup needs app credentials + a WhatsApp configuration id from Meta.
+  return Boolean(
+    process.env.META_APP_ID &&
+      process.env.META_APP_SECRET &&
+      process.env.META_WA_CONFIG_ID,
+  );
 }
 
 function getEmbeddedSignupConfig() {
@@ -11,7 +16,7 @@ function getEmbeddedSignupConfig() {
     appId: process.env.META_APP_ID || '',
     configId: process.env.META_WA_CONFIG_ID || '',
     graphVersion: GRAPH_VERSION,
-    configured: Boolean(process.env.META_APP_ID && process.env.META_WA_CONFIG_ID),
+    configured: isWhatsAppConfigured(),
   };
 }
 

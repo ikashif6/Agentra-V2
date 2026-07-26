@@ -39,7 +39,7 @@ exports.connect = async (req, res, next) => {
     if (!isWhatsAppConfigured()) {
       return response.badRequest(
         res,
-        'WhatsApp is not configured yet. Add META_APP_ID and META_APP_SECRET to the server environment.',
+        'WhatsApp is not configured yet. Add META_APP_ID, META_APP_SECRET, and META_WA_CONFIG_ID to the server environment.',
       );
     }
 

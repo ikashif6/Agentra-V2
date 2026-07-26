@@ -27,14 +27,20 @@ const liveChatRoutes     = require('./live-chat.routes');
 const widgetRoutes       = require('./widget.routes');
 const aiAgentRoutes      = require('./ai-agent.routes');
 const helpdeskAiRoutes   = require('./helpdesk-ai.routes');
+const chatbotBridgeRoutes = require('./chatbot-bridge.routes');
 
 // Health check
 router.get('/health', (req, res) => {
   res.json({
     success: true,
     message: 'Agentra API is running',
-    build: 'store-sync-2',
+    build: 'chatbot-bridge-1',
     shopifyConfigured: Boolean(process.env.SHOPIFY_API_KEY && process.env.SHOPIFY_API_SECRET),
+    chatbotEngineEnabled: ['1', 'true', 'yes'].includes(
+      String(process.env.CHATBOT_ENGINE_ENABLED || '').toLowerCase(),
+    ) || ['chatbot', 'clean'].includes(
+      String(process.env.AI_CONVERSATION_PIPELINE || '').toLowerCase(),
+    ),
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || '1.0.0',
     environment: process.env.NODE_ENV || 'development',
@@ -63,6 +69,7 @@ router.use('/store',         storeRoutes);
 router.use('/live-chat',     liveChatRoutes);
 router.use('/ai-agent',      aiAgentRoutes);
 router.use('/helpdesk-ai',   helpdeskAiRoutes);
+router.use('/chatbot-bridge', chatbotBridgeRoutes);
 router.use('/widget',        widgetRoutes);
 router.use('/webhooks/facebook', facebookWebhookRoutes);
 router.use('/webhooks/tiktok', tiktokWebhookRoutes);

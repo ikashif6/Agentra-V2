@@ -16,7 +16,7 @@ export const DEFAULT_PRIMARY_COLOR = "#D85A30";
 export const DEFAULT_LOGO_WIDTH = 148;
 export const DEFAULT_LOGO_HEIGHT = 28;
 
-const BRANDING_CACHE_KEY = "agentra_workspace_branding";
+const BRANDING_CACHE_KEY = "agentra_workspace_branding_v2";
 const FAVICON_LINK_ID = "agentra-workspace-favicon";
 
 type Rgb = { r: number; g: number; b: number };
@@ -141,10 +141,10 @@ export function generateBrandCssVars(hex: string) {
 }
 
 export function resolveWorkspaceTheme(theme: WorkspaceTheme): "light" | "dark" {
-  if (theme === "system" && typeof window !== "undefined") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
-  return theme === "dark" ? "dark" : "light";
+  // Default appearance is always light. "system" no longer follows the OS dark setting.
+  // Users can still choose dark explicitly in settings.
+  if (theme === "dark") return "dark";
+  return "light";
 }
 
 /** Logo to show for the currently resolved light/dark appearance. */
@@ -328,7 +328,11 @@ export async function resizeLogoFile(file: File, maxWidth = 320, maxHeight = 96)
 export const THEME_OPTIONS: { id: WorkspaceTheme; label: string; description: string }[] = [
   { id: "light", label: "Light", description: "Bright workspace with white surfaces." },
   { id: "dark", label: "Dark", description: "Dim workspace for low-light environments." },
-  { id: "system", label: "System", description: "Follow your device appearance setting." },
+  {
+    id: "system",
+    label: "System",
+    description: "Uses light by default (OS dark mode is ignored).",
+  },
 ];
 
 type ThemeUser = { preferences?: { theme?: WorkspaceTheme } } | null;

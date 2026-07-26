@@ -74,7 +74,7 @@ const start = async () => {
   const { syncStoreOrders } = require('./services/store-sync.service');
   const storeSyncMs = parseInt(process.env.STORE_SYNC_INTERVAL_MS, 10) || 15 * 60 * 1000;
   const STORE_SECRET_SELECT =
-    '+storeIntegration.shopify.accessToken ' +
+    '+storeIntegration.shopify.accessToken +storeIntegration.shopify.refreshToken ' +
     '+storeIntegration.woocommerce.consumerKey ' +
     '+storeIntegration.woocommerce.consumerSecret ' +
     '+storeIntegration.custom.apiKey';

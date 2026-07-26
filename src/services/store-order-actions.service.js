@@ -5,6 +5,7 @@ const {
   normalizeShopifyOrder,
   normalizeWooOrder,
 } = require('./store.service');
+const { ensureShopifyAccessToken } = require('./store-oauth.service');
 const { upsertOrder, fetchCustomOrder, customStoreOrderAction, updateCustomOrderRemote } = require('./store-sync.service');
 const { fetchShopifyConversion, shopifyGraphql } = require('./shopify-conversion.service');
 const { fetchWooConversion } = require('./woo-conversion.service');
@@ -861,8 +862,7 @@ async function cancelStoreOrder(company, orderId, options = {}) {
   const { provider, externalId } = storeOrder;
 
   if (provider === 'shopify') {
-    const { shopDomain, accessToken } = secrets.shopify;
-    if (!shopDomain || !accessToken) throw new Error('Shopify credentials unavailable');
+    const { shopDomain, accessToken } = await ensureShopifyAccessToken(company);
     await shopifyCancelOrder(shopDomain, accessToken, externalId, options);
     return refreshShopifyOrder(company, shopDomain, accessToken, externalId);
   }
@@ -902,8 +902,7 @@ async function fulfillStoreOrder(company, orderId, options = {}) {
   const { provider, externalId } = storeOrder;
 
   if (provider === 'shopify') {
-    const { shopDomain, accessToken } = secrets.shopify;
-    if (!shopDomain || !accessToken) throw new Error('Shopify credentials unavailable');
+    const { shopDomain, accessToken } = await ensureShopifyAccessToken(company);
     await shopifyFulfillOrder(shopDomain, accessToken, externalId, options);
     return refreshShopifyOrder(company, shopDomain, accessToken, externalId);
   }
@@ -940,8 +939,7 @@ async function getStoreOrderDetail(company, orderId) {
   const { provider, externalId } = storeOrder;
 
   if (provider === 'shopify') {
-    const { shopDomain, accessToken } = secrets.shopify;
-    if (!shopDomain || !accessToken) throw new Error('Shopify credentials unavailable');
+    const { shopDomain, accessToken } = await ensureShopifyAccessToken(company);
     const res = await fetch(
       `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}/orders/${externalId}.json`,
       { headers: { 'X-Shopify-Access-Token': accessToken, Accept: 'application/json' } },
@@ -1118,8 +1116,7 @@ async function runStoreOrderAction(company, orderId, action, payload = {}) {
     throw new Error('This action is only supported for Shopify stores right now');
   }
 
-  const { shopDomain, accessToken } = secrets.shopify;
-  if (!shopDomain || !accessToken) throw new Error('Shopify credentials unavailable');
+  const { shopDomain, accessToken } = await ensureShopifyAccessToken(company);
 
   switch (action) {
     case 'cancel':
@@ -1194,8 +1191,7 @@ async function updateStoreOrder(company, orderId, updates = {}) {
   const { provider, externalId } = storeOrder;
 
   if (provider === 'shopify') {
-    const { shopDomain, accessToken } = secrets.shopify;
-    if (!shopDomain || !accessToken) throw new Error('Shopify credentials unavailable');
+    const { shopDomain, accessToken } = await ensureShopifyAccessToken(company);
     if (
       updates.updateCustomerProfile &&
       updates.email &&

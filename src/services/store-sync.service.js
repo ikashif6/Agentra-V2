@@ -6,6 +6,7 @@ const {
   normalizeWooOrder,
   normalizeCustomOrder,
 } = require('./store.service');
+const { ensureShopifyAccessToken } = require('./store-oauth.service');
 
 async function readJsonResponse(res) {
   const text = await res.text();
@@ -163,12 +164,9 @@ async function syncStoreOrders(company, { limit = 100 } = {}) {
   let orders = [];
 
   if (integration.provider === 'shopify') {
-    const accessToken = secrets.shopify.accessToken;
-    if (!accessToken) {
-      throw new Error('Shopify access token is missing. Disconnect and reconnect the store.');
-    }
+    const { shopDomain, accessToken } = await ensureShopifyAccessToken(company);
     orders = await fetchShopifyOrders({
-      shopDomain: integration.shopify.shopDomain,
+      shopDomain,
       accessToken,
       limit,
     });

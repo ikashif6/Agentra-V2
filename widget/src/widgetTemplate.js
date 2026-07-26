@@ -267,7 +267,7 @@ export function buildHTML(c) {
     '</div>' +
     '<div class="agt-tabbar">' +
     '<button class="agt-tab active" id="tab-home"><span class="agt-tab-ico">' + SVG_HOME_ICON + '</span><span>Home</span></button>' +
-    '<button class="agt-tab" id="tab-chat"><span class="agt-tab-ico">' + SVG_CHAT_ICON + '</span><span>Chat</span></button>' +
+    '<button class="agt-tab" id="tab-chat"><span class="agt-tab-ico">' + SVG_CHAT_ICON + '<span class="agt-tab-unread" id="agt-tab-unread"></span></span><span>Chat</span></button>' +
     '</div>' +
     '</div>' +
     '<div class="agt-screen gone" id="agt-email-gate">' +
@@ -326,9 +326,59 @@ export function buildCSS(brand, font, rootId, options) {
   const btnShadow = 'inset 0 1.5px 0 rgba(255,255,255,0.22), inset 0 -2px 0 rgba(0,0,0,0.18), inset 1px 0 0 rgba(255,255,255,0.07), inset -1px 0 0 rgba(0,0,0,0.08)';
   const root = '#' + rootId;
   const prefix = root + ' ';
-  const fontStack = font.includes(',') ? font : "'" + String(font).replace(/'/g, '') + "', system-ui, -apple-system, sans-serif";
+  const fontNameOnly = String(font || 'Plus Jakarta Sans')
+    .replace(/['"]/g, '')
+    .split(',')[0]
+    .trim() || 'Plus Jakarta Sans';
+  const fontStack = font.includes(',')
+    ? font
+    : "'" + fontNameOnly + "', system-ui, -apple-system, sans-serif";
+  const fontImportUrl =
+    'https://fonts.googleapis.com/css2?family=' +
+    encodeURIComponent(fontNameOnly).replace(/%20/g, '+') +
+    ':wght@400..800&display=swap';
   return (
-    prefix + '*, ' + prefix + '*::before, ' + prefix + '*::after { box-sizing: border-box; margin: 0; padding: 0; }\n\n' +
+    '@import url("' + fontImportUrl + '");\n\n' +
+    /* Hard reset so Shopify theme typography cannot leak into the widget */
+    prefix + '*, ' + prefix + '*::before, ' + prefix + '*::after {\n' +
+    '  box-sizing: border-box;\n' +
+    '  margin: 0;\n' +
+    '  padding: 0;\n' +
+    '  letter-spacing: normal;\n' +
+    '  text-transform: none;\n' +
+    '}\n\n' +
+    root + ',\n' +
+    root + ' *,\n' +
+    root + ' button,\n' +
+    root + ' input,\n' +
+    root + ' textarea,\n' +
+    root + ' select,\n' +
+    root + ' h1,\n' +
+    root + ' h2,\n' +
+    root + ' h3,\n' +
+    root + ' h4,\n' +
+    root + ' h5,\n' +
+    root + ' h6,\n' +
+    root + ' p,\n' +
+    root + ' a,\n' +
+    root + ' span,\n' +
+    root + ' div,\n' +
+    root + ' li,\n' +
+    root + ' label {\n' +
+    '  font-family: ' + fontStack + ' !important;\n' +
+    '}\n\n' +
+    prefix + 'h1, ' + prefix + 'h2, ' + prefix + 'h3, ' + prefix + 'h4, ' +
+    prefix + 'h5, ' + prefix + 'h6, ' + prefix + 'p {\n' +
+    '  margin: 0 !important;\n' +
+    '  padding: 0 !important;\n' +
+    '  line-height: 1.35;\n' +
+    '  font-weight: inherit;\n' +
+    '  color: inherit;\n' +
+    '}\n\n' +
+    prefix + 'button, ' + prefix + 'input, ' + prefix + 'textarea {\n' +
+    '  font: inherit;\n' +
+    '  letter-spacing: inherit;\n' +
+    '}\n\n' +
     /* Kill native scrollbar arrow buttons everywhere inside the widget */
     prefix + '*::-webkit-scrollbar-button,\n' +
     prefix + '*::-webkit-scrollbar-button:single-button,\n' +
@@ -345,7 +395,11 @@ export function buildCSS(brand, font, rootId, options) {
     '  border: none !important;\n' +
     '}\n\n' +
     root + ' {\n' +
-    '  font-family: ' + fontStack + ';\n' +
+    '  font-family: ' + fontStack + ' !important;\n' +
+    '  font-size: 14px;\n' +
+    '  line-height: 1.4;\n' +
+    '  -webkit-font-smoothing: antialiased;\n' +
+    '  -moz-osx-font-smoothing: grayscale;\n' +
     '  --brand:    ' + brand + ';\n' +
     '  --brand-dk: ' + dk + ';\n' +
     '  --ink:      #111214;\n' +
@@ -360,7 +414,7 @@ export function buildCSS(brand, font, rootId, options) {
     '  --gray-700: #374151;\n' +
     '  --gray-900: #111827;\n' +
     '  --w: 370px;\n' +
-    '  --h: 590px;\n' +
+    '  --h: 560px;\n' +
     '  --r: 20px;\n' +
     '  --shadow: none;\n' +
     '  --btn-shadow: none;\n' +
@@ -397,24 +451,28 @@ export function buildCSS(brand, font, rootId, options) {
     prefix + '.agt-badge {\n' +
     '  position: absolute; top: -2px; right: -2px;\n' +
     '  width: 18px; height: 18px; border-radius: 50%;\n' +
-    '  background: rgba(' + brandRgb + ', 0.35); border: 2px solid white;\n' +
+    '  background: #ef4444; border: 2px solid white;\n' +
     '  color: white; font-size: 10px; font-weight: 700;\n' +
     '  display: flex; align-items: center; justify-content: center;\n' +
     '  opacity: 0; transform: scale(0);\n' +
     '  transition: all 0.22s cubic-bezier(0.34,1.56,0.64,1);\n' +
     '}\n' +
-    prefix + '.agt-badge.show { opacity: 1; transform: scale(1); }\n\n' +
+    prefix + '.agt-badge.show { opacity: 1; transform: scale(1); animation: agt-unread-pulse 1.8s ease-in-out infinite; }\n' +
+    '@keyframes agt-unread-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.35); } 50% { box-shadow: 0 0 0 5px rgba(239,68,68,0); } }\n\n' +
     prefix + '#agt-panel {\n' +
     '  position: fixed; bottom: 96px; right: 26px;\n' +
     '  width: var(--w);\n' +
-    '  height: auto;\n' +
+    '  height: var(--h);\n' +
     '  min-height: 0;\n' +
+    '  max-height: calc(100dvh - 122px);\n' +
     '  background: var(--white);\n' +
     '  border-radius: var(--r);\n' +
     '  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.06);\n' +
     '  overflow: hidden;\n' +
     '  display: flex; flex-direction: column;\n' +
     '  z-index: 9998;\n' +
+    '  overscroll-behavior: contain;\n' +
+    '  touch-action: pan-y;\n' +
     '  transform: translate3d(0, 14px, 0) scale(0.96);\n' +
     '  transform-origin: bottom right;\n' +
     '  opacity: 0;\n' +
@@ -425,11 +483,6 @@ export function buildCSS(brand, font, rootId, options) {
     '    opacity 0.16s ease-in,\n' +
     '    visibility 0s linear 0.2s;\n' +
     '  will-change: transform, opacity;\n' +
-    '}\n' +
-    prefix + '#agt-panel:has(#agt-home.gone) {\n' +
-    '  height: var(--h);\n' +
-    '  min-height: var(--h);\n' +
-    '  max-height: min(92dvh, 780px);\n' +
     '}\n' +
     prefix + '#agt-panel.open {\n' +
     '  transform: translate3d(0, 0, 0) scale(1);\n' +
@@ -506,8 +559,8 @@ export function buildCSS(brand, font, rootId, options) {
     '  flex-direction: column;\n' +
     '  flex: 1 1 auto;\n' +
     '  min-height: 0;\n' +
-    '  height: auto;\n' +
-    '  max-height: min(72dvh, 640px);\n' +
+    '  height: 100%;\n' +
+    '  max-height: none;\n' +
     '}\n\n' +
     prefix + '.agt-home-scroll {\n' +
     '  flex: 1 1 auto;\n' +
@@ -518,6 +571,8 @@ export function buildCSS(brand, font, rootId, options) {
     '  flex-direction: column;\n' +
     '  scrollbar-width: none;\n' +
     '  -ms-overflow-style: none;\n' +
+    '  overscroll-behavior: contain;\n' +
+    '  -webkit-overflow-scrolling: touch;\n' +
     '}\n' +
     prefix + '.agt-home-scroll::-webkit-scrollbar { width: 0; height: 0; display: none; }\n' +
     prefix + '.agt-hero {\n' +
@@ -525,9 +580,13 @@ export function buildCSS(brand, font, rootId, options) {
     '  padding: 28px 18px 56px;\n' +
     '  flex-shrink: 0;\n' +
     '  position: relative;\n' +
+    '  display: flex;\n' +
+    '  flex-direction: column;\n' +
+    '  align-items: flex-start;\n' +
+    '  gap: 0;\n' +
     '}\n' +
     prefix + '.agt-hero-logo {\n' +
-    '  margin-bottom: 14px;\n' +
+    '  margin: 0 0 17px !important;\n' +
     '}\n' +
     prefix + '.agt-hero-logo img {\n' +
     '  width: auto; height: auto; object-fit: contain; display: block;\n' +
@@ -540,20 +599,22 @@ export function buildCSS(brand, font, rootId, options) {
     '  font-size: 12px; font-weight: 700;\n' +
     '  color: rgba(255,255,255,0.6);\n' +
     '  letter-spacing: 0.1em; text-transform: uppercase;\n' +
-    '  margin-bottom: 18px;\n' +
+    '  margin: 0 0 17px !important;\n' +
     '  display: flex; align-items: center; gap: 7px;\n' +
     '}\n' +
     prefix + '.agt-hero-brand i { font-size: 11px; }\n' +
     prefix + '.agt-hero h2 {\n' +
     '  font-family: ' + font + ';\n' +
     '  font-size: 24px; font-weight: 800;\n' +
-    '  color: white; line-height: 1.2;\n' +
+    '  color: white; line-height: 1.3;\n' +
     '  letter-spacing: -0.03em;\n' +
-    '  margin: 18px 0 10px;\n' +
+    '  margin: 0 0 10px !important;\n' +
+    '  padding: 0 !important;\n' +
     '}\n' +
     prefix + '.agt-hero-sub {\n' +
     '  font-family: ' + font + ';\n' +
-    '  font-size: 13.5px; color: rgba(255,255,255,0.72); margin: 0; font-weight: 400;\n' +
+    '  font-size: 13.5px; color: rgba(255,255,255,0.72);\n' +
+    '  margin: 0 !important; padding: 0 !important; font-weight: 400;\n' +
     '  line-height: 1.45; max-width: 92%;\n' +
     '}\n\n' +
     prefix + '.agt-home-body {\n' +
@@ -601,12 +662,18 @@ export function buildCSS(brand, font, rootId, options) {
     prefix + '.agt-av { width:28px; height:28px; border-radius:50%; border:2px solid #fff; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#fff; flex-shrink:0; overflow:hidden; }\n' +
     prefix + '.agt-av + .agt-av { margin-left:-8px; }\n' +
     prefix + '.agt-av img { width:100%; height:100%; object-fit:cover; display:block; }\n' +
-    prefix + '.agt-msg-card-text { flex: 1; }\n' +
+    prefix + '.agt-msg-card-text { flex: 1; min-width: 0; }\n' +
     prefix + '.agt-msg-card-title {\n' +
     '  font-size: 14px; font-weight: 700; color: var(--gray-900);\n' +
+    '  line-height: 1.25 !important;\n' +
+    '  margin: 0 !important;\n' +
     '}\n' +
     prefix + '.agt-msg-card-sub {\n' +
-    '  font-size: 12px; color: var(--gray-400); margin-top: 3px; font-weight: 400;\n' +
+    '  font-size: 12px; color: var(--gray-400);\n' +
+    '  margin-top: 3px !important;\n' +
+    '  margin-bottom: 0 !important;\n' +
+    '  font-weight: 400;\n' +
+    '  line-height: 1.3 !important;\n' +
     '}\n' +
     prefix + '.agt-msg-card-arr { color: var(--gray-300); flex-shrink:0; display:flex; align-items:center; justify-content:center; width:16px; height:16px; overflow:visible; }\n\n' +
     prefix + '.agt-history-section {\n' +
@@ -666,8 +733,15 @@ export function buildCSS(brand, font, rootId, options) {
     '  color: var(--gray-400); transition: color 0.14s;\n' +
     '  font-family: ' + font + ';\n' +
     '}\n' +
-    prefix + '.agt-tab .agt-tab-ico { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; }\n' +
+    prefix + '.agt-tab .agt-tab-ico { position: relative; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; }\n' +
     prefix + '.agt-tab .agt-tab-ico svg { width: 20px; height: 20px; flex-shrink: 0; }\n' +
+    prefix + '.agt-tab-unread {\n' +
+    '  position: absolute; top: -3px; right: -5px;\n' +
+    '  width: 8px; height: 8px; border-radius: 50%;\n' +
+    '  background: #ef4444; border: 2px solid var(--white);\n' +
+    '  opacity: 0; transform: scale(0); transition: all 0.18s ease;\n' +
+    '}\n' +
+    prefix + '.agt-tab-unread.show { opacity: 1; transform: scale(1); }\n' +
     prefix + '.agt-tab:hover { color: var(--gray-700); }\n' +
     prefix + '.agt-tab.active { color: var(--brand); font-weight: 600; }\n' +
     prefix + '.agt-tab > span:last-of-type { font-size: 11px; font-weight: 600; letter-spacing: 0.01em; line-height: 1; }\n\n' +
@@ -1006,8 +1080,21 @@ export function buildCSS(brand, font, rootId, options) {
     '  display: flex; flex-direction: column; justify-content: center; gap: 12px;\n' +
     '  max-width: 100%;\n' +
     '}\n' +
-    prefix + '.agt-email-gate h3 { font-size:18px; font-weight:700; color:var(--ink); text-align:left; }\n' +
-    prefix + '.agt-email-gate p { font-size:13px; color:var(--gray-500); line-height:1.45; text-align:left; }\n' +
+    prefix + '.agt-email-gate h3 {\n' +
+    '  font-size: 18px;\n' +
+    '  font-weight: 700;\n' +
+    '  color: var(--ink);\n' +
+    '  text-align: left;\n' +
+    '  margin: 0 !important;\n' +
+    '  line-height: 1.25 !important;\n' +
+    '}\n' +
+    prefix + '.agt-email-gate p {\n' +
+    '  font-size: 13px;\n' +
+    '  color: var(--gray-500);\n' +
+    '  line-height: 1.45 !important;\n' +
+    '  text-align: left;\n' +
+    '  margin: 0 !important;\n' +
+    '}\n' +
     prefix + '.agt-email-privacy {\n' +
     '  margin-top: 4px;\n' +
     '  text-align: left;\n' +
@@ -1231,14 +1318,22 @@ prefix + '.agt-input-bar {\n' +
     '  gap: 8px;\n' +
     '  box-sizing: border-box;\n' +
     '  transition: border-color 0.2s;\n' +
+    '  box-shadow: none !important;\n' +
+    '  outline: none !important;\n' +
     '}\n' +
     prefix + '.agt-input-wrap:focus-within {\n' +
     '  border-color: var(--brand);\n' +
-    '  box-shadow: none;\n' +
+    '  box-shadow: none !important;\n' +
+    '  outline: none !important;\n' +
     '}\n' +
     prefix + '.agt-input {\n' +
     '  flex: 1; min-width: 0;\n' +
-    '  background: none; border: none; outline: none;\n' +
+    '  background: transparent !important;\n' +
+    '  border: none !important;\n' +
+    '  outline: none !important;\n' +
+    '  box-shadow: none !important;\n' +
+    '  -webkit-appearance: none;\n' +
+    '  appearance: none;\n' +
     '  font-size: 14px; color: var(--gray-700);\n' +
     '  font-family: ' + font + ';\n' +
     '  resize: none;\n' +
@@ -1251,6 +1346,15 @@ prefix + '.agt-input-bar {\n' +
     '  box-sizing: border-box;\n' +
     '  overflow-y: hidden;\n' +
     '  field-sizing: fixed;\n' +
+    '}\n' +
+    prefix + '.agt-input:focus,\n' +
+    prefix + '.agt-input:focus-visible,\n' +
+    prefix + '.agt-input:active {\n' +
+    '  outline: none !important;\n' +
+    '  box-shadow: none !important;\n' +
+    '  -webkit-box-shadow: none !important;\n' +
+    '  border: none !important;\n' +
+    '  background: transparent !important;\n' +
     '}\n' +
     prefix + '.agt-input::placeholder { color: var(--gray-400); opacity: 1; line-height: 20px; }\n' +
     prefix + '.agt-send-btn {\n' +
@@ -1270,13 +1374,11 @@ prefix + '.agt-input-bar {\n' +
     '  ' + root + ' #agt-panel {\n' +
     '    width: min(100% - 24px, 360px);\n' +
     '    max-width: calc(100vw - 24px);\n' +
-    '    min-height: min(560px, 85dvh);\n' +
+    '    height: min(var(--h), calc(100dvh - 98px));\n' +
+    '    min-height: 0;\n' +
+    '    max-height: calc(100dvh - 98px);\n' +
     '    bottom: 80px; right: 12px; left: auto;\n' +
     '    border-radius: 20px;\n' +
-    '  }\n' +
-    '  ' + root + ' #agt-panel:has(#agt-home.gone) {\n' +
-    '    height: min(560px, 85dvh);\n' +
-    '    max-height: min(560px, 85dvh);\n' +
     '  }\n' +
     '  ' + root + ' #agt-launcher { bottom: 18px; right: 18px; }\n' +
     '}\n' +
@@ -1284,11 +1386,9 @@ prefix + '.agt-input-bar {\n' +
     '  ' + root + ' #agt-panel {\n' +
     '    width: calc(100vw - 20px);\n' +
     '    right: 10px; left: 10px;\n' +
-    '    min-height: min(520px, 80dvh);\n' +
-    '  }\n' +
-    '  ' + root + ' #agt-panel:has(#agt-home.gone) {\n' +
-    '    height: min(520px, 80dvh);\n' +
-    '    max-height: min(520px, 80dvh);\n' +
+    '    height: min(var(--h), calc(100dvh - 98px));\n' +
+    '    min-height: 0;\n' +
+    '    max-height: calc(100dvh - 98px);\n' +
     '  }\n' +
     '}\n'
   );

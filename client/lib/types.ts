@@ -254,6 +254,9 @@ export interface LiveChatSettings {
   installMethod?: 'shopify_script' | 'manual' | null;
   canAutoInstall?: boolean;
   shopifyAutoInstallPending?: boolean;
+  /** Why one-click Shopify install is unavailable (e.g. local HTTP API). */
+  autoInstallBlockedReason?: string | null;
+  apiPublicBase?: string | null;
   /** Actual scopes on the connected Shopify access token */
   shopifyGrantedScope?: string | null;
   storeProvider?: string | null;
@@ -281,6 +284,10 @@ export interface LiveChatSettings {
     welcomeMessage?: string;
     emailGateTitle?: string;
     emailGateSubtitle?: string;
+    privacyNotice?: string;
+    privacyPolicyLabel?: string;
+    privacyPolicyUrl?: string;
+    askAnythingLabel?: string;
     offlineMessage?: string;
     quickReplies?: string[];
   };

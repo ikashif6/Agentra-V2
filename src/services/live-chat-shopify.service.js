@@ -3,6 +3,9 @@ const {
   getApiBaseUrl,
   configuredShopifyScriptTagsScope,
   shopifyScopesIncludeScriptTags,
+  ensureShopifyAccessToken,
+  isNonExpiringTokenRejectedError,
+  isHttpsPublicApiUrl,
 } = require('./store-oauth.service');
 
 async function readJsonResponse(res) {
@@ -15,9 +18,41 @@ async function readJsonResponse(res) {
   }
 }
 
+function shopifyApiErrorMessage(body, fallback) {
+  if (!body) return fallback;
+  if (typeof body.errors === 'string') return body.errors;
+  if (Array.isArray(body.errors) && body.errors[0]) return String(body.errors[0]);
+  if (body.errors && typeof body.errors === 'object') {
+    const first = Object.values(body.errors)[0];
+    if (Array.isArray(first) && first[0]) return String(first[0]);
+    if (first) return String(first);
+    const keys = Object.keys(body.errors);
+    if (keys[0]) return keys[0];
+  }
+  if (body.error_description) return String(body.error_description);
+  if (body.error) return String(body.error);
+  if (typeof body === 'string') return body;
+  return fallback;
+}
+
 function widgetLoaderUrl(widgetKey) {
   const base = getApiBaseUrl();
   return `${base}/widget-loader.js?key=${encodeURIComponent(widgetKey)}`;
+}
+
+function shopifyHttpsInstallError() {
+  return (
+    'Shopify requires an HTTPS widget URL. Your API is currently HTTP/localhost ' +
+    `(${getApiBaseUrl()}), so one-click install cannot run from local development. ` +
+    'Set APP_API_URL to a public HTTPS URL (Railway production API or an ngrok/Cloudflare tunnel), ' +
+    'restart the API, then try again — or use the embed code below for now.'
+  );
+}
+
+function isShopifyHttpsRequiredError(err) {
+  return /must be secure \(HTTPS\)|https required|insecure.*script/i.test(
+    String(err?.message || err || ''),
+  );
 }
 
 function shopifyHeaders(accessToken) {
@@ -35,7 +70,7 @@ async function listAgentraScriptTags(shopDomain, accessToken) {
   );
   const body = await readJsonResponse(res);
   if (!res.ok) {
-    throw new Error(body?.errors || `Could not list Shopify script tags (${res.status})`);
+    throw new Error(shopifyApiErrorMessage(body, `Could not list Shopify script tags (${res.status})`));
   }
   const loaderPrefix = `${getApiBaseUrl()}/widget-loader.js`;
   return (body?.script_tags || []).filter((tag) => String(tag.src || '').startsWith(loaderPrefix));
@@ -48,7 +83,7 @@ async function deleteScriptTag(shopDomain, accessToken, id) {
   );
   if (!res.ok && res.status !== 404) {
     const body = await readJsonResponse(res);
-    throw new Error(body?.errors || `Could not delete Shopify script tag (${res.status})`);
+    throw new Error(shopifyApiErrorMessage(body, `Could not delete Shopify script tag (${res.status})`));
   }
 }
 
@@ -58,15 +93,27 @@ async function installShopifyWidget(company) {
     throw new Error('Connect a Shopify store first to use one-click widget install');
   }
 
-  const shopDomain = integration.shopify?.shopDomain;
-  const secrets = getStoreSecrets(integration);
-  const accessToken = secrets.shopify?.accessToken;
   const widgetKey = company.liveChat?.widgetKey;
-  if (!shopDomain || !accessToken) {
-    throw new Error('Shopify credentials unavailable');
-  }
   if (!widgetKey) {
     throw new Error('Widget key is missing — save live chat settings first');
+  }
+
+  let auth;
+  try {
+    auth = await ensureShopifyAccessToken(company);
+  } catch (err) {
+    if (isNonExpiringTokenRejectedError(err)) {
+      throw new Error(
+        'Shopify requires an updated store connection. Disconnect and reconnect your store in Settings › Store, then try Install again.',
+      );
+    }
+    throw err;
+  }
+  const { shopDomain, accessToken } = auth;
+
+  const src = widgetLoaderUrl(widgetKey);
+  if (!isHttpsPublicApiUrl()) {
+    throw new Error(shopifyHttpsInstallError());
   }
 
   const existing = await listAgentraScriptTags(shopDomain, accessToken);
@@ -74,7 +121,6 @@ async function installShopifyWidget(company) {
     await deleteScriptTag(shopDomain, accessToken, tag.id);
   }
 
-  const src = widgetLoaderUrl(widgetKey);
   const res = await fetch(
     `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}/script_tags.json`,
     {
@@ -91,10 +137,47 @@ async function installShopifyWidget(company) {
   );
   const body = await readJsonResponse(res);
   if (!res.ok) {
-    const message =
-      typeof body?.errors === 'string'
-        ? body.errors
-        : body?.errors?.[0] || body?.error || `Shopify script tag install failed (${res.status})`;
+    const message = shopifyApiErrorMessage(
+      body,
+      `Shopify script tag install failed (${res.status})`,
+    );
+    if (isShopifyHttpsRequiredError({ message })) {
+      throw new Error(shopifyHttpsInstallError());
+    }
+    if (isNonExpiringTokenRejectedError({ message })) {
+      // Race: migrate then retry once.
+      auth = await ensureShopifyAccessToken(company);
+      const retry = await fetch(
+        `https://${auth.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/script_tags.json`,
+        {
+          method: 'POST',
+          headers: shopifyHeaders(auth.accessToken),
+          body: JSON.stringify({
+            script_tag: {
+              event: 'onload',
+              src,
+              display_scope: 'online_store',
+            },
+          }),
+        },
+      );
+      const retryBody = await readJsonResponse(retry);
+      if (!retry.ok) {
+        const retryMessage = shopifyApiErrorMessage(
+          retryBody,
+          `Shopify script tag install failed (${retry.status})`,
+        );
+        if (isShopifyHttpsRequiredError({ message: retryMessage })) {
+          throw new Error(shopifyHttpsInstallError());
+        }
+        throw new Error(retryMessage);
+      }
+      return {
+        scriptTagId: String(retryBody?.script_tag?.id || ''),
+        src,
+        shopDomain: auth.shopDomain,
+      };
+    }
     if (String(message).toLowerCase().includes('script_tags')) {
       throw new Error(
         'Shopify needs the write_script_tags scope. Disconnect and reconnect your store in Settings › Store.',
@@ -116,10 +199,18 @@ async function uninstallShopifyWidget(company) {
     return { removed: 0 };
   }
 
-  const shopDomain = integration.shopify?.shopDomain;
-  const secrets = getStoreSecrets(integration);
-  const accessToken = secrets.shopify?.accessToken;
-  if (!shopDomain || !accessToken) return { removed: 0 };
+  let shopDomain;
+  let accessToken;
+  try {
+    const auth = await ensureShopifyAccessToken(company);
+    shopDomain = auth.shopDomain;
+    accessToken = auth.accessToken;
+  } catch {
+    const secrets = getStoreSecrets(integration);
+    shopDomain = integration.shopify?.shopDomain;
+    accessToken = secrets.shopify?.accessToken;
+    if (!shopDomain || !accessToken) return { removed: 0 };
+  }
 
   const storedId = company.liveChat?.shopifyScriptTagId;
   let removed = 0;
@@ -164,7 +255,11 @@ function canUseShopifyAutoInstall(company) {
   if (integration?.provider !== 'shopify' || integration?.status !== 'connected') {
     return false;
   }
-  return configuredShopifyScriptTagsScope() && storeHasScriptTagsScope(company);
+  return (
+    configuredShopifyScriptTagsScope() &&
+    storeHasScriptTagsScope(company) &&
+    isHttpsPublicApiUrl()
+  );
 }
 
 function applyShopifyAllowedOrigins(liveChat, company) {
@@ -227,4 +322,5 @@ module.exports = {
   uninstallShopifyWidget,
   syncWidgetInstall,
   canUseShopifyAutoInstall,
+  shopifyHttpsInstallError,
 };

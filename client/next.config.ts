@@ -1,8 +1,14 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const APP_BASE_DOMAIN = process.env.NEXT_PUBLIC_APP_BASE_DOMAIN ?? "agentraa.com";
 
 const nextConfig: NextConfig = {
+  // Multiple lockfiles exist (repo root + client). Pin Turbopack to the app dir
+  // so routes like /auth/login resolve correctly in local dev.
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
   devIndicators: false,
   /**
    * Hostname-based rewrites for custom help center domains.

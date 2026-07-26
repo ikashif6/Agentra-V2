@@ -314,39 +314,23 @@ button:disabled,
   }
 }
 
-/* Onboarding — light warm shell (Shopify-style card on soft background) */
+/* Onboarding / setup — same flat white as Home */
 .onboarding-shell {
-  background:
-    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(216, 90, 48, 0.08), transparent 55%),
-    radial-gradient(ellipse 70% 50% at 100% 50%, rgba(240, 153, 123, 0.12), transparent 50%),
-    radial-gradient(ellipse 60% 40% at 0% 80%, rgba(216, 90, 48, 0.06), transparent 45%),
-    hsl(var(--background));
+  background: #fff !important;
+  background-image: none !important;
 }
 
 .onboarding-shell-grid {
-  background-image:
-    linear-gradient(rgba(216, 90, 48, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(216, 90, 48, 0.05) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse 85% 75% at 50% 40%, black 30%, transparent 78%);
-  -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 40%, black 30%, transparent 78%);
+  display: none !important;
 }
 
-/* App shell — warm canvas matching auth/onboarding */
+/* App shell — flat canvas (no brand gradient wash) */
 .app-shell {
-  background:
-    radial-gradient(ellipse 80% 50% at 100% 0%, hsl(var(--brand) / 0.08), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 0% 100%, hsl(var(--brand) / 0.06), transparent 50%),
-    hsl(var(--background));
+  background: hsl(var(--background));
 }
 
 .app-shell-grid {
-  background-image:
-    linear-gradient(hsl(var(--brand) / 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(var(--brand) / 0.04) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse 90% 80% at 50% 30%, black 25%, transparent 82%);
-  -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 30%, black 25%, transparent 82%);
+  display: none;
 }
 
 .dark .app-shell {
@@ -354,7 +338,7 @@ button:disabled,
 }
 
 .dark .app-shell-grid {
-  opacity: 0.35;
+  display: none;
 }
 
 /* Flat canvas pages — no grid or brand gradient wash */

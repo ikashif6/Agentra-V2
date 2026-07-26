@@ -4,7 +4,10 @@ const {
   SHOPIFY_API_VERSION,
   normalizeShopDomain,
   normalizeStoreUrl,
+  getStoreSecrets,
+  encryptStoreIntegration,
 } = require('./store.service');
+const { encryptSecret } = require('../utils/crypto');
 
 const SHOPIFY_SCRIPT_TAG_SCOPE = 'write_script_tags';
 
@@ -40,6 +43,19 @@ function getApiBaseUrl() {
     /\/+$/,
     '',
   );
+}
+
+/** Shopify script tags require a publicly reachable HTTPS src (not localhost/http). */
+function isHttpsPublicApiUrl(url = getApiBaseUrl()) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function getShopifyRedirectUri() {
@@ -182,6 +198,10 @@ function usesCustomInstallFlow() {
   return Boolean(process.env.SHOPIFY_CUSTOM_INSTALL_LINK?.trim());
 }
 
+function shopifyAdminStoreHandle(shopDomain) {
+  return normalizeShopDomain(shopDomain).replace(/\.myshopify\.com$/i, '');
+}
+
 function buildShopifyCustomInstallUrl(shopDomain) {
   if (!usesCustomInstallFlow()) return null;
   const parsed = parseCustomInstallLink(process.env.SHOPIFY_CUSTOM_INSTALL_LINK);
@@ -195,9 +215,12 @@ function buildShopifyCustomInstallUrl(shopDomain) {
     throw new Error('Install link client_id does not match SHOPIFY_API_KEY');
   }
 
-  const url = new URL(`https://${domain}/admin/oauth/install_custom_app`);
+  // Use Unified Admin host — legacy {shop}.myshopify.com/admin/oauth/install_custom_app
+  // often lands on /app/grant with "installation link is invalid".
+  const url = new URL('https://admin.shopify.com/oauth/install_custom_app');
   url.searchParams.set('client_id', parsed.clientId);
   url.searchParams.set('signature', parsed.signature);
+  url.searchParams.set('no_redirect', 'true');
   return url.toString();
 }
 
@@ -215,6 +238,7 @@ function buildShopifyAuthorizeUrl({
     );
   }
   const domain = normalizeShopDomain(shopDomain);
+  const handle = shopifyAdminStoreHandle(domain);
   const state = signOAuthState({
     purpose: 'shopify_oauth',
     companyId: companyId.toString(),
@@ -225,7 +249,10 @@ function buildShopifyAuthorizeUrl({
     returnPath: normalizeReturnPath(returnPath) || undefined,
   });
 
-  const url = new URL(`https://${domain}/admin/oauth/authorize`);
+  // Unified Admin authorize URL — required for custom-distribution apps.
+  // Legacy https://{shop}.myshopify.com/admin/oauth/authorize triggers the
+  // broken /app/grant "installation link is invalid" page.
+  const url = new URL(`https://admin.shopify.com/store/${handle}/oauth/authorize`);
   url.searchParams.set('client_id', process.env.SHOPIFY_API_KEY);
   url.searchParams.set('scope', SHOPIFY_SCOPES);
   url.searchParams.set('redirect_uri', getShopifyRedirectUri());
@@ -247,28 +274,32 @@ function buildShopifyInstallUrl({
     );
   }
   const domain = normalizeShopDomain(shopDomain);
-  let customInstallUrl;
-  try {
-    customInstallUrl = buildShopifyCustomInstallUrl(domain);
-  } catch (err) {
-    // A custom-distribution link is only required for the first installation.
-    // If Shopify's signed link has expired but the app remains installed, run
-    // OAuth again to recover a workspace token without asking the merchant to
-    // reinstall the app.
-    if (!/install link has expired/i.test(String(err?.message || ''))) {
+
+  if (usesCustomInstallFlow()) {
+    try {
+      const customInstallUrl = buildShopifyCustomInstallUrl(domain);
+      if (customInstallUrl) return customInstallUrl;
+    } catch (err) {
+      const message = String(err?.message || '');
+      // Partner Dashboard only shows Copy — expired custom links cannot be refreshed in-UI.
+      // If the app is still installed on the shop, standard OAuth can re-authorize.
+      // First-time installs after uninstall still need Partner Support / a new app distribution.
+      if (/install link has expired/i.test(message)) {
+        console.warn(
+          '[shopify] custom install link expired — falling back to oauth/authorize for',
+          domain,
+        );
+        return buildShopifyAuthorizeUrl({
+          shopDomain: domain,
+          companyId,
+          subdomain,
+          userId,
+          returnOrigin,
+          returnPath,
+        });
+      }
       throw err;
     }
-    return buildShopifyAuthorizeUrl({
-      shopDomain: domain,
-      companyId,
-      subdomain,
-      userId,
-      returnOrigin,
-      returnPath,
-    });
-  }
-  if (customInstallUrl) {
-    return customInstallUrl;
   }
 
   return buildShopifyAuthorizeUrl({
@@ -321,18 +352,185 @@ function isValidShopDomain(shop) {
 async function exchangeShopifyCode(shopDomain, code) {
   const res = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body: new URLSearchParams({
       client_id: process.env.SHOPIFY_API_KEY,
       client_secret: process.env.SHOPIFY_API_SECRET,
       code,
-    }),
+      // Required for newly created public apps (expiring offline tokens).
+      expiring: '1',
+    }).toString(),
   });
   const body = await readJsonResponse(res);
   if (!res.ok || !body?.access_token) {
     throw new Error(body?.error_description || body?.error || 'Could not exchange Shopify code');
   }
-  return { accessToken: body.access_token, scope: body.scope };
+  return parseShopifyTokenResponse(body);
+}
+
+function parseShopifyTokenResponse(body) {
+  const now = Date.now();
+  const expiresIn = Number(body.expires_in);
+  const refreshExpiresIn = Number(body.refresh_token_expires_in);
+  return {
+    accessToken: body.access_token,
+    scope: body.scope,
+    refreshToken: body.refresh_token || null,
+    accessTokenExpiresAt: Number.isFinite(expiresIn)
+      ? new Date(now + expiresIn * 1000)
+      : null,
+    refreshTokenExpiresAt: Number.isFinite(refreshExpiresIn)
+      ? new Date(now + refreshExpiresIn * 1000)
+      : null,
+  };
+}
+
+function shopifyTokenRequestError(body, fallback) {
+  return body?.error_description || body?.error || body?.errors || fallback;
+}
+
+/** Migrate a non-expiring offline token → expiring offline token (irreversible). */
+async function migrateNonExpiringToExpiringOfflineToken(shopDomain, accessToken) {
+  const res = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body: new URLSearchParams({
+      client_id: process.env.SHOPIFY_API_KEY,
+      client_secret: process.env.SHOPIFY_API_SECRET,
+      grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+      subject_token: accessToken,
+      subject_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token',
+      requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token',
+      expiring: '1',
+    }).toString(),
+  });
+  const body = await readJsonResponse(res);
+  if (!res.ok || !body?.access_token) {
+    throw new Error(
+      shopifyTokenRequestError(
+        body,
+        'Could not migrate Shopify token to expiring offline access. Disconnect and reconnect your store.',
+      ),
+    );
+  }
+  return parseShopifyTokenResponse(body);
+}
+
+async function refreshExpiringOfflineToken(shopDomain, refreshToken) {
+  const res = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body: new URLSearchParams({
+      client_id: process.env.SHOPIFY_API_KEY,
+      client_secret: process.env.SHOPIFY_API_SECRET,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }).toString(),
+  });
+  const body = await readJsonResponse(res);
+  if (!res.ok || !body?.access_token) {
+    throw new Error(
+      shopifyTokenRequestError(
+        body,
+        'Could not refresh Shopify access token. Disconnect and reconnect your store.',
+      ),
+    );
+  }
+  return parseShopifyTokenResponse(body);
+}
+
+function applyShopifyTokenFields(company, tokens) {
+  if (!company?.storeIntegration?.shopify) {
+    throw new Error('Shopify integration missing');
+  }
+  const shopify = company.storeIntegration.shopify;
+  const alreadyEncrypted = Boolean(company.storeIntegration.encrypted);
+
+  shopify.accessToken = alreadyEncrypted
+    ? encryptSecret(tokens.accessToken)
+    : tokens.accessToken;
+  if (tokens.refreshToken) {
+    shopify.refreshToken = alreadyEncrypted
+      ? encryptSecret(tokens.refreshToken)
+      : tokens.refreshToken;
+  }
+  if (tokens.accessTokenExpiresAt) {
+    shopify.accessTokenExpiresAt = tokens.accessTokenExpiresAt;
+  }
+  if (tokens.refreshTokenExpiresAt) {
+    shopify.refreshTokenExpiresAt = tokens.refreshTokenExpiresAt;
+  }
+  if (tokens.scope) shopify.scope = tokens.scope;
+
+  if (!alreadyEncrypted) {
+    encryptStoreIntegration(company.storeIntegration);
+  }
+  company.markModified('storeIntegration');
+}
+
+/**
+ * Ensure company has a usable Shopify Admin API access token.
+ * Migrates legacy non-expiring tokens and refreshes expiring ones as needed.
+ */
+async function ensureShopifyAccessToken(company, { persist = true } = {}) {
+  const integration = company?.storeIntegration;
+  if (integration?.provider !== 'shopify' || integration?.status !== 'connected') {
+    throw new Error('Connect a Shopify store first');
+  }
+
+  const shopDomain = integration.shopify?.shopDomain;
+  const secrets = getStoreSecrets(integration);
+  let accessToken = secrets.shopify?.accessToken;
+  const refreshToken = secrets.shopify?.refreshToken;
+  if (!shopDomain || !accessToken) {
+    throw new Error('Shopify credentials unavailable');
+  }
+
+  const expiresAt = integration.shopify?.accessTokenExpiresAt
+    ? new Date(integration.shopify.accessTokenExpiresAt).getTime()
+    : null;
+  const refreshSkewMs = 60 * 1000;
+
+  // Legacy permanent token — migrate once to expiring offline tokens.
+  if (!refreshToken) {
+    const migrated = await migrateNonExpiringToExpiringOfflineToken(shopDomain, accessToken);
+    applyShopifyTokenFields(company, migrated);
+    if (persist) await company.save();
+    return { shopDomain, accessToken: migrated.accessToken, migrated: true };
+  }
+
+  if (!expiresAt || expiresAt - refreshSkewMs <= Date.now()) {
+    try {
+      const refreshed = await refreshExpiringOfflineToken(shopDomain, refreshToken);
+      applyShopifyTokenFields(company, refreshed);
+      if (persist) await company.save();
+      return { shopDomain, accessToken: refreshed.accessToken, refreshed: true };
+    } catch (err) {
+      // Refresh token may itself be stale — force reconnect messaging.
+      const message = String(err.message || '');
+      if (/invalid_request|refresh_token|expired/i.test(message)) {
+        throw new Error(
+          'Shopify session expired. Disconnect and reconnect your store in Settings › Store, then try again.',
+        );
+      }
+      throw err;
+    }
+  }
+
+  return { shopDomain, accessToken, migrated: false, refreshed: false };
+}
+
+function isNonExpiringTokenRejectedError(err) {
+  return /non-expiring access tokens are no longer accepted/i.test(String(err?.message || err || ''));
 }
 
 async function fetchShopifyShopName({ shopDomain, accessToken }) {
@@ -466,6 +664,7 @@ module.exports = {
   configuredShopifyScriptTagsScope,
   isShopifyOAuthConfigured,
   getApiBaseUrl,
+  isHttpsPublicApiUrl,
   getShopifyRedirectUri,
   getWooCallbackUrl,
   revokeShopifyAppAccess,
@@ -477,6 +676,9 @@ module.exports = {
   verifyShopifyOAuthHmac,
   isValidShopDomain,
   exchangeShopifyCode,
+  ensureShopifyAccessToken,
+  migrateNonExpiringToExpiringOfflineToken,
+  isNonExpiringTokenRejectedError,
   fetchShopifyShopName,
   registerShopifyWebhooks,
   buildWooAuthUrl,

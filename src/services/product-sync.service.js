@@ -1,6 +1,7 @@
 const StoreProduct = require('../models/StoreProduct');
 const Company = require('../models/Company');
 const { SHOPIFY_API_VERSION, getStoreSecrets } = require('./store.service');
+const { ensureShopifyAccessToken } = require('./store-oauth.service');
 
 async function readJsonResponse(res) {
   const text = await res.text();
@@ -101,15 +102,8 @@ async function syncStoreProducts(company, { limit = 100 } = {}) {
   let products = [];
 
   if (integration.provider === 'shopify') {
-    const accessToken = secrets.shopify.accessToken;
-    if (!accessToken) {
-      throw new Error('Shopify access token is missing. Disconnect and reconnect the store.');
-    }
-    products = await fetchShopifyProducts(
-      integration.shopify.shopDomain,
-      accessToken,
-      limit,
-    );
+    const { shopDomain, accessToken } = await ensureShopifyAccessToken(company);
+    products = await fetchShopifyProducts(shopDomain, accessToken, limit);
   } else if (integration.provider === 'woocommerce') {
     products = await fetchWooProducts(
       integration.woocommerce.storeUrl,
@@ -152,6 +146,7 @@ async function syncStoreProducts(company, { limit = 100 } = {}) {
 async function syncProductsForCompanyId(companyId) {
   const STORE_SECRET_SELECT =
     '+storeIntegration.shopify.accessToken ' +
+    '+storeIntegration.shopify.refreshToken ' +
     '+storeIntegration.woocommerce.consumerKey ' +
     '+storeIntegration.woocommerce.consumerSecret ' +
     '+storeIntegration.custom.apiKey';

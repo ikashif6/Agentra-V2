@@ -7,7 +7,8 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
   'use strict';
 
   const cfg = window.AgentraConfig || {};
-  const WIDGET_KEY = cfg.widgetKey || cfg.key || '';
+  const PREVIEW = Boolean(cfg.preview);
+  const WIDGET_KEY = cfg.widgetKey || cfg.key || (PREVIEW ? 'preview' : '');
   const API_BASE = (cfg.apiBase || 'http://localhost:5000/api/v1/widget').replace(/\/$/, '');
   const STYLE_ATTR = 'data-agentra-widget-style';
 
@@ -23,6 +24,9 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
   let messagesEl, inputEl, sendBtnEl, typingEl, badgeEl, processStepsEl;
   let tabHomeEl, tabChatEl, emailGateEl, emailInputEl, emailBtnEl, emailErrorEl;
   let inputBarEl;
+  let unreadCount = 0;
+  let notificationAudio = null;
+  let notificationEventsWired = false;
   const seenMessageKeys = new Set();
 
   function resetMessagesCanvas() {
@@ -313,6 +317,77 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     return false;
   }
 
+  function updateUnreadIndicators() {
+    const hasUnread = unreadCount > 0;
+    if (badgeEl) {
+      badgeEl.textContent = unreadCount > 9 ? '9+' : String(unreadCount || '');
+      badgeEl.classList.toggle('show', hasUnread);
+    }
+    document.getElementById('agt-tab-unread')?.classList.toggle('show', hasUnread);
+  }
+
+  function clearUnreadMessages() {
+    unreadCount = 0;
+    updateUnreadIndicators();
+  }
+
+  function unlockNotificationAudio() {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      if (!notificationAudio) notificationAudio = new AudioContext();
+      if (notificationAudio.state === 'suspended') {
+        notificationAudio.resume().catch(function () {});
+      }
+    } catch {
+      // Audio is optional and may be blocked by the browser.
+    }
+  }
+
+  function playMessageArrivalSound() {
+    if (!notificationAudio || notificationAudio.state !== 'running') return;
+    try {
+      const now = notificationAudio.currentTime;
+      const gain = notificationAudio.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.12, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+      gain.connect(notificationAudio.destination);
+
+      [660, 880].forEach(function (frequency, index) {
+        const oscillator = notificationAudio.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(frequency, now);
+        oscillator.connect(gain);
+        oscillator.start(now + index * 0.09);
+        oscillator.stop(now + 0.18 + index * 0.09);
+      });
+    } catch {
+      // Keep chat functional if audio playback fails.
+    }
+  }
+
+  function notifyIncomingMessage() {
+    playMessageArrivalSound();
+    const activelyViewingChat =
+      isOpen && inChat && document.visibilityState !== 'hidden';
+    if (activelyViewingChat) return;
+    unreadCount += 1;
+    updateUnreadIndicators();
+  }
+
+  function wireNotificationEvents() {
+    if (notificationEventsWired) return;
+    notificationEventsWired = true;
+    document.addEventListener('pointerdown', unlockNotificationAudio, true);
+    document.addEventListener('keydown', unlockNotificationAudio, true);
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState !== 'hidden' && isOpen && inChat) {
+        clearUnreadMessages();
+      }
+    });
+  }
+
   function uid() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
       const r = (Math.random() * 16) | 0;
@@ -321,6 +396,39 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
   }
 
   async function api(endpoint, method, body) {
+    // Settings live-preview: exact UI, no real sessions / network.
+    if (PREVIEW) {
+      if (String(endpoint || '').indexOf('/session/start') === 0) {
+        return {
+          sessionToken: 'preview-session',
+          messages: [
+            {
+              role: 'bot',
+              body:
+                (agentCfg && agentCfg.welcomeMsg) ||
+                "I'm here to help with orders, products, and store questions.",
+              senderName: (agentCfg && agentCfg.agentName) || 'Support Assistant',
+            },
+          ],
+        };
+      }
+      if (String(endpoint || '').indexOf('/session/message') === 0) {
+        return {
+          messages: [
+            {
+              role: 'bot',
+              body: 'Preview only — responses will come from your AI once the widget is live.',
+              senderName: (agentCfg && agentCfg.agentName) || 'Support Assistant',
+            },
+          ],
+        };
+      }
+      if (String(endpoint || '').indexOf('/session/') === 0) {
+        return { session: { messages: [], visitorEmail: null } };
+      }
+      return {};
+    }
+
     const url = API_BASE + endpoint;
     const opts = {
       method: method || 'GET',
@@ -339,22 +447,53 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
   }
 
   function loadFonts(fontFamilyName) {
-    const name = String(fontFamilyName || 'Sora')
+    const name = String(fontFamilyName || 'Plus Jakarta Sans')
       .replace(/['"]/g, '')
       .split(',')[0]
       .trim();
     if (!name) return;
+
+    if (!document.querySelector('link[href*="fonts.googleapis.com"][rel="preconnect"]')) {
+      const preconnectApi = document.createElement('link');
+      preconnectApi.rel = 'preconnect';
+      preconnectApi.href = 'https://fonts.googleapis.com';
+      document.head.appendChild(preconnectApi);
+
+      const preconnectStatic = document.createElement('link');
+      preconnectStatic.rel = 'preconnect';
+      preconnectStatic.href = 'https://fonts.gstatic.com';
+      preconnectStatic.crossOrigin = 'anonymous';
+      document.head.appendChild(preconnectStatic);
+    }
+
     const id = 'agentra-gf-' + name.replace(/\s+/g, '-');
     if (document.querySelector('#' + id)) return;
     const link = document.createElement('link');
     link.id = id;
     link.rel = 'stylesheet';
+    link.crossOrigin = 'anonymous';
     link.href =
       'https://fonts.googleapis.com/css2?family=' +
       encodeURIComponent(name).replace(/%20/g, '+') +
-      ':wght@400;500;600;700&display=swap';
+      ':wght@400..800&display=swap';
     document.head.appendChild(link);
+
+    // Bunny Fonts fallback if Google Fonts is blocked by the storefront CSP/theme.
+    const bunnyId = id + '-bunny';
+    if (!document.querySelector('#' + bunnyId)) {
+      const bunny = document.createElement('link');
+      bunny.id = bunnyId;
+      bunny.rel = 'stylesheet';
+      bunny.href =
+        'https://fonts.bunny.net/css?family=' +
+        encodeURIComponent(name).replace(/%20/g, '+').toLowerCase().replace(/\+/g, '-') +
+        ':400,500,600,700,800';
+      document.head.appendChild(bunny);
+    }
   }
+
+  // Start default font early so it is ready before config/API mount.
+  loadFonts('Plus Jakarta Sans');
 
   function loadFA() {
     if (document.querySelector('#agentra-fa-css')) return;
@@ -366,6 +505,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
   }
 
   function connectWebSocket() {
+    if (PREVIEW) return;
     if (!sessionToken || !agentCfg?.wsUrl) return;
     try {
       if (ws) ws.close();
@@ -374,7 +514,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       ws.onmessage = function (ev) {
         try {
           const msg = JSON.parse(ev.data);
-          if (msg.type === 'message' && msg.data) renderServerMessage(msg.data);
+          if (msg.type === 'message' && msg.data) renderServerMessage(msg.data, true);
           if (msg.type === 'system_event' && msg.data?.event === 'agent_joined') {
             clearConnectingIndicator();
             addSystemEvent((msg.data.agentName || 'An agent') + ' joined the chat');
@@ -519,8 +659,9 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
 
     // overflow:hidden kills native scrollbar chrome (Windows arrows). Drive scroll ourselves.
     messagesEl.addEventListener('wheel', function (e) {
-      if (maxScrollTop() <= 0) return;
+      // Always stop page scroll chaining, even when content fits / is at an edge.
       e.preventDefault();
+      if (maxScrollTop() <= 0) return;
       setScrollTop(messagesEl.scrollTop + e.deltaY);
     }, { passive: false });
 
@@ -531,8 +672,10 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     }, { passive: true });
 
     messagesEl.addEventListener('touchmove', function (e) {
-      if (!e.touches || !e.touches.length || maxScrollTop() <= 0) return;
+      if (!e.touches || !e.touches.length) return;
+      // Block page scroll even when the thread itself cannot move further.
       e.preventDefault();
+      if (maxScrollTop() <= 0) return;
       const dy = touchStartY - e.touches[0].clientY;
       setScrollTop(touchStartScroll + dy);
     }, { passive: false });
@@ -592,6 +735,83 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     });
 
     updateCustomScrollbar();
+  }
+
+  function isElementScrollableY(el) {
+    if (!(el instanceof HTMLElement)) return false;
+    const style = window.getComputedStyle(el);
+    const overflowY = style.overflowY;
+    if (overflowY !== 'auto' && overflowY !== 'scroll' && overflowY !== 'overlay') return false;
+    return el.scrollHeight > el.clientHeight + 1;
+  }
+
+  function canScrollInDirection(el, deltaY) {
+    if (!isElementScrollableY(el)) return false;
+    const top = el.scrollTop;
+    const max = el.scrollHeight - el.clientHeight;
+    if (deltaY < 0) return top > 0;
+    if (deltaY > 0) return top < max - 1;
+    return false;
+  }
+
+  /** Keep wheel/touch scrolling inside the open panel — never chain to the host page. */
+  function wirePanelScrollContainment() {
+    const panel = document.getElementById('agt-panel');
+    if (!panel || panel.dataset.agtScrollLock === '1') return;
+    panel.dataset.agtScrollLock = '1';
+
+    panel.addEventListener(
+      'wheel',
+      function (e) {
+        let node = e.target instanceof Element ? e.target : null;
+        while (node && node !== panel) {
+          if (node.id === 'agt-messages') {
+            // Messages uses a custom scroller that already preventDefaults.
+            e.preventDefault();
+            return;
+          }
+          if (isElementScrollableY(node)) {
+            if (!canScrollInDirection(node, e.deltaY)) e.preventDefault();
+            return;
+          }
+          node = node.parentElement;
+        }
+        e.preventDefault();
+      },
+      { passive: false },
+    );
+
+    let touchStartY = 0;
+    panel.addEventListener(
+      'touchstart',
+      function (e) {
+        if (!e.touches || !e.touches.length) return;
+        touchStartY = e.touches[0].clientY;
+      },
+      { passive: true },
+    );
+
+    panel.addEventListener(
+      'touchmove',
+      function (e) {
+        if (!e.touches || !e.touches.length) return;
+        const deltaY = touchStartY - e.touches[0].clientY;
+        let node = e.target instanceof Element ? e.target : null;
+        while (node && node !== panel) {
+          if (node.id === 'agt-messages') {
+            // Handled by the messages custom touch scroller.
+            return;
+          }
+          if (isElementScrollableY(node)) {
+            if (!canScrollInDirection(node, deltaY)) e.preventDefault();
+            return;
+          }
+          node = node.parentElement;
+        }
+        e.preventDefault();
+      },
+      { passive: false },
+    );
   }
 
   const TIME_GAP_MS = 15 * 60 * 1000;
@@ -1022,7 +1242,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
   }
 
   function addAgentMessage(msg) {
-    if (markMessageSeen(msg)) return;
+    if (markMessageSeen(msg)) return false;
     hideProcessStatus();
     toggleTyping(false);
     const at = msg.sentAt ? new Date(msg.sentAt) : new Date();
@@ -1031,13 +1251,13 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     if (msg.contentType === 'system_event') {
       if (msg.payload?.type === 'handoff_requested') {
         addConnectingIndicator(msg.body || 'Connecting with an agent…');
-        return;
+        return false;
       }
       if (msg.payload?.type === 'agent_joined') {
         clearConnectingIndicator();
       }
       addSystemEvent(msg.body || 'Update');
-      return;
+      return false;
     }
 
     const row = document.createElement('div');
@@ -1078,16 +1298,19 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     }
     pinLiveIndicators();
     scrollMessages();
+    return true;
   }
 
-  function renderServerMessage(msg) {
-    if (!msg) return;
+  function renderServerMessage(msg, shouldNotify) {
+    if (!msg) return false;
     if (msg.role === 'customer') {
       // Visitor already paints their own bubble optimistically.
       markMessageSeen(msg);
-      return;
+      return false;
     }
-    addAgentMessage(msg);
+    const added = addAgentMessage(msg);
+    if (added && shouldNotify) notifyIncomingMessage();
+    return added;
   }
 
   function clearEmailError() {
@@ -1120,6 +1343,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     document.getElementById('agt-chat-header')?.style.setProperty('display', 'flex');
     tabChatEl?.classList.add('active');
     tabHomeEl?.classList.remove('active');
+    clearUnreadMessages();
     if (freeHandMode) {
       setFreeHandMode(true);
     } else if (inputBarEl) {
@@ -1260,7 +1484,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       hideProcessStatus();
       applyHandoffState(data.handoffState, data.clearConnecting);
       (data.messages || []).forEach(function (m) {
-        addAgentMessage(m);
+        if (addAgentMessage(m)) notifyIncomingMessage();
       });
       saveChatHistoryEntry({
         sessionToken: sessionToken,
@@ -1328,13 +1552,15 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     emailBtnEl = document.getElementById('agt-email-btn');
     emailErrorEl = document.getElementById('agt-email-error');
     inputBarEl = document.getElementById('agt-input-bar');
+    wireNotificationEvents();
     wireCustomScrollbar();
+    wirePanelScrollContainment();
 
     function openPanel() {
       isOpen = true;
       panel.classList.add('open');
       launcher.classList.add('open');
-      badgeEl?.classList.remove('show');
+      if (inChat) clearUnreadMessages();
       renderChatHistory();
     }
     function closePanel() {
@@ -1461,9 +1687,22 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     renderChatHistory();
   }
 
+  function openPreviewPanel() {
+    if (!PREVIEW) return;
+    const panel = document.getElementById('agt-panel');
+    const launcher = document.getElementById('agt-launcher');
+    const badge = document.getElementById('agt-badge');
+    if (!panel || !launcher) return;
+    isOpen = true;
+    panel.classList.add('open');
+    launcher.classList.add('open');
+    badge?.classList.remove('show');
+  }
+
   function mount(cfgData) {
     agentCfg = cfgData;
-    if (!agentCfg?.enabled) return;
+    // Preview always renders so merchants can style before enabling.
+    if (!PREVIEW && !agentCfg?.enabled) return;
 
     const rootId = 'agentra-widget-root';
     let root = document.getElementById(rootId);
@@ -1474,10 +1713,10 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     }
 
     const brand = agentCfg.widgetColor || '#2563eb';
-    const fontName = String(agentCfg.fontFamily || 'Sora')
+    const fontName = String(agentCfg.fontFamily || 'Plus Jakarta Sans')
       .replace(/['"]/g, '')
       .split(',')[0]
-      .trim() || 'Sora';
+      .trim() || 'Plus Jakarta Sans';
     const font = "'" + fontName + "', system-ui, -apple-system, sans-serif";
     loadFonts(fontName);
     loadFA();
@@ -1491,16 +1730,68 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     });
     document.head.appendChild(style);
 
+    // Reset interaction state when remounting from settings edits.
+    sessionToken = null;
+    visitorEmail = null;
+    inChat = false;
+    emailVerified = false;
+    freeHandMode = false;
+    lastMessageTs = null;
+    unreadCount = 0;
+    seenMessageKeys.clear();
+    isOpen = false;
+
     root.innerHTML = buildHTML(agentCfg);
     wireEvents();
+    updateUnreadIndicators();
 
     if (agentCfg.position === 'bottom-left') {
       root.style.setProperty('--launcher-left', agentCfg.launcherOffsetX + 'px');
       root.style.setProperty('--launcher-right', 'auto');
     }
+
+    if (PREVIEW) {
+      requestAnimationFrame(function () {
+        openPreviewPanel();
+      });
+    }
   }
 
   async function init() {
+    if (PREVIEW) {
+      const initial = cfg.previewConfig && typeof cfg.previewConfig === 'object'
+        ? cfg.previewConfig
+        : {
+            enabled: true,
+            widgetColor: '#2563eb',
+            backgroundColor: '#ffffff',
+            fontFamily: 'Plus Jakarta Sans',
+            storeName: 'Your store',
+            agentName: 'Support Assistant',
+            welcomeTitle: 'Hi there 👋\nHow can we help?',
+            welcomeSubtitle: 'Ask about orders, products, returns & store support.',
+            quickReplies: [
+              'Where is my order?',
+              'Return or refund policy',
+              'Talk to a human',
+              'Product recommendations',
+            ],
+          };
+      mount({ ...initial, enabled: true });
+      window.AgentraWidgetPreview = {
+        update: function (next) {
+          if (!next || typeof next !== 'object') return;
+          mount({ ...next, enabled: true });
+        },
+      };
+      try {
+        window.parent.postMessage({ type: 'agentra-preview-ready' }, '*');
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+
     if (!WIDGET_KEY) {
       console.warn('[Agentra] widgetKey missing in AgentraConfig');
       return;
