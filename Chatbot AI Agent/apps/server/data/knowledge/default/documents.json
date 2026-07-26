@@ -1,0 +1,62 @@
+[
+  {
+    "id": "shipping",
+    "title": "Shipping policy",
+    "tags": ["shipping", "delivery", "timeline", "eta", "cost"],
+    "body": "Shipping timelines and rates are set by the store. Tracking is typically emailed when an order ships. The chat assistant can estimate delivery or shipping cost when those tools have data; final rates are confirmed at checkout."
+  },
+  {
+    "id": "returns",
+    "title": "Returns and refunds",
+    "tags": ["returns", "refunds", "exchange", "partial"],
+    "body": "Return eligibility follows the store’s return policy (window, condition, and excluded items). The chat assistant can check eligibility and start a return, partial return, or exchange for verified eligible orders after confirming details. Refunds go to the original payment method after the return is received. The assistant can check refund status but cannot process a new refund — connect with a human agent for that."
+  },
+  {
+    "id": "cancellations",
+    "title": "Cancellations",
+    "tags": ["cancel", "cancellation"],
+    "body": "Orders can usually be cancelled before fulfillment. Once packed or shipped, cancellation is typically not available and a return may be required after delivery."
+  },
+  {
+    "id": "discounts",
+    "title": "Discounts and coupons",
+    "tags": ["discount", "coupon", "promo", "code"],
+    "body": "Promo codes are applied at checkout. The chat assistant only confirms codes that have been configured for this store — it must never invent discount or coupon codes. If no codes are configured in chat, ask the customer to check the site banner or enter their code at checkout, or offer a human agent for current promotions."
+  },
+  {
+    "id": "payment",
+    "title": "Payment help",
+    "tags": ["payment", "card", "checkout", "declined"],
+    "body": "We never ask for full card numbers, CVV, or passwords in chat. Declined cards: retry on the secure checkout page with correct billing details or another payment method. Duplicate charges are often temporary authorizations that drop off in a few days — verify order payment status in chat or with an agent."
+  },
+  {
+    "id": "sizing",
+    "title": "Size and fit",
+    "tags": ["size", "fit", "sizing"],
+    "body": "Use the size chart on the product page when available. If you are between sizes, we generally recommend choosing the larger size unless the product notes run large. Share your measurements for a more precise suggestion. Available sizes come from the catalog — ask about a specific product for exact options."
+  },
+  {
+    "id": "care",
+    "title": "Product care",
+    "tags": ["care", "cleaning"],
+    "body": "Follow the care instructions on the product label or product page. When unsure, ask in chat and we can check the listed product details."
+  },
+  {
+    "id": "damaged",
+    "title": "Damaged, incorrect, missing, late, or lost",
+    "tags": ["damaged", "incorrect", "missing", "late", "lost"],
+    "body": "If an item arrives damaged, incorrect, or missing from the box, contact us with your order number and photos when possible — we will arrange a replacement or refund after verification. For late or lost packages, we check tracking and can open a delivery investigation after order verification."
+  },
+  {
+    "id": "custom",
+    "title": "Custom product requests",
+    "tags": ["custom", "bespoke", "made-to-order", "alteration"],
+    "body": "Custom, made-to-order, and special alteration requests can be submitted in chat with your email and a description of what you need. Our team reviews feasibility and follows up — custom pieces may have different return rules and longer lead times."
+  },
+  {
+    "id": "contact",
+    "title": "Store contact",
+    "tags": ["contact", "hours", "support"],
+    "body": "Support is available by chat during business hours. Outside hours, leave your email or phone and we will follow up. For out-of-stock items, ask to be notified — we’ll collect your email and alert you when the product is back."
+  }
+]

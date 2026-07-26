@@ -1,0 +1,83 @@
+[
+  {
+    "id": "shipping",
+    "title": "Shipping policy",
+    "tags": [
+      "shipping",
+      "delivery",
+      "timeline"
+    ],
+    "body": "Standard shipping takes 5–8 business days within the US. Express shipping takes 2–3 business days. International orders typically arrive in 10–21 business days. Tracking is emailed when the order ships."
+  },
+  {
+    "id": "returns",
+    "title": "Returns and refunds",
+    "tags": [
+      "returns",
+      "refunds",
+      "exchange"
+    ],
+    "body": "Unworn items with tags may be returned within 14 days of delivery. Custom and final-sale items are not eligible. The chat assistant can start a return for eligible orders after verifying the order and confirming the reason. Refunds are issued to the original payment method within 5–10 business days after we receive the return. The chat assistant can check whether a refund has been issued (refund status) but cannot process a new refund — for that, connect with a human agent. Restocking does not by itself explain a refund — refund status is tracked separately."
+  },
+  {
+    "id": "fulfillment",
+    "title": "Order packing and fulfillment",
+    "tags": [
+      "packing",
+      "packed",
+      "fulfillment",
+      "processing",
+      "preparing",
+      "unfulfilled"
+    ],
+    "body": "After payment, orders stay unfulfilled while the warehouse prepares them — that is the Placed stage (not packed yet). Once items are packed, fulfillment moves forward. Tracking appears only after the order ships. Payment status and fulfillment status update separately. Orders can usually be cancelled or have the shipping address changed while still unfulfilled."
+  },
+  {
+    "id": "cancellations",
+    "title": "Cancellations",
+    "tags": [
+      "cancel",
+      "cancellation"
+    ],
+    "body": "Orders can be cancelled before fulfillment. Once packed or shipped, cancellation is not available and a return may be required after delivery."
+  },
+  {
+    "id": "sizing",
+    "title": "Size and fit",
+    "tags": [
+      "size",
+      "fit",
+      "sizing"
+    ],
+    "body": "Dresses follow standard US sizing. If you are between sizes, we recommend sizing up for structured gowns and true-to-size for crepe sheath styles. Share your bust/waist/hip measurements for a more precise suggestion."
+  },
+  {
+    "id": "care",
+    "title": "Product care",
+    "tags": [
+      "care",
+      "cleaning"
+    ],
+    "body": "Most gowns should be professionally dry cleaned. Store hanging in a breathable garment bag away from direct sunlight."
+  },
+  {
+    "id": "damaged",
+    "title": "Damaged or incorrect items",
+    "tags": [
+      "damaged",
+      "incorrect",
+      "missing"
+    ],
+    "body": "If an item arrives damaged, incorrect, or missing, contact us with your order number and photos when possible. We will arrange a replacement or refund after verification."
+  },
+  {
+    "id": "contact",
+    "title": "Store contact",
+    "tags": [
+      "contact",
+      "hours",
+      "support"
+    ],
+    "body": "Support is available by chat during business hours. Outside hours, leave your email or phone and we will follow up. For out-of-stock items, ask to be notified — we’ll collect your email and alert you when the product is back. Email: support@example.com."
+  }
+]

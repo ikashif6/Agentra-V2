@@ -1,9 +1,25 @@
 node_modules/
 .env
+.env.local
+.env.test
+.env.test.local
 *.log
 dist/
 coverage/
+.turbo/
+.next/
+*.tsbuildinfo
 
 # Uploaded files (keep the folder, ignore contents)
 uploads/*
 !uploads/.gitkeep
+
+# Chatbot AI Agent local/runtime data (keep source; ignore stores)
+Chatbot AI Agent/apps/server/data/conversations/
+Chatbot AI Agent/apps/server/data/tickets/
+Chatbot AI Agent/apps/server/data/uploads/
+Chatbot AI Agent/apps/server/data/messages/
+Chatbot AI Agent/apps/server/data/alerts/
+Chatbot AI Agent/apps/server/data/shopify/
+Chatbot AI Agent/apps/server/data/workspace/
+Chatbot AI Agent/apps/server/data/*.db

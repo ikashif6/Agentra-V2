@@ -1,0 +1,8 @@
+{
+  "name": "@chatbot/widget",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "serve": "npx --yes serve -l 5500 ."
+  }
+}

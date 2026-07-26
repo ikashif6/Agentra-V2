@@ -1,0 +1,25 @@
+{
+  "name": "ecommerce-chatbot",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @chatbot/server",
+    "dev:widget": "npm run serve -w @chatbot/widget",
+    "build": "npm run build -w @chatbot/shared && npm run build -w @chatbot/server",
+    "test": "npm run test -w @chatbot/server",
+    "test:complete": "node tests/api/run-complete-suite.mjs",
+    "test:report": "node tests/reports/generate-report.mjs",
+    "audit:copy": "node scripts/copy-audit.mjs",
+    "start": "npm run start -w @chatbot/server"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
+  }
+}
