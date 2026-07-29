@@ -1,0 +1,9 @@
+[build]
+builder = "nixpacks"
+# typescript lives in devDependencies — production installs omit it unless we force include.
+buildCommand = "npm install --include=dev && npm run build"
+
+[deploy]
+startCommand = "npm start"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
