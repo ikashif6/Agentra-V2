@@ -16,7 +16,16 @@ async function loadCompany(companyId) {
 
 exports.getStatus = async (req, res, next) => {
   try {
-    const integration = getEmailIntegration(req.company);
+    const company = await loadCompany(req.company._id);
+    const integration = getEmailIntegration(company);
+    // Without a stored secret the mailbox cannot sync, so don't report it as
+    // connected — the workspace has to reconnect before mail becomes tickets.
+    if (integration.status === 'connected' && !integration.secret) {
+      integration.status = 'error';
+      integration.lastError =
+        'Mailbox credentials are missing. Reconnect the mailbox to resume syncing.';
+      await company.save();
+    }
     return response.success(res, {
       email: sanitizeEmailIntegration(integration),
       providers: getSupportedProviders(),

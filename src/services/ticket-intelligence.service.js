@@ -1,6 +1,7 @@
 const Company = require('../models/Company');
 const Ticket = require('../models/Ticket');
 const StoreOrder = require('../models/StoreOrder');
+const User = require('../models/User');
 const { groqJson, isGroqConfigured } = require('./groq.service');
 const { retrieveKnowledge } = require('./live-chat-knowledge.service');
 const { getHelpdeskAiConfig } = require('./helpdesk-ai-config.service');
@@ -41,19 +42,62 @@ function stripHtml(text) {
     .trim();
 }
 
-function conversationTranscript(ticket, limit = 24) {
+function isAiMessage(msg) {
+  return Boolean(msg.isAi) || String(msg.senderEmail || '').includes('bot@agentra');
+}
+
+/**
+ * Staff senders on the ticket. Without this, a colleague's reply and notices like
+ * "Daniel has joined the conversation" read as the customer talking — which is how
+ * the agent's own name ends up in a draft addressed to the customer.
+ */
+async function staffSenderIds(ticket) {
+  const ids = [
+    ...new Set(
+      (ticket.messages || [])
+        .filter((m) => m.sender && !isAiMessage(m))
+        .map((m) => String(m.sender._id || m.sender)),
+    ),
+  ];
+  if (!ids.length) return new Set();
+  const users = await User.find({ _id: { $in: ids }, role: { $ne: 'customer' } })
+    .select('_id')
+    .lean();
+  return new Set(users.map((u) => String(u._id)));
+}
+
+function speakerFor(msg, staffIds) {
+  if (msg.isSystem || String(msg.senderEmail || '').includes('system@agentra')) return 'SYSTEM';
+  if (isAiMessage(msg)) return 'AI_AGENT';
+  if (msg.sender && staffIds.has(String(msg.sender._id || msg.sender))) return 'HUMAN_AGENT';
+  return 'CUSTOMER';
+}
+
+function conversationTranscript(ticket, staffIds, limit = 24) {
   return (ticket.messages || [])
     .filter((m) => m.body && !m.isInternal)
     .slice(-limit)
-    .map((m) => {
-      const who = m.isAi
-        ? 'AI_AGENT'
-        : String(m.senderEmail || '').includes('bot@agentra')
-          ? 'AI_AGENT'
-          : 'USER';
-      return `${who}: ${stripHtml(m.body).replace(/^\[.*?\]\s*/, '')}`;
-    })
+    .map(
+      (m) => `${speakerFor(m, staffIds)}: ${stripHtml(m.body).replace(/^\[.*?\]\s*/, '')}`,
+    )
     .join('\n');
+}
+
+/** Only a real name on the customer's own account counts — never a name from the transcript. */
+function customerNameFromTicket(ticket) {
+  const creator = ticket.createdBy;
+  if (!creator || typeof creator !== 'object') return '';
+  if (creator.role && creator.role !== 'customer') return '';
+  const name = [creator.firstName, creator.lastName]
+    .map((p) => String(p || '').trim())
+    .filter((p) => p && p !== '-')
+    .join(' ');
+  if (!name || /^(visitor|guest|anonymous|unknown|chat|customer)$/i.test(name)) return '';
+  // Chat and email visitors get a placeholder name built from their address, which
+  // is not something they told us — greeting them with it reads as a mistake.
+  const key = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const localPart = String(creator.email || '').split('@')[0];
+  return key(name) === key(localPart) ? '' : name;
 }
 
 function customerEmailFromTicket(ticket) {
@@ -67,10 +111,11 @@ function customerEmailFromTicket(ticket) {
 
 async function buildContextPack(company, ticket) {
   const email = customerEmailFromTicket(ticket);
-  const transcript = conversationTranscript(ticket);
+  const staffIds = await staffSenderIds(ticket);
+  const transcript = conversationTranscript(ticket, staffIds);
   const lastCustomer = [...(ticket.messages || [])]
     .reverse()
-    .find((m) => m.body && !m.isInternal && !m.isAi && !String(m.senderEmail || '').includes('bot@agentra'));
+    .find((m) => m.body && !m.isInternal && speakerFor(m, staffIds) === 'CUSTOMER');
   const queryText = stripHtml(lastCustomer?.body || ticket.ticket_title || ticket.ticket_description || '');
 
   const [knowledge, orders, priorTickets] = await Promise.all([
@@ -104,6 +149,7 @@ async function buildContextPack(company, ticket) {
 
   return {
     email,
+    customerName: customerNameFromTicket(ticket),
     transcript,
     knowledge,
     orders: orders.map((o) => ({
@@ -232,7 +278,10 @@ async function generateTicketIntelligence(companyId, ticketId, { force = false }
     return { skipped: true, reason: 'disabled' };
   }
 
-  const ticket = await Ticket.findById(ticketId).populate('createdBy', 'email firstName lastName');
+  const ticket = await Ticket.findById(ticketId).populate(
+    'createdBy',
+    'email firstName lastName role',
+  );
   if (!ticket || String(ticket.company) !== String(company._id)) {
     return { skipped: true, reason: 'ticket' };
   }
@@ -277,10 +326,13 @@ async function generateTicketIntelligence(companyId, ticketId, { force = false }
   "contradictions": [{"type":"conflict_slug","severity":"low|medium|high|critical","message":"..."}],
   "waitingOn": "customer|warehouse|courier|manager|payment_provider|agent|none"
 }
-Never invent order facts. Prefer request_info when data is missing. Flag contradictions when customer claims conflict with order data, prior AI promises look unsafe, or agents made conflicting commitments.`;
+Never invent order facts. Prefer request_info when data is missing. Flag contradictions when customer claims conflict with order data, prior AI promises look unsafe, or agents made conflicting commitments.
+
+Transcript speakers: CUSTOMER is the person you are helping. AI_AGENT and HUMAN_AGENT are your own side (chatbot and support staff). SYSTEM lines are internal notices such as an agent joining — no one said them to the customer. Names appearing in HUMAN_AGENT or SYSTEM lines belong to staff, never to the customer. Address the customer by name only if "Customer name" below is set, and never write a reply that offers to connect the customer to a human when a human agent has already joined.`;
 
   const user = `Ticket: ${JSON.stringify(ctx.ticketMeta)}
 Customer email: ${ctx.email || 'unknown'}
+Customer name: ${ctx.customerName || 'unknown — do not guess, greet without a name'}
 Orders: ${JSON.stringify(ctx.orders)}
 Prior tickets: ${JSON.stringify(ctx.priorTickets)}
 AI actions already tried:

@@ -117,7 +117,16 @@ const GOAL_HINTS: Array<{ goal: ConversationGoal; patterns: RegExp[] }> = [
   },
   { goal: "return_request", patterns: [/\breturn\b(?! policy)/i, /send(ing)? back/i, /start a return/i] },
   { goal: "cancellation", patterns: [/cancel(ling)? (my )?(order|it)/i, /\bcancel\b/i] },
-  { goal: "address_change", patterns: [/change.*(address|shipping)/i, /update.*(address|shipping)/i] },
+  {
+    goal: "address_change",
+    patterns: [
+      /change.*(address|shipping)/i,
+      /update.*(address|shipping)/i,
+      // Customers answer the address question without repeating "change".
+      /\bnew (shipping )?address\b/i,
+      /\b(?:ship|send|deliver)\s+(?:it|this|the order|my order)\s+to\b/i,
+    ],
+  },
   { goal: "damaged_item", patterns: [/damaged/i, /broken/i] },
   { goal: "incorrect_item", patterns: [/wrong item/i, /incorrect/i] },
   { goal: "missing_item", patterns: [/missing/i, /didn'?t (receive|get|arrive)/i, /haven'?t received/i, /not received/i, /never (arrived|received)/i] },
@@ -675,7 +684,9 @@ export function looksLikeOrderToolAction(message: string): boolean {
     return true;
   if (/^\s*#?\d{3,8}\s*$/.test(message)) return true;
   if (/@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(message) && /\d{3,8}/.test(message)) return true;
-  if (/I (said|meant|meant to say)|sorry.*\d{3,8}|actually.*\d{3,8}/i.test(message)) return true;
+  // "I said 1002" is a correction to re-look-up; "I said, I want to cancel" is not.
+  if (/\b(I (said|meant|meant to say)|sorry|actually)\b/i.test(message) && /\d{3,8}/.test(message))
+    return true;
   return false;
 }
 
@@ -709,10 +720,15 @@ export function extractSlots(message: string, existing: ConversationSlots): Conv
   const email = message.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   if (email) slots.email = email[0];
 
-  const orderNum = extractOrderNumberCandidate(message);
+  const isShippingAddressPayload =
+    /(?:address1|street address|new shipping address)\s*[:=]/i.test(message) &&
+    /(?:zip|postal)\s*[:=]/i.test(message);
+  const orderNum = isShippingAddressPayload
+    ? undefined
+    : extractOrderNumberCandidate(message);
   if (orderNum) slots.orderNumber = orderNum;
 
-  if (/^\s*#?\d{3,8}\s*$/.test(message)) {
+  if (!isShippingAddressPayload && /^\s*#?\d{3,8}\s*$/.test(message)) {
     slots.orderNumber = message.trim().replace("#", "");
   }
 
@@ -723,12 +739,31 @@ export function extractSlots(message: string, existing: ConversationSlots): Conv
     slots.phone = phone[0];
   }
 
+  // Allow fillers between the cue and the amount: "budget is only 500",
+  // "under about $300", "max just 40k".
+  const budgetFiller = "(?:only\\s+|just\\s+|around\\s+|about\\s+|at\\s+(?:most\\s+)?)?";
   const budget =
     message.match(/\$\s?(\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?\b/) ||
     message.match(/\$\s?(\d{2,7})(?:\.\d{1,2})?\b/) ||
     message.match(/\b(\d{1,3})\s*k\b(?:\s*(?:budget|max|maximum|limit))?/i) ||
-    message.match(/\b(?:budget|max(?:imum)?(?:\s*budget)?|under|upto|up to)\s*(?:is\s*|of\s*)?\$?\s*(\d{1,3})\s*k\b/i) ||
-    message.match(/\b(?:budget|max(?:imum)?(?:\s*budget)?|under|upto|up to)\s*(?:is\s*|of\s*)?\$?\s*(\d{2,7})\b/i);
+    message.match(
+      new RegExp(
+        `\\b(?:budget|max(?:imum)?(?:\\s*budget)?|under|upto|up to)\\s*(?:is\\s*|of\\s*)?${budgetFiller}\\$?\\s*(\\d{1,3})\\s*k\\b`,
+        "i",
+      ),
+    ) ||
+    message.match(
+      new RegExp(
+        `\\b(?:budget|max(?:imum)?(?:\\s*budget)?|under|upto|up to)\\s*(?:is\\s*|of\\s*)?${budgetFiller}\\$?\\s*(\\d{2,7})\\b`,
+        "i",
+      ),
+    ) ||
+    message.match(
+      new RegExp(
+        `\\b(?:my\\s+)?budget\\s*(?:is\\s*|of\\s*|=\\s*)?${budgetFiller}\\$?\\s*(\\d{2,7})\\b`,
+        "i",
+      ),
+    );
   if (budget) {
     let amount = budget[1].replace(/,/g, "");
     if (/k\b/i.test(budget[0]) && Number(amount) < 1000) {
@@ -830,7 +865,7 @@ export function extractSlots(message: string, existing: ConversationSlots): Conv
   // Widget forms often serialize as `field: value` lines — capture known slots
   for (const line of message.split(/\r?\n/)) {
     const kv = line.match(
-      /^\s*(orderNumber|email|phone|returnReason|exchangeReason|partialReturnItems|partialReturnReason|customRequestDescription|desiredSize|desiredColor|issueDescription|addressLine1|addressLine2|address1|city|state|zip|country|name|budget|size|color)\s*[:=]\s*(.+)\s*$/i,
+      /^\s*(orderNumber|email|phone|returnReason|exchangeReason|partialReturnItems|partialReturnReason|customRequestDescription|desiredSize|desiredColor|issueDescription|addressLine1|addressLine2|address1|city|state|province|zip|country|name|budget|size|color)\s*[:=]\s*(.+)\s*$/i,
     );
     if (!kv) continue;
     const key = kv[1].toLowerCase();
@@ -838,6 +873,7 @@ export function extractSlots(message: string, existing: ConversationSlots): Conv
     if (!value) continue;
     if (key === "address1") slots.addressLine1 = value;
     else if (key === "name") slots.name = value;
+    else if (key === "province") slots.state = value;
     else if (key === "returnreason") slots.returnReason = value;
     else if (key === "exchangereason") slots.exchangeReason = value;
     else if (key === "partialreturnitems") slots.partialReturnItems = value;

@@ -50,10 +50,21 @@ const updateRules = [
 ];
 
 const messageRules = [
-  body('body').trim().notEmpty().withMessage('Message body is required').isLength({ max: 50000 }),
+  body('body')
+    .optional({ nullable: true, checkFalsy: true })
+    .isString()
+    .isLength({ max: 50000 }),
   body('attachments').optional().isArray(),
   body('attachments.*.url').optional().isURL(),
   body('isInternal').optional().isBoolean(),
+  body().custom((_, { req }) => {
+    const text = String(req.body?.body || '').trim();
+    const files = Array.isArray(req.body?.attachments) ? req.body.attachments : [];
+    if (!text && !files.length) {
+      throw new Error('Message body or attachment is required');
+    }
+    return true;
+  }),
 ];
 
 const addPersonRules = [
@@ -306,6 +317,17 @@ router.post(
   protect,
   requireTicketAccess,
   ticketController.closeTicket
+);
+
+/**
+ * POST /tickets/:code/email-transcript
+ * Staff only — email full live-chat conversation to the customer
+ */
+router.post(
+  '/:code/email-transcript',
+  protect,
+  authorize('owner', 'admin', 'manager', 'agent'),
+  ticketController.emailTranscript
 );
 
 /**

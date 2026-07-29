@@ -1,4 +1,5 @@
 const { htmlToPlainText } = require('./facebook.service');
+const { ensureChannelIntegrations } = require('./channel-integrations.util');
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v21.0';
 
@@ -141,7 +142,7 @@ async function connectFromEmbeddedSignup(company, { code, wabaId, phoneNumberId 
   await labeledStep('subscribe', () => subscribeWabaToApp(wabaId, accessToken));
   await registerPhoneNumber(phoneNumberId, accessToken);
 
-  company.channelIntegrations = company.channelIntegrations || {};
+  ensureChannelIntegrations(company);
   company.channelIntegrations.whatsapp = {
     status: 'connected',
     connectedAt: new Date(),
@@ -166,7 +167,7 @@ async function connectWithToken(company, { accessToken, wabaId, phoneNumberId })
   await labeledStep('subscribe', () => subscribeWabaToApp(wabaId, accessToken));
   await registerPhoneNumber(phoneNumberId, accessToken);
 
-  company.channelIntegrations = company.channelIntegrations || {};
+  ensureChannelIntegrations(company);
   company.channelIntegrations.whatsapp = {
     status: 'connected',
     connectedAt: new Date(),
@@ -183,7 +184,7 @@ async function connectWithToken(company, { accessToken, wabaId, phoneNumberId })
 }
 
 async function disconnectWhatsApp(company) {
-  company.channelIntegrations = company.channelIntegrations || {};
+  ensureChannelIntegrations(company);
   company.channelIntegrations.whatsapp = defaultWhatsAppIntegration();
   await company.save();
   return sanitizeWhatsAppIntegration(company.channelIntegrations.whatsapp);

@@ -1,5 +1,6 @@
 const Company = require('../models/Company');
 const response = require('../utils/apiResponse');
+const { ensureChannelIntegrations } = require('../services/channel-integrations.util');
 const {
   isWhatsAppConfigured,
   getEmbeddedSignupConfig,
@@ -16,7 +17,16 @@ async function loadCompanyWithSecrets(companyId) {
 
 exports.getStatus = async (req, res, next) => {
   try {
-    const integration = getWhatsAppIntegration(req.company);
+    const company = await loadCompanyWithSecrets(req.company._id);
+    const integration = getWhatsAppIntegration(company);
+    // A number with no stored token can neither reply nor receive, so don't
+    // keep showing it as connected — the workspace has to reconnect.
+    if (integration.status === 'connected' && !integration.accessToken) {
+      integration.status = 'error';
+      integration.lastError =
+        'WhatsApp credentials are missing. Reconnect WhatsApp to resume messaging.';
+      await company.save();
+    }
     return response.success(res, {
       whatsapp: sanitizeWhatsAppIntegration(integration),
       configured: isWhatsAppConfigured(),
@@ -59,7 +69,7 @@ exports.connect = async (req, res, next) => {
       });
     } catch (connectErr) {
       console.error('[whatsapp connect]', connectErr);
-      company.channelIntegrations = company.channelIntegrations || {};
+      ensureChannelIntegrations(company);
       company.channelIntegrations.whatsapp = {
         ...(company.channelIntegrations.whatsapp || {}),
         status: 'error',
@@ -93,7 +103,7 @@ exports.connectManual = async (req, res, next) => {
       });
     } catch (connectErr) {
       console.error('[whatsapp connect manual]', connectErr);
-      company.channelIntegrations = company.channelIntegrations || {};
+      ensureChannelIntegrations(company);
       company.channelIntegrations.whatsapp = {
         ...(company.channelIntegrations.whatsapp || {}),
         status: 'error',

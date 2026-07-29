@@ -50,7 +50,7 @@ export function shippingAddressForm(summary?: string[]): InputFormPayload {
         placeholder: "Optional",
       },
       { name: "city", label: "City", required: true },
-      { name: "province", label: "State / Province", required: false },
+      { name: "province", label: "State / Province", required: true },
       { name: "zip", label: "Postal / ZIP code", required: true },
       {
         name: "country",
@@ -284,7 +284,7 @@ export function formForMissing(
   if (flow === "address_change") {
     if (
       missing.some((m) =>
-        ["addressLine1", "city", "zip", "country"].includes(m),
+        ["addressLine1", "city", "state", "zip", "country"].includes(m),
       )
     ) {
       return shippingAddressForm();

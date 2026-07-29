@@ -21,9 +21,10 @@ const SVG_CHAT_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" fill="non
 
 // Header/input bar icons (replacing text labels)
 const SVG_BACK_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-const SVG_NEW_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+const SVG_MORE_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="12" r="1.75" fill="currentColor"/><circle cx="12" cy="12" r="1.75" fill="currentColor"/><circle cx="19" cy="12" r="1.75" fill="currentColor"/></svg>`;
 const SVG_CLOSE_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const SVG_SEND_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const SVG_ATTACH_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 01-7.78-7.78l8.49-8.49a3.5 3.5 0 014.95 4.95l-8.49 8.49a1.5 1.5 0 01-2.12-2.12l7.78-7.78" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const DEFAULT_QUICK_REPLIES = [
   'Where is my order?',
@@ -223,8 +224,25 @@ export function buildHTML(c) {
     '<div class="agt-chat-header-name">' + esc(c.agentName) + '</div>' +
     '<div class="agt-chat-header-status"><span class="agt-status-pip"></span><span>Online · replies instantly</span></div>' +
     '</div>' +
-    '<button class="agt-new-chat-btn" id="agt-new-chat-btn" aria-label="New chat" title="New chat">' + SVG_NEW_ICON + '</button>' +
+    '<div class="agt-chat-header-actions">' +
+    '<div class="agt-menu-wrap" id="agt-menu-wrap">' +
+    '<button class="agt-menu-btn" id="agt-menu-btn" type="button" aria-label="More options" aria-haspopup="true" aria-expanded="false" title="More options">' +
+    SVG_MORE_ICON +
+    '</button>' +
+    '<div class="agt-menu" id="agt-header-menu" role="menu" hidden>' +
+    '<button type="button" class="agt-menu-item" role="menuitem" data-menu-action="new-chat">Start new conversation</button>' +
+    '<button type="button" class="agt-menu-item danger" role="menuitem" data-menu-action="end-chat">End chat</button>' +
+    '</div>' +
+    '</div>' +
     '<button class="agt-chat-header-close" id="agt-close-btn" aria-label="Close">' + SVG_CLOSE_ICON + '</button>' +
+    '</div>' +
+    '</div>' +
+    '<div class="agt-confirm" id="agt-confirm" hidden>' +
+    '<div class="agt-confirm-card" role="dialog" aria-modal="true" aria-labelledby="agt-confirm-title">' +
+    '<div class="agt-confirm-title" id="agt-confirm-title"></div>' +
+    '<div class="agt-confirm-body" id="agt-confirm-body"></div>' +
+    '<div class="agt-confirm-actions" id="agt-confirm-actions"></div>' +
+    '</div>' +
     '</div>' +
     '<div class="agt-screen" id="agt-home">' +
     '<div class="agt-home-scroll">' +
@@ -303,7 +321,12 @@ export function buildHTML(c) {
     '</div>' +
     '<div class="agt-composer" id="agt-composer">' +
     '<div class="agt-input-bar gone" id="agt-input-bar">' +
+    '<div class="agt-attach-preview gone" id="agt-attach-preview"></div>' +
     '<div class="agt-input-wrap">' +
+    '<button type="button" class="agt-attach-btn gone" id="agt-attach-btn" aria-label="Attach a file" title="Attach a file">' +
+    SVG_ATTACH_ICON +
+    '</button>' +
+    '<input type="file" id="agt-file-input" class="agt-file-input" multiple accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.png,.jpg,.jpeg,.gif,.webp" hidden />' +
     '<textarea class="agt-input" id="agt-input" rows="1" placeholder="Type your message…" aria-label="Message"></textarea>' +
     '<button class="agt-send-btn" id="agt-send-btn" disabled aria-label="Send">' + SVG_SEND_ICON + '</button>' +
     '</div>' +
@@ -482,10 +505,11 @@ export function buildCSS(brand, font, rootId, options) {
     '    transform 0.2s cubic-bezier(0.4, 0, 1, 1),\n' +
     '    opacity 0.16s ease-in,\n' +
     '    visibility 0s linear 0.2s;\n' +
-    '  will-change: transform, opacity;\n' +
     '}\n' +
+    // No transform once open: a lingering composited layer is re-sampled on
+    // fractional display scaling, which visibly softens photos and text.
     prefix + '#agt-panel.open {\n' +
-    '  transform: translate3d(0, 0, 0) scale(1);\n' +
+    '  transform: none;\n' +
     '  opacity: 1;\n' +
     '  pointer-events: all;\n' +
     '  visibility: visible;\n' +
@@ -522,33 +546,98 @@ export function buildCSS(brand, font, rootId, options) {
     prefix + '.agt-chat-header-name {\n' +
     '  font-size: 13.5px; font-weight: 700;\n' +
     '  color: var(--ink); letter-spacing: -0.01em;\n' +
+    '  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;\n' +
     '}\n' +
     prefix + '.agt-chat-header-status {\n' +
     '  display: flex; align-items: center; gap: 5px;\n' +
     '  font-size: 11.5px; color: var(--gray-500); margin-top: 1px;\n' +
+    '  white-space: nowrap; overflow: hidden;\n' +
+    '}\n' +
+    prefix + '.agt-chat-header-status span:last-child {\n' +
+    '  overflow: hidden; text-overflow: ellipsis;\n' +
     '}\n' +
     prefix + '.agt-status-pip {\n' +
     '  width: 6px; height: 6px; border-radius: 50%;\n' +
     '  background: #16a34a; flex-shrink: 0;\n' +
     '}\n' +
-    prefix + '.agt-chat-header-close {\n' +
+    prefix + '.agt-chat-header-actions {\n' +
+    '  display: flex; align-items: center; gap: 2px; flex-shrink: 0;\n' +
+    '}\n' +
+    prefix + '.agt-chat-header-close,\n' +
+    prefix + '.agt-menu-btn {\n' +
     '  background: none; border: none; cursor: pointer;\n' +
     '  width: 28px; height: 28px; min-width: 28px; padding: 0; border-radius: 6px;\n' +
     '  display: flex; align-items: center; justify-content: center;\n' +
     '  color: var(--gray-400); line-height: 0;\n' +
-    '  transition: background 0.14s; flex-shrink: 0;\n' +
+    '  transition: background 0.14s, color 0.14s; flex-shrink: 0;\n' +
     '}\n' +
-    prefix + '.agt-chat-header-close svg { width: 14px; height: 14px; display: block; }\n' +
-    prefix + '.agt-chat-header-close:hover { background: var(--gray-100); color: var(--gray-700); }\n' +
-    prefix + '.agt-new-chat-btn {\n' +
-    '  background: none; border: none; cursor: pointer;\n' +
-    '  width: 28px; height: 28px; min-width: 28px; padding: 0; border-radius: 6px;\n' +
+    prefix + '.agt-chat-header-close svg,\n' +
+    prefix + '.agt-menu-btn svg { width: 14px; height: 14px; display: block; }\n' +
+    prefix + '.agt-chat-header-close:hover,\n' +
+    prefix + '.agt-menu-btn:hover,\n' +
+    prefix + '.agt-menu-btn[aria-expanded="true"] {\n' +
+    '  background: var(--gray-100); color: var(--gray-700);\n' +
+    '}\n' +
+    prefix + '.agt-menu-wrap { position: relative; flex-shrink: 0; }\n' +
+    prefix + '.agt-menu {\n' +
+    '  position: absolute; top: calc(100% + 6px); right: 0; z-index: 40;\n' +
+    '  min-width: 188px; padding: 6px;\n' +
+    '  background: var(--white); border: 1px solid var(--gray-200);\n' +
+    '  border-radius: 12px; box-shadow: 0 12px 28px rgba(15,23,42,0.12);\n' +
+    '}\n' +
+    prefix + '.agt-menu[hidden] { display: none !important; }\n' +
+    prefix + '.agt-menu-item {\n' +
+    '  appearance: none; width: 100%; border: none; background: transparent;\n' +
+    '  text-align: left; cursor: pointer; border-radius: 8px;\n' +
+    '  padding: 9px 10px; font: inherit; font-size: 12.5px; font-weight: 600;\n' +
+    '  color: var(--ink); line-height: 1.25;\n' +
+    '}\n' +
+    prefix + '.agt-menu-item:hover { background: var(--gray-100); }\n' +
+    prefix + '.agt-menu-item.danger { color: #b91c1c; }\n' +
+    prefix + '.agt-menu-item.danger:hover { background: #fef2f2; }\n' +
+    prefix + '.agt-menu-item:disabled { opacity: 0.45; cursor: default; }\n\n' +
+    prefix + '.agt-confirm {\n' +
+    '  position: absolute; inset: 0; z-index: 60;\n' +
     '  display: flex; align-items: center; justify-content: center;\n' +
-    '  color: var(--gray-400); line-height: 0;\n' +
-    '  transition: background 0.14s; flex-shrink: 0;\n' +
+    '  padding: 18px; background: rgba(15,23,42,0.34);\n' +
+    '  backdrop-filter: blur(2px);\n' +
     '}\n' +
-    prefix + '.agt-new-chat-btn svg { width: 15px; height: 15px; display: block; }\n' +
-    prefix + '.agt-new-chat-btn:hover { background: var(--gray-100); color: var(--brand); }\n\n' +
+    prefix + '.agt-confirm[hidden] { display: none !important; }\n' +
+    prefix + '.agt-confirm-card {\n' +
+    '  width: 100%; max-width: 280px; background: var(--white);\n' +
+    '  border-radius: 16px; padding: 16px 16px 14px;\n' +
+    '  box-shadow: 0 18px 40px rgba(15,23,42,0.18);\n' +
+    '  border: 1px solid rgba(15,23,42,0.06);\n' +
+    '}\n' +
+    prefix + '.agt-confirm-title {\n' +
+    '  font-size: 14.5px; font-weight: 750; color: var(--ink);\n' +
+    '  letter-spacing: -0.01em; margin-bottom: 6px;\n' +
+    '}\n' +
+    prefix + '.agt-confirm-body {\n' +
+    '  font-size: 12.5px; line-height: 1.45; color: var(--gray-500);\n' +
+    '  margin-bottom: 14px;\n' +
+    '}\n' +
+    prefix + '.agt-confirm-actions {\n' +
+    '  display: flex; flex-direction: column; gap: 7px;\n' +
+    '}\n' +
+    prefix + '.agt-confirm-btn {\n' +
+    '  appearance: none; cursor: pointer; width: 100%;\n' +
+    '  border-radius: 10px; height: 36px; padding: 0 12px;\n' +
+    '  font: inherit; font-size: 12.5px; font-weight: 700; line-height: 1;\n' +
+    '  border: 1px solid var(--gray-200); background: var(--white); color: var(--ink);\n' +
+    '  transition: background 0.14s, border-color 0.14s, color 0.14s;\n' +
+    '}\n' +
+    prefix + '.agt-confirm-btn:hover { background: var(--gray-50); }\n' +
+    prefix + '.agt-confirm-btn.primary {\n' +
+    '  background: var(--brand); border-color: var(--brand); color: #fff;\n' +
+    '}\n' +
+    prefix + '.agt-confirm-btn.primary:hover { background: var(--brand-dk); border-color: var(--brand-dk); }\n' +
+    prefix + '.agt-confirm-btn.danger {\n' +
+    '  background: #b91c1c; border-color: #b91c1c; color: #fff;\n' +
+    '}\n' +
+    prefix + '.agt-confirm-btn.danger:hover { background: #991b1b; border-color: #991b1b; }\n' +
+    prefix + '.agt-confirm-btn.ghost { color: var(--gray-500); border-color: transparent; background: transparent; }\n' +
+    prefix + '.agt-confirm-btn.ghost:hover { background: var(--gray-100); color: var(--ink); }\n\n' +
     prefix + '.gone { display: none !important; }\n' +
     prefix + '.agt-screen { flex: 1; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }\n' +
     prefix + '.agt-screen.gone { display: none !important; }\n\n' +
@@ -884,8 +973,12 @@ export function buildCSS(brand, font, rootId, options) {
     '  from { opacity: 0; transform: translateY(10px) scale(0.98); }\n' +
     '  to   { opacity: 1; transform: translateY(0) scale(1); }\n' +
     '}\n\n' +
-    prefix + '.agt-msg-row.customer { align-items: flex-end; }\n' +
-    prefix + '.agt-msg-row.agent    { align-items: flex-start; width: 100%; }\n\n' +
+    prefix + '.agt-msg-row.customer { align-items: flex-end; width: 100%; }\n' +
+    prefix + '.agt-msg-row.agent    { align-items: flex-start; width: 100%; }\n' +
+    prefix + '.agt-customer-stack {\n' +
+    '  display: flex; flex-direction: column; align-items: flex-end;\n' +
+    '  gap: 6px; max-width: 82%; margin-left: auto;\n' +
+    '}\n\n' +
     prefix + '.agt-msg-meta {\n' +
     '  display: flex; align-items: baseline; gap: 8px;\n' +
     '  font-size: 11px; font-weight: 600;\n' +
@@ -902,7 +995,7 @@ export function buildCSS(brand, font, rootId, options) {
     '  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);\n' +
     '}\n' +
     prefix + '.agt-msg-row.customer .agt-bubble {\n' +
-    '  max-width: 82%;\n' +
+    '  max-width: 100%;\n' +
     '  background: var(--brand);\n' +
     '  color: #ffffff;\n' +
     '  border: none;\n' +
@@ -963,7 +1056,14 @@ export function buildCSS(brand, font, rootId, options) {
     '  box-shadow: 0 0 0 2px #fff, 0 1px 3px rgba(15,23,42,0.12);\n' +
     '}\n' +
     prefix + '.agt-agent-av img { width: 100%; height: 100%; object-fit: cover; display: block; }\n' +
-    prefix + '.agt-agent-av-fallback { background: var(--brand); }\n\n' +
+    prefix + '.agt-agent-av-fallback { background: var(--brand); }\n' +
+    prefix + '.agt-agent-av-human, ' + prefix + '.agt-header-av-human {\n' +
+    '  background: var(--brand);\n' +
+    '}\n' +
+    prefix + '.agt-agent-av-human img, ' + prefix + '.agt-header-av-human img {\n' +
+    '  width: 100%; height: 100%; object-fit: cover; display: block;\n' +
+    '}\n' +
+    prefix + '.agt-av-initial { line-height: 1; font-weight: 700; }\n\n' +
     prefix + '.agt-choice-stack {\n' +
     '  display: flex; flex-wrap: wrap; gap: 8px;\n' +
     '  width: 100%; margin-top: 4px;\n' +
@@ -1109,12 +1209,33 @@ export function buildCSS(brand, font, rootId, options) {
     prefix + '.agt-email-input { width:100%; border:1.5px solid var(--gray-200); border-radius:12px; padding:12px 14px; font-size:14px; font-family:inherit; background:#fff; }\n' +
     prefix + '.agt-email-btn { width:100%; border:none; border-radius:12px; padding:12px 14px; background:var(--brand); color:#fff; font-weight:700; font-size:14px; cursor:pointer; }\n' +
     prefix + '.agt-email-btn:disabled { opacity:0.6; cursor:not-allowed; }\n' +
-    prefix + '.agt-product-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; max-width:100%; margin-top:4px; }\n' +
-    prefix + '.agt-product-card { border:1px solid var(--gray-200); border-radius:12px; overflow:hidden; background:#fff; text-decoration:none; color:inherit; }\n' +
-    prefix + '.agt-product-card img { width:100%; height:72px; object-fit:cover; background:var(--gray-100); display:block; }\n' +
-    prefix + '.agt-product-card .agt-product-body { padding:8px; }\n' +
-    prefix + '.agt-product-card .agt-product-title { font-size:11px; font-weight:600; line-height:1.3; color:var(--ink); }\n' +
-    prefix + '.agt-product-card .agt-product-price { font-size:11px; color:var(--brand); font-weight:700; margin-top:4px; }\n' +
+    prefix + '.agt-product-rail { position:relative; width:100%; max-width:100%; margin-top:4px; }\n' +
+    prefix + '.agt-product-grid { display:flex; flex-wrap:nowrap; gap:10px; width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; touch-action:pan-x; overscroll-behavior-x:contain; scrollbar-width:none; -ms-overflow-style:none; padding:0 2px 2px; scroll-snap-type:x proximity; cursor:default; }\n' +
+    prefix + '.agt-product-grid::-webkit-scrollbar { display:none; width:0; height:0; }\n' +
+    prefix + '.agt-product-grid.is-dragging { scroll-snap-type:none; }\n' +
+    '@media (hover: none) and (pointer: coarse) {\n' +
+    '  ' + prefix + '.agt-product-grid { cursor:grab; }\n' +
+    '  ' + prefix + '.agt-product-grid.is-dragging { cursor:grabbing; }\n' +
+    '}\n' +
+    prefix + '.agt-product-rail::before, ' + prefix + '.agt-product-rail::after { content:""; position:absolute; top:0; bottom:2px; width:14px; pointer-events:none; z-index:2; }\n' +
+    prefix + '.agt-product-rail::before { left:0; background:linear-gradient(to right, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0) 100%); }\n' +
+    prefix + '.agt-product-rail::after { right:0; background:linear-gradient(to left, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0) 100%); }\n' +
+    prefix + '.agt-product-nav { position:absolute; top:42%; transform:translateY(-50%); z-index:4; width:28px; height:28px; border-radius:50%; border:1px solid var(--gray-200); background:rgba(255,255,255,0.96); color:var(--ink); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 1px 4px rgba(15,23,42,0.12); padding:0; transition:opacity .15s ease, background .15s ease; }\n' +
+    prefix + '.agt-product-nav:hover { background:#fff; }\n' +
+    prefix + '.agt-product-nav[disabled] { opacity:0.35; pointer-events:none; }\n' +
+    prefix + '.agt-product-nav-prev { left:2px; }\n' +
+    prefix + '.agt-product-nav-next { right:2px; }\n' +
+    prefix + '.agt-product-nav svg { width:14px; height:14px; display:block; }\n' +
+    prefix + '.agt-product-card { flex:0 0 148px; width:148px; display:flex; flex-direction:column; border:1px solid var(--gray-200); border-radius:12px; overflow:hidden; background:#fff; color:inherit; min-width:0; box-shadow:0 1px 2px rgba(15,23,42,0.04); scroll-snap-align:start; pointer-events:auto; }\n' +
+    prefix + '.agt-product-media { position:relative; display:block; width:100%; background:var(--gray-100); overflow:hidden; }\n' +
+    prefix + '.agt-product-card img { width:100%; aspect-ratio:1 / 1; height:auto; object-fit:cover; object-position:center top; display:block; pointer-events:none; user-select:none; }\n' +
+    prefix + '.agt-product-card .agt-product-body { padding:8px 9px 10px; display:flex; flex-direction:column; gap:6px; flex:1; min-width:0; }\n' +
+    prefix + '.agt-product-card .agt-product-title { font-size:11px; font-weight:600; line-height:1.3; color:var(--ink); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }\n' +
+    prefix + '.agt-product-card .agt-product-row { display:flex; align-items:center; justify-content:space-between; gap:6px; }\n' +
+    prefix + '.agt-product-card .agt-product-price { font-size:12px; color:var(--brand); font-weight:700; letter-spacing:0.01em; }\n' +
+    prefix + '.agt-product-view { display:inline-flex; align-items:center; justify-content:center; width:100%; margin-top:auto; padding:7px 8px; border-radius:8px; border:1px solid var(--gray-200); background:var(--gray-50); color:var(--ink); font-size:11px; font-weight:600; line-height:1; text-decoration:none; cursor:pointer; transition:background .15s ease, border-color .15s ease, color .15s ease; }\n' +
+    prefix + '.agt-product-view:hover { background:#fff; border-color:var(--brand); color:var(--brand); }\n' +
+    prefix + '.agt-product-view.is-disabled { opacity:0.45; pointer-events:none; cursor:default; }\n' +
     prefix + '.agt-system-event { text-align:center; font-size:11.5px; color:var(--gray-500); padding:6px 12px; background:var(--gray-50); border-radius:999px; align-self:center; }\n\n' +
     prefix + '.agt-input-form {\n' +
     '  background: #fff;\n' +
@@ -1277,34 +1398,59 @@ export function buildCSS(brand, font, rootId, options) {
     '  border-color: rgba(22,163,74,0.2); border-top-color: #16a34a;\n' +
     '}\n\n' +
     prefix + '.agt-rating {\n' +
-    '  margin-left: 0; margin-top: 8px;\n' +
+    '  margin: 10px auto 4px;\n' +
     '  animation: msgIn 0.22s ease both;\n' +
     '  background: #fff; border: 1px solid rgba(15,23,42,0.07);\n' +
-    '  border-radius: 16px; padding: 14px; width: 100%;\n' +
+    '  border-radius: 16px; padding: 15px; width: calc(100% - 20px); box-sizing: border-box;\n' +
     '  box-shadow: 0 6px 18px rgba(15,23,42,0.05);\n' +
     '}\n' +
     prefix + '.agt-rating-label {\n' +
-    '  font-size: 13px; color: var(--ink); margin-bottom: 10px; font-weight: 650;\n' +
+    '  font-size: 13px; color: var(--ink); margin-bottom: 12px; font-weight: 700; text-align: center;\n' +
     '}\n' +
-    prefix + '.agt-stars { display: flex; gap: 6px; }\n' +
-    prefix + '.agt-star {\n' +
-    '  font-size: 22px; cursor: pointer;\n' +
-    '  color: var(--gray-300);\n' +
-    '  transition: color 0.14s, transform 0.14s;\n' +
+    prefix + '.agt-rating-options { display: flex; justify-content: space-between; gap: 5px; }\n' +
+    prefix + '.agt-rating-option {\n' +
+    '  appearance: none; border: 1px solid transparent; background: transparent;\n' +
+    '  border-radius: 10px; padding: 5px 3px; min-width: 0; flex: 1;\n' +
+    '  color: var(--gray-500); font: inherit; font-size: 9px; cursor: pointer;\n' +
+    '  display: flex; flex-direction: column; align-items: center; gap: 4px;\n' +
+    '  transition: background 0.14s, border-color 0.14s, transform 0.14s;\n' +
     '}\n' +
-    prefix + '.agt-star:hover { color: #f59e0b; transform: scale(1.18); }\n' +
-    prefix + '.agt-star.selected { color: #f59e0b; }\n' +
+    prefix + '.agt-rating-option:hover:not(:disabled) { background: var(--gray-100); transform: translateY(-1px); }\n' +
+    prefix + '.agt-rating-option.selected { background: rgba(99,55,164,0.10); border-color: var(--brand); color: var(--brand); font-weight: 700; }\n' +
+    prefix + '.agt-rating-option:disabled { cursor: default; }\n' +
+    prefix + '.agt-rating-emoji { font-size: 25px; line-height: 1; }\n' +
     prefix + '.agt-rating-thanks {\n' +
-    '  font-size: 12px; color: var(--gray-500);\n' +
-    '  font-weight: 500; margin-top: 7px; display: none;\n' +
+    '  font-size: 11px; color: var(--gray-500); text-align: center;\n' +
+    '  font-weight: 500; margin-top: 10px; display: none;\n' +
     '}\n\n' +
 prefix + '.agt-input-bar {\n' +
     '  padding: 0;\n' +
     '  border-top: none;\n' +
     '  background: transparent;\n' +
-    '  display: flex; align-items: center; gap: 10px;\n' +
+    '  display: flex; flex-direction: column; align-items: stretch; gap: 8px;\n' +
     '  flex-shrink: 0;\n' +
     '  width: 100%;\n' +
+    '}\n' +
+    prefix + '.agt-attach-preview {\n' +
+    '  display: flex; flex-wrap: wrap; gap: 6px;\n' +
+    '  padding: 0 2px;\n' +
+    '}\n' +
+    prefix + '.agt-attach-preview.gone { display: none !important; }\n' +
+    prefix + '.agt-attach-chip {\n' +
+    '  display: inline-flex; align-items: center; gap: 6px;\n' +
+    '  max-width: 100%;\n' +
+    '  padding: 5px 8px;\n' +
+    '  border-radius: 999px;\n' +
+    '  background: var(--gray-100);\n' +
+    '  border: 1px solid var(--gray-200);\n' +
+    '  font-size: 12px; color: var(--gray-700);\n' +
+    '}\n' +
+    prefix + '.agt-attach-chip span {\n' +
+    '  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;\n' +
+    '}\n' +
+    prefix + '.agt-attach-chip button {\n' +
+    '  border: none; background: transparent; color: var(--gray-500);\n' +
+    '  cursor: pointer; padding: 0; line-height: 1; font-size: 14px;\n' +
     '}\n' +
     prefix + '.agt-input-wrap {\n' +
     '  flex: 1;\n' +
@@ -1314,8 +1460,8 @@ prefix + '.agt-input-bar {\n' +
     '  border: 1.5px solid var(--gray-200);\n' +
     '  border-radius: 22px;\n' +
     '  display: flex; align-items: center;\n' +
-    '  padding: 4px 6px 4px 14px;\n' +
-    '  gap: 8px;\n' +
+    '  padding: 4px 6px 4px 8px;\n' +
+    '  gap: 4px;\n' +
     '  box-sizing: border-box;\n' +
     '  transition: border-color 0.2s;\n' +
     '  box-shadow: none !important;\n' +
@@ -1326,6 +1472,17 @@ prefix + '.agt-input-bar {\n' +
     '  box-shadow: none !important;\n' +
     '  outline: none !important;\n' +
     '}\n' +
+    prefix + '.agt-attach-btn {\n' +
+    '  width: 34px; height: 34px; padding: 0; border-radius: 50%;\n' +
+    '  border: none; background: transparent; color: var(--gray-500);\n' +
+    '  cursor: pointer; display: none; align-items: center; justify-content: center;\n' +
+    '  flex-shrink: 0;\n' +
+    '}\n' +
+    prefix + '.agt-attach-btn:not(.gone) { display: flex; }\n' +
+    prefix + '.agt-attach-btn.gone { display: none !important; }\n' +
+    prefix + '.agt-attach-btn:hover { color: var(--brand); background: var(--gray-100); }\n' +
+    prefix + '.agt-attach-btn:disabled { opacity: 0.45; cursor: not-allowed; }\n' +
+    prefix + '.agt-file-input { display: none !important; }\n' +
     prefix + '.agt-input {\n' +
     '  flex: 1; min-width: 0;\n' +
     '  background: transparent !important;\n' +
@@ -1369,7 +1526,30 @@ prefix + '.agt-input-bar {\n' +
     prefix + '.agt-send-btn:disabled {\n' +
     '  background: var(--gray-200); color: var(--gray-400); cursor: not-allowed; transform: none;\n' +
     '}\n' +
-    prefix + '.agt-send-btn svg { width: 18px; height: 18px; }\n\n' +
+    prefix + '.agt-send-btn svg { width: 18px; height: 18px; }\n' +
+    prefix + '.agt-msg-attachments {\n' +
+    '  display: flex; flex-direction: column; gap: 6px; margin-top: 0;\n' +
+    '  align-items: flex-end;\n' +
+    '  width: fit-content;\n' +
+    '  max-width: 100%;\n' +
+    '}\n' +
+    prefix + '.agt-msg-row.customer .agt-msg-attachments {\n' +
+    '  align-self: flex-end;\n' +
+    '  margin-left: auto;\n' +
+    '}\n' +
+    prefix + '.agt-msg-row.agent .agt-msg-attachments {\n' +
+    '  align-items: flex-start;\n' +
+    '}\n' +
+    prefix + '.agt-msg-attachments a {\n' +
+    '  color: inherit; text-decoration: underline; font-size: 12px; word-break: break-all;\n' +
+    '  display: block; max-width: 100%;\n' +
+    '}\n' +
+    prefix + '.agt-msg-attachments img {\n' +
+    '  display: block; width: auto; height: auto;\n' +
+    '  max-width: min(220px, 100%); border-radius: 12px;\n' +
+    '  border: 1px solid rgba(0,0,0,0.08);\n' +
+    '  float: none;\n' +
+    '}\n\n' +
     '@media (max-width: 480px) {\n' +
     '  ' + root + ' #agt-panel {\n' +
     '    width: min(100% - 24px, 360px);\n' +

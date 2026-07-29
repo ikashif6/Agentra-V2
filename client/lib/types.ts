@@ -49,6 +49,43 @@ export interface User {
   };
 }
 
+export type LiveChatRatingLabel = "very_bad" | "bad" | "okay" | "good" | "excellent";
+
+export interface LiveChatRatingSummary {
+  totalRatings: number;
+  averageRating: number | null;
+  distribution: Record<1 | 2 | 3 | 4 | 5, number>;
+  lastRatedAt?: string | null;
+  agentsRated?: number;
+}
+
+export interface LiveChatRatingRecord {
+  _id: string;
+  rating: number;
+  label: LiveChatRatingLabel;
+  submittedAt?: string;
+  resolvedAt?: string | null;
+  agent?: Pick<User, "_id" | "firstName" | "lastName" | "email" | "avatar" | "role">;
+  ticket?: {
+    _id: string;
+    ticket_code: string;
+    ticket_title?: string;
+    status?: TicketStatus;
+  } | null;
+}
+
+export interface AgentLiveChatEvaluation {
+  agent: Pick<User, "_id" | "firstName" | "lastName" | "email" | "avatar" | "role" | "isOnline">;
+  summary: LiveChatRatingSummary;
+  records?: LiveChatRatingRecord[];
+}
+
+export interface WorkspaceLiveChatEvaluation {
+  summary: LiveChatRatingSummary;
+  agents: AgentLiveChatEvaluation[];
+  recent: LiveChatRatingRecord[];
+}
+
 export type StoreProvider = "shopify" | "woocommerce" | "custom";
 
 export type StoreIntegrationStatus = "disconnected" | "pending" | "connected" | "error";

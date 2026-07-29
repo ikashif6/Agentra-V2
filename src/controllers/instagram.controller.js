@@ -30,7 +30,16 @@ function igRedirect(subdomain, params, returnOrigin, returnPath) {
 
 exports.getStatus = async (req, res, next) => {
   try {
-    const integration = getInstagramIntegration(req.company);
+    const company = await loadCompanyWithSecrets(req.company._id);
+    const integration = getInstagramIntegration(company);
+    // Without a page token we can neither send nor receive, so stop showing the
+    // account as connected — the workspace has to reconnect.
+    if (integration.status === 'connected' && !integration.pageAccessToken) {
+      integration.status = 'error';
+      integration.lastError =
+        'Instagram credentials are missing. Reconnect the account to resume messaging.';
+      await company.save();
+    }
     return response.success(res, {
       instagram: sanitizeInstagramIntegration(integration),
       configured: isInstagramConfigured(),

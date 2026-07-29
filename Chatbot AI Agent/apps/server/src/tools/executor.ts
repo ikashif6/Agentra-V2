@@ -38,7 +38,7 @@ async function resolveProductFromArgs(
 ): Promise<NonNullable<
   Awaited<ReturnType<ReturnType<typeof getStoreAdapter>["getProduct"]>>
 > | null> {
-  const store = getStoreAdapter(ctx.workspaceId);
+  const store = getStoreAdapter(ctx?.workspaceId || env.workspaceId);
   const slots = ctx?.conversation.state.slots || {};
   const id =
     (args.productId as string) ||
@@ -814,7 +814,7 @@ const handlers: Record<string, ToolHandler> = {
     return productCards(products, reasons, search);
   },
 
-  async listCatalogOptions(args) {
+  async listCatalogOptions(args, ctx) {
     const store = getStoreAdapter(ctx.workspaceId);
     const products = await store.searchProducts({ limit: 50, availableOnly: false });
     const facet = String(args.facet || "colors").toLowerCase();
@@ -1202,6 +1202,22 @@ const handlers: Record<string, ToolHandler> = {
   async requestCancellation(args, ctx) {
     const verified = requireVerifiedOrder(ctx, args.orderId as string | undefined);
     if (!verified.ok) return verified;
+
+    // Fulfilled / shipped orders can only be returned, never cancelled.
+    const snap = ctx.conversation.state.verifiedOrderSnapshot;
+    if (snap && snap.cancelEligible === false) {
+      const alreadyCancelled =
+        String(snap.cancellationStatus || "").toLowerCase() === "cancelled";
+      const message = alreadyCancelled
+        ? `Order #${snap.orderNumber} is already cancelled.`
+        : `Order #${snap.orderNumber} has already been fulfilled, so it can’t be cancelled anymore. Once it arrives I can help you start a return instead.`;
+      return {
+        ok: false,
+        data: { message, cancelEligible: false },
+        error: message,
+      };
+    }
+
     if (!args.confirmed) {
       const token = randomUUID();
       ctx.conversation.state.pendingAction = {
@@ -1286,7 +1302,7 @@ const handlers: Record<string, ToolHandler> = {
     ).trim();
     const state = String(args.state || ctx.conversation.state.slots.state || "").trim();
 
-    if (!line1 || !city || !zip || !country) {
+    if (!line1 || !city || !state || !zip || !country) {
       return {
         ok: true,
         data: { needsAddress: true },
@@ -1314,7 +1330,7 @@ const handlers: Record<string, ToolHandler> = {
                 required: false,
               },
               { name: "city", label: "City", required: true },
-              { name: "province", label: "State / Province", required: false },
+              { name: "province", label: "State / Province", required: true },
               { name: "zip", label: "Postal / ZIP code", required: true },
               {
                 name: "country",
@@ -1359,6 +1375,7 @@ const handlers: Record<string, ToolHandler> = {
       };
       ctx.conversation.state.slots.addressLine1 = line1;
       ctx.conversation.state.slots.city = city;
+      ctx.conversation.state.slots.state = state;
       ctx.conversation.state.slots.zip = zip;
       ctx.conversation.state.slots.country = country;
       await saveConversation(ctx.conversation);

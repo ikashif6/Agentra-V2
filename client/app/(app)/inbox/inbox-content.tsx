@@ -25,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { InboxReplyComposer } from "@/components/inbox/inbox-reply-composer";
 import { FormattedMessageBody, extractTicketSenderPrefix, stripTicketSenderPrefix } from "@/lib/format-message-body";
 import { messageHtmlToPlain, isMessageHtml } from "@/lib/sanitize-message-html";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { InboxTicketToolbar } from "@/components/inbox/inbox-ticket-toolbar";
@@ -117,6 +117,62 @@ function lastPreview(ticket: Ticket) {
   return plain.replace(/\s+/g, " ").trim().slice(0, 120);
 }
 
+/** Apply a PATCH-shaped update to local ticket state so the UI can move before the network returns. */
+function applyOptimisticTicketPatch(
+  ticket: Ticket,
+  patch: Record<string, unknown>,
+  ctx: { agents: User[]; teams: Team[] },
+): Ticket {
+  const next: Ticket = {
+    ...ticket,
+    lastActivity: new Date().toISOString(),
+  };
+
+  if ("status" in patch && patch.status != null) {
+    next.status = patch.status as TicketStatus;
+  }
+  if ("priority" in patch && patch.priority != null) {
+    next.priority = patch.priority as TicketPriority;
+  }
+  if ("isUnread" in patch) {
+    next.isUnread = Boolean(patch.isUnread);
+  }
+  if ("tags" in patch && Array.isArray(patch.tags)) {
+    next.tags = patch.tags as string[];
+  }
+  if ("inboxFolder" in patch) {
+    next.inboxFolder = patch.inboxFolder as InboxFolder;
+  }
+  if ("details" in patch && patch.details && typeof patch.details === "object") {
+    next.details = {
+      ...(ticket.details || {}),
+      ...(patch.details as TicketDetails),
+    };
+  }
+  if ("assigned_agent" in patch) {
+    const id = patch.assigned_agent as string | null | undefined;
+    if (!id) {
+      next.assigned_agent = undefined;
+    } else {
+      next.assigned_agent =
+        ctx.agents.find((agent) => agent._id === id) ||
+        (ticket.assigned_agent &&
+        typeof ticket.assigned_agent === "object" &&
+        ticket.assigned_agent._id === id
+          ? ticket.assigned_agent
+          : undefined);
+    }
+  }
+  if ("teams" in patch) {
+    const ids = Array.isArray(patch.teams) ? (patch.teams as string[]) : [];
+    next.teams = ids
+      .map((id) => ctx.teams.find((team) => team._id === id))
+      .filter((team): team is Team => Boolean(team));
+  }
+
+  return next;
+}
+
 /** Agent / AI replies sit on the right; customer messages on the left. */
 function isSystemMessage(msg: TicketMessage) {
   return Boolean(msg.isSystem || msg.contentType === "system_event");
@@ -135,6 +191,14 @@ function isOutboundMessage(msg: TicketMessage, currentUserId?: string) {
   }
 
   return false;
+}
+
+/** Staff profile picture for their bubbles — AI and customer bubbles keep initials. */
+function messageSenderAvatar(msg: TicketMessage) {
+  if (isSystemMessage(msg) || msg.isAi) return "";
+  const sender = typeof msg.sender === "object" ? msg.sender : null;
+  if (!sender || sender.role === "customer") return "";
+  return sender.avatar || "";
 }
 
 function messageSenderLabel(msg: TicketMessage) {
@@ -266,7 +330,6 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
   const [creating, setCreating] = useState(false);
   const [msgBody, setMsgBody] = useState("");
   const [sending, setSending] = useState(false);
-  const [loadingDemo, setLoadingDemo] = useState(false);
   const [toolbarBusy, setToolbarBusy] = useState(false);
   const [agents, setAgents] = useState<User[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -340,7 +403,20 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
           prev &&
           prev.ticket_code === ticket.ticket_code &&
           (prev.messages?.length ?? 0) === (ticket.messages?.length ?? 0) &&
-          prev.lastActivity === ticket.lastActivity
+          prev.lastActivity === ticket.lastActivity &&
+          prev.status === ticket.status &&
+          prev.priority === ticket.priority &&
+          prev.isUnread === ticket.isUnread &&
+          String(
+            typeof prev.assigned_agent === "object"
+              ? prev.assigned_agent?._id
+              : prev.assigned_agent || "",
+          ) ===
+            String(
+              typeof ticket.assigned_agent === "object"
+                ? ticket.assigned_agent?._id
+                : ticket.assigned_agent || "",
+            )
         ) {
           return prev;
         }
@@ -373,25 +449,29 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
     const loadAgents = async () => {
       try {
         if (isLiveChat) {
-          const { data } = await liveChatApi.getSettings();
-          const configured = (data.data.liveChat?.agents ?? []) as LiveChatAgent[];
-          if (configured.length > 0) {
-            setAgents(
-              configured.map((a) => ({
-                _id: a._id,
-                firstName: a.firstName,
-                lastName: a.lastName,
-                fullName: a.fullName,
-                email: "",
-                role: (a.role || "agent") as User["role"],
-                avatar: a.avatar,
-                company: "",
-                isEmailVerified: true,
-                isActive: true,
-                isOnline: a.isOnline,
-              })),
-            );
-            return;
+          try {
+            const { data } = await liveChatApi.getSettings();
+            const configured = (data.data.liveChat?.agents ?? []) as LiveChatAgent[];
+            if (configured.length > 0) {
+              setAgents(
+                configured.map((a) => ({
+                  _id: a._id,
+                  firstName: a.firstName,
+                  lastName: a.lastName,
+                  fullName: a.fullName,
+                  email: "",
+                  role: (a.role || "agent") as User["role"],
+                  avatar: a.avatar,
+                  company: "",
+                  isEmailVerified: true,
+                  isActive: true,
+                  isOnline: a.isOnline,
+                })),
+              );
+              return;
+            }
+          } catch {
+            // Agents (and others without live-chat settings access) fall back to member search.
           }
         }
 
@@ -486,50 +566,48 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
 
   const moveToFolder = async (folder: InboxFolder) => {
     if (!activeTicket) return;
-    try {
-      await ticketApi.update(activeTicket.ticket_code, { inboxFolder: folder });
-      const labels: Record<InboxFolder, string> = {
-        inbox: "Moved to inbox",
-        snoozed: "Conversation snoozed",
-        trash: "Moved to trash",
-        spam: "Marked as spam",
-      };
-      toast.success(labels[folder]);
-      await refreshInbox();
-      if (folder !== "inbox" && folder !== view) {
-        router.replace(basePath, { scroll: false });
-      } else {
-        await fetchTicketDetail(activeTicket.ticket_code);
-      }
-    } catch {
-      toast.error("Could not update conversation");
-    }
-  };
+    const code = activeTicket.ticket_code;
+    const prevTicket = activeTicket;
+    const prevList = tickets;
+    const labels: Record<InboxFolder, string> = {
+      inbox: "Moved to inbox",
+      snoozed: "Conversation snoozed",
+      trash: "Moved to trash",
+      spam: "Marked as spam",
+    };
+    const leavesCurrentView = folder !== "inbox" && folder !== view;
 
-  const loadDemoTicket = async () => {
-    setLoadingDemo(true);
+    const optimistic = applyOptimisticTicketPatch(
+      activeTicket,
+      { inboxFolder: folder },
+      { agents, teams },
+    );
+    setActiveTicket(optimistic);
+    setTickets((list) =>
+      leavesCurrentView
+        ? list.filter((ticket) => ticket.ticket_code !== code)
+        : list.map((ticket) =>
+            ticket.ticket_code === code
+              ? applyOptimisticTicketPatch(ticket, { inboxFolder: folder }, { agents, teams })
+              : ticket,
+          ),
+    );
+    toast.success(labels[folder]);
+    if (leavesCurrentView) {
+      router.replace(basePath, { scroll: false });
+    }
+
     try {
-      const { data } = await ticketApi.createDemo();
-      const payload = data.data;
-      const inboxCount = payload.inboxCount ?? 20;
-      const liveChatCount = payload.liveChatCount ?? payload.aiAgentCount ?? 20;
-      const created = payload.created ?? 0;
-      toast.success(
-        `Demo data ready: ${inboxCount} inbox + ${liveChatCount} AI Agent conversations (${created} new)`,
-      );
-      const tickets = (payload.tickets ?? [payload.ticket]).filter(Boolean);
-      setView(isLiveChat ? "queue" : "all");
-      await refreshInbox();
-      const preferred = isLiveChat
-        ? tickets.find((ticket: Ticket) => isLiveChatTicket(ticket)) ?? tickets[0]
-        : tickets.find((ticket: Ticket) => !isLiveChatTicket(ticket)) ?? tickets[0];
-      if (preferred?.ticket_code) {
-        selectTicket(preferred.ticket_code);
+      await ticketApi.update(code, { inboxFolder: folder });
+      void fetchTickets(true);
+      void fetchCounts();
+      if (!leavesCurrentView) {
+        void fetchTicketDetail(code, true);
       }
     } catch {
-      toast.error("Could not load demo conversation");
-    } finally {
-      setLoadingDemo(false);
+      setActiveTicket(prevTicket);
+      setTickets(prevList);
+      toast.error("Could not update conversation");
     }
   };
 
@@ -593,52 +671,74 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
     successMessage?: string,
   ) => {
     if (!activeTicket) return false;
-    setToolbarBusy(true);
+    const code = activeTicket.ticket_code;
+    const prevTicket = activeTicket;
+    const prevList = tickets;
+    const optimistic = applyOptimisticTicketPatch(activeTicket, patch, { agents, teams });
+
+    setActiveTicket(optimistic);
+    setTickets((list) =>
+      list.map((ticket) =>
+        ticket.ticket_code === code
+          ? applyOptimisticTicketPatch(ticket, patch, { agents, teams })
+          : ticket,
+      ),
+    );
+    if (successMessage) toast.success(successMessage);
+
     try {
-      await ticketApi.update(activeTicket.ticket_code, patch);
-      await fetchTicketDetail(activeTicket.ticket_code);
-      await refreshInbox();
-      if (successMessage) toast.success(successMessage);
+      await ticketApi.update(code, patch);
+      void fetchTicketDetail(code, true);
+      void fetchTickets(true);
+      void fetchCounts();
       return true;
     } catch {
+      setActiveTicket(prevTicket);
+      setTickets(prevList);
       toast.error("Could not update conversation");
       return false;
-    } finally {
-      setToolbarBusy(false);
     }
   };
 
   const updateStatus = async (status: TicketStatus) => {
     if (!activeTicket) return;
-    if (status === "resolved" || status === "closed") {
-      try {
-        const { data } = await ticketAiApi.checkResolution(activeTicket.ticket_code, {
-          draftReply: messageHtmlToPlain(msgBody),
+    const previousStatus = activeTicket.status;
+    const code = activeTicket.ticket_code;
+    const draftReply = messageHtmlToPlain(msgBody);
+
+    // Paint the new status immediately; resolution quality check runs after.
+    const ok = await patchTicket({ status });
+    if (!ok) return;
+
+    if (status !== "resolved" && status !== "closed") return;
+
+    try {
+      const { data } = await ticketAiApi.checkResolution(code, { draftReply });
+      const issues = (data.data.issues || []) as Array<{ severity?: string; message?: string }>;
+      const high = issues.filter((i) => i.severity === "high");
+      if (high.length || (issues.length && data.data.ok === false)) {
+        const lines = issues
+          .slice(0, 4)
+          .map((i) => `• ${i.message}`)
+          .join("\n");
+        const keep = await confirm({
+          title: "Resolution check found issues",
+          description: `${lines}\n\nKeep this conversation ${status === "resolved" ? "resolved" : "closed"}?`,
+          confirmLabel: status === "resolved" ? "Keep resolved" : "Keep closed",
+          cancelLabel: "Undo",
+          variant: "default",
         });
-        const issues = (data.data.issues || []) as Array<{ severity?: string; message?: string }>;
-        const high = issues.filter((i) => i.severity === "high");
-        if (high.length || (issues.length && data.data.ok === false)) {
-          const lines = issues
-            .slice(0, 4)
-            .map((i) => `• ${i.message}`)
-            .join("\n");
-          const proceed = await confirm({
-            title: "Resolution check found issues",
-            description: `${lines}\n\nResolve or close this conversation anyway?`,
-            confirmLabel: "Resolve anyway",
-            variant: "default",
-          });
-          if (!proceed) return;
-        } else if (issues.length) {
-          toast.message("Resolution notes", {
-            description: issues[0]?.message || "Review before closing if needed.",
-          });
+        if (!keep) {
+          await patchTicket({ status: previousStatus });
         }
-      } catch {
-        // Don't block close if check fails
+      } else if (issues.length) {
+        toast.message("Resolution notes", {
+          description: issues[0]?.message || "Review before closing if needed.",
+        });
       }
+    } catch {
+      // Don't undo a successful resolve if the check fails.
     }
-    await patchTicket({ status });
   };
 
   const updatePriority = async (priority: TicketPriority) => {
@@ -658,25 +758,68 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
   };
 
   const transferTicket = async (agent: User) => {
-    const ok = await patchTicket(
-      { assigned_agent: agent._id },
-      `Transferred to ${formatUserDisplayName(agent)}`,
+    // Include the target so the assignee paints immediately even if the agents list is stale.
+    if (!activeTicket) return;
+    const code = activeTicket.ticket_code;
+    const prevTicket = activeTicket;
+    const prevList = tickets;
+    const patch = { assigned_agent: agent._id };
+    const ctx = { agents: [...agents, agent], teams };
+    const optimistic = {
+      ...applyOptimisticTicketPatch(activeTicket, patch, ctx),
+      assigned_agent: agent,
+    };
+
+    setActiveTicket(optimistic);
+    setTickets((list) =>
+      list.map((ticket) =>
+        ticket.ticket_code === code
+          ? { ...applyOptimisticTicketPatch(ticket, patch, ctx), assigned_agent: agent }
+          : ticket,
+      ),
     );
-    if (ok) return;
+    toast.success(`Transferred to ${formatUserDisplayName(agent)}`);
+
+    try {
+      await ticketApi.update(code, patch);
+      void fetchTicketDetail(code, true);
+      void fetchTickets(true);
+      void fetchCounts();
+    } catch {
+      setActiveTicket(prevTicket);
+      setTickets(prevList);
+      toast.error("Could not update conversation");
+    }
   };
 
   const updateTicketDetails = async (details: Partial<TicketDetails>) => {
     if (!activeTicket) return;
-    setToolbarBusy(true);
+    const code = activeTicket.ticket_code;
+    const prevTicket = activeTicket;
+    const prevList = tickets;
+    const mergedDetails = { ...(activeTicket.details || {}), ...details };
+    const optimistic = applyOptimisticTicketPatch(
+      activeTicket,
+      { details: mergedDetails },
+      { agents, teams },
+    );
+
+    setActiveTicket(optimistic);
+    setTickets((list) =>
+      list.map((ticket) =>
+        ticket.ticket_code === code
+          ? applyOptimisticTicketPatch(ticket, { details: mergedDetails }, { agents, teams })
+          : ticket,
+      ),
+    );
+
     try {
-      await ticketApi.update(activeTicket.ticket_code, {
-        details: { ...activeTicket.details, ...details },
-      });
-      await fetchTicketDetail(activeTicket.ticket_code);
+      await ticketApi.update(code, { details: mergedDetails });
+      void fetchTicketDetail(code, true);
     } catch {
+      setActiveTicket(prevTicket);
+      setTickets(prevList);
       toast.error("Could not save details");
-    } finally {
-      setToolbarBusy(false);
     }
   };
 
@@ -686,6 +829,35 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
 
   const printTicket = () => {
     window.print();
+  };
+
+  const emailTranscript = async () => {
+    if (!activeTicket) return;
+    setToolbarBusy(true);
+    try {
+      const { data } = await ticketApi.emailTranscript(activeTicket.ticket_code, {
+        force: true,
+      });
+      const payload = data.data;
+      if (payload?.skipped) {
+        toast.message("Transcript was already emailed", {
+          description: payload.to ? `Previously sent to ${payload.to}` : undefined,
+        });
+      } else {
+        toast.success(
+          payload?.to
+            ? `Transcript emailed to ${payload.to}`
+            : "Conversation transcript emailed",
+        );
+      }
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || "Could not email transcript";
+      toast.error(message);
+    } finally {
+      setToolbarBusy(false);
+    }
   };
 
   return (
@@ -834,9 +1006,9 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
             ) : tickets.length === 0 ? (
               <div className="flex flex-col items-center px-6 py-16 text-center">
                 {isLiveChat ? (
-                  <AiAgentIcon className="mb-3 size-10 text-muted-foreground/40" />
+                  <AiAgentIcon className="mb-3 size-10 text-muted-foreground/70" />
                 ) : (
-                  <Inbox className="mb-3 size-10 text-muted-foreground/40" />
+                  <Inbox className="mb-3 size-10 text-muted-foreground/70" />
                 )}
                 <p className="text-sm font-medium text-foreground">
                   {isLiveChat ? "No AI Agent conversations in this view" : "No conversations in this view"}
@@ -850,24 +1022,6 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                         : "Human-owned conversations — including live chat after handoff — appear here."
                     : "When you open a support request it will appear here."}
                 </p>
-                {isStaff ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-4"
-                    disabled={loadingDemo}
-                    onClick={() => void loadDemoTicket()}
-                  >
-                    {loadingDemo ? (
-                      <Loader2 className="mr-2 size-4 animate-spin" />
-                    ) : isLiveChat ? (
-                      <AiAgentIcon className="mr-2 size-4" />
-                    ) : (
-                      <Inbox className="mr-2 size-4" />
-                    )}
-                    {isLiveChat ? "Load demo conversations" : "Load demo conversation"}
-                  </Button>
-                ) : null}
               </div>
             ) : (
               tickets.map((ticket) => {
@@ -910,7 +1064,7 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
         <section className="hidden min-w-0 flex-[1.4] flex-col lg:flex">
           {!selectedCode ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-              <Mail className="size-10 text-muted-foreground/40" />
+              <Mail className="size-10 text-muted-foreground/70" />
               <p className="text-sm font-medium text-foreground">Select a conversation</p>
               <p className="max-w-xs text-xs text-muted-foreground">
                 Choose a thread from the list to read messages and reply.
@@ -960,6 +1114,7 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                     onTrash={() => void moveToFolder("trash")}
                     onTransfer={(agent) => void transferTicket(agent)}
                     onPrint={printTicket}
+                    onEmailTranscript={() => void emailTranscript()}
                   />
                 ) : (
                   <InboxTicketToolbar
@@ -1027,6 +1182,9 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
                       ) : null}
                       <div className={cn("group flex items-center gap-3", isOutbound && "flex-row-reverse")}>
                         <Avatar className="size-8 shrink-0 self-end">
+                          {messageSenderAvatar(msg) ? (
+                            <AvatarImage src={messageSenderAvatar(msg)} alt={sender} />
+                          ) : null}
                           <AvatarFallback className="bg-muted text-xs">
                             {userInitials(sender)}
                           </AvatarFallback>

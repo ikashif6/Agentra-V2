@@ -13,7 +13,11 @@ function defaultPermissions(channelAi = {}) {
     createReturns: Boolean(actions.createReturns),
     exchangeItems: Boolean(actions.exchangeItems),
     cancelOrders: Boolean(actions.cancelOrder),
-    changeDeliveryAddress: Boolean(actions.changeAddress ?? actions.updateAddress),
+    // The settings UI and Company schema expose this capability as `editOrder`.
+    // Keep the older aliases for backwards compatibility.
+    changeDeliveryAddress: Boolean(
+      actions.changeAddress ?? actions.updateAddress ?? actions.editOrder,
+    ),
     issueRefunds: Boolean(actions.refundOrder),
     issueStoreCredit: Boolean(actions.issueStoreCredit),
     applyDiscounts: {

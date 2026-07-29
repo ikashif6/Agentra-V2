@@ -1,4 +1,5 @@
 const { signOAuthState } = require('../utils/token');
+const { ensureChannelIntegrations } = require('./channel-integrations.util');
 const {
   normalizeReturnOrigin,
   normalizeReturnPath,
@@ -185,7 +186,7 @@ async function finalizeAccountConnection(company, account, userAccessToken) {
   // Subscribing the linked Page routes Instagram messaging webhooks to the app.
   await labeledStep('subscribe', () => subscribePageToApp(account.pageId, account.pageAccessToken));
 
-  company.channelIntegrations = company.channelIntegrations || {};
+  ensureChannelIntegrations(company);
   company.channelIntegrations.instagram = {
     status: 'connected',
     connectedAt: new Date(),
@@ -210,7 +211,7 @@ async function handleOAuthCallback(code, company) {
   const accounts = await labeledStep('list-accounts', () => fetchInstagramAccounts(userAccessToken));
 
   if (!accounts.length) {
-    company.channelIntegrations = company.channelIntegrations || {};
+    ensureChannelIntegrations(company);
     company.channelIntegrations.instagram = {
       ...defaultInstagramIntegration(),
       status: 'error',
@@ -228,7 +229,7 @@ async function handleOAuthCallback(code, company) {
     return { kind: 'connected', instagram, username: instagram.igUsername };
   }
 
-  company.channelIntegrations = company.channelIntegrations || {};
+  ensureChannelIntegrations(company);
   company.channelIntegrations.instagram = {
     ...defaultInstagramIntegration(),
     status: 'pending',
@@ -262,7 +263,7 @@ async function connectPendingAccount(company, igUserId) {
 }
 
 async function disconnectInstagram(company) {
-  company.channelIntegrations = company.channelIntegrations || {};
+  ensureChannelIntegrations(company);
   company.channelIntegrations.instagram = defaultInstagramIntegration();
   await company.save();
   return sanitizeInstagramIntegration(company.channelIntegrations.instagram);

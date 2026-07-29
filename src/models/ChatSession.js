@@ -15,7 +15,20 @@ const chatMessageSchema = new Schema(
       default: 'text',
     },
     payload: { type: Schema.Types.Mixed },
+    attachments: {
+      type: [
+        {
+          url: { type: String, required: true },
+          filename: { type: String, required: true },
+          mimetype: { type: String },
+          size: { type: Number },
+        },
+      ],
+      default: [],
+    },
     senderName: { type: String },
+    /** Profile picture of the human agent, so the widget shows them and not the bot */
+    senderAvatar: { type: String },
     sentAt: { type: Date, default: Date.now },
   },
   { _id: true },
@@ -66,6 +79,22 @@ const chatSessionSchema = new Schema(
     },
     lastActivityAt: { type: Date, default: Date.now },
     closedAt: { type: Date },
+    resolution: {
+      resolvedAt: { type: Date },
+      resolvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+      resolvedAgent: { type: Schema.Types.ObjectId, ref: 'User' },
+    },
+    feedback: {
+      rating: { type: Number, min: 1, max: 5 },
+      label: { type: String },
+      requestedAt: { type: Date },
+      submittedAt: { type: Date },
+    },
+    transcriptEmail: {
+      sentAt: { type: Date },
+      to: { type: String },
+      messageId: { type: String },
+    },
   },
   { timestamps: true },
 );

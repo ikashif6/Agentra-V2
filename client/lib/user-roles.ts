@@ -14,7 +14,7 @@ export const INVITE_ROLE_OPTIONS: InviteRoleOption[] = [
     id: "agent",
     label: "Support agent",
     description:
-      "Works handed-off conversations in the inbox. No AI Agent queue, analytics, or team management.",
+      "Inbox and AI Agent conversations (view and reply). No AI setup, analytics, or team management.",
   },
   {
     id: "manager",
@@ -86,7 +86,8 @@ export const WORKSPACE_ROLES: WorkspaceRoleDefinition[] = [
   {
     id: "agent",
     label: "Support agent",
-    summary: "Inbox and day-to-day customer replies after AI handoff. No AI Agent queue or analytics.",
+    summary:
+      "Inbox and AI Agent conversations (view how AI handles chats, reply, resolve). No AI setup or analytics.",
   },
   {
     id: "customer",
@@ -134,7 +135,7 @@ export const PERMISSION_MATRIX: PermissionRow[] = [
   {
     id: "ai-agent",
     label: "AI Agent",
-    levels: { owner: "full", admin: "full", manager: "full", agent: "none", customer: "none" },
+    levels: { owner: "full", admin: "full", manager: "full", agent: "limited", customer: "none" },
   },
 ];
 

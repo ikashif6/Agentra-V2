@@ -39,7 +39,7 @@ export const PRIMARY_NAV: AppNavItem[] = [
     label: "AI Agent",
     href: "/ai-agent",
     icon: AiAgentIcon,
-    roles: ["owner", "admin", "manager"],
+    roles: ["owner", "admin", "manager", "agent"],
   },
   {
     label: "Analytics",

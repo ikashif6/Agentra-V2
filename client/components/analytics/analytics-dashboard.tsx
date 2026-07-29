@@ -16,6 +16,7 @@ import {
 import { AnalyticsIcon } from "@/components/icons/analytics-icon";
 import ManagerAiPanel from "@/components/analytics/manager-ai-panel";
 import KnowledgeAiPanel from "@/components/analytics/knowledge-ai-panel";
+import AgentLiveChatPerformancePanel from "@/components/analytics/agent-live-chat-performance-panel";
 import { useAuth } from "@/contexts/AuthContext";
 import { businessHoursApi, ticketApi, usersApi } from "@/lib/api";
 import { formatScheduleSummary } from "@/lib/business-hours";
@@ -453,6 +454,8 @@ export default function AnalyticsDashboard() {
           loading={loading}
         />
       </div>
+
+      <AgentLiveChatPerformancePanel />
 
       <ManagerAiPanel />
 

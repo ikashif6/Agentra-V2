@@ -99,7 +99,14 @@ function runBackgroundSync(companyId) {
         );
       }
     })
-    .catch((err) => console.error('[store sync]', err.message));
+    .catch(async (err) => {
+      console.error('[store sync]', err.message);
+      try {
+        await patchStoreIntegrationFields(companyId, { lastError: String(err.message || err) });
+      } catch {
+        /* ignore */
+      }
+    });
 }
 
 function defaultSyncSettings(overrides = {}) {

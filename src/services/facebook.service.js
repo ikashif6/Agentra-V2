@@ -1,4 +1,5 @@
 const { signOAuthState } = require('../utils/token');
+const { ensureChannelIntegrations } = require('./channel-integrations.util');
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v21.0';
 const SCOPES = [
@@ -349,7 +350,7 @@ async function finalizePageConnection(company, page, userAccessToken) {
   }
   await labeledStep('subscribe', () => subscribePageToApp(page.id, page.accessToken));
 
-  company.channelIntegrations = company.channelIntegrations || {};
+  ensureChannelIntegrations(company);
   company.channelIntegrations.facebook = {
     status: 'connected',
     connectedAt: new Date(),
@@ -372,7 +373,7 @@ async function handleOAuthCallback(code, company) {
   const pages = await labeledStep('list-pages', () => fetchManagedPages(userAccessToken));
 
   if (!pages.length) {
-    company.channelIntegrations = company.channelIntegrations || {};
+    ensureChannelIntegrations(company);
     company.channelIntegrations.facebook = {
       ...defaultFacebookIntegration(),
       status: 'error',
@@ -389,7 +390,7 @@ async function handleOAuthCallback(code, company) {
     return { kind: 'connected', facebook, pageName: facebook.pageName };
   }
 
-  company.channelIntegrations = company.channelIntegrations || {};
+  ensureChannelIntegrations(company);
   company.channelIntegrations.facebook = {
     status: 'pending',
     connectedAt: null,
@@ -432,7 +433,7 @@ async function connectPendingPage(company, pageId) {
 }
 
 async function disconnectFacebook(company) {
-  company.channelIntegrations = company.channelIntegrations || {};
+  ensureChannelIntegrations(company);
   company.channelIntegrations.facebook = defaultFacebookIntegration();
   await company.save();
   return sanitizeFacebookIntegration(company.channelIntegrations.facebook);

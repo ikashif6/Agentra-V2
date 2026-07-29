@@ -79,6 +79,7 @@ export function missingSlotsForFlow(
   if (flow === "address_change" && verifiedOrderId) {
     if (!slots.addressLine1) missing.push("addressLine1");
     if (!slots.city) missing.push("city");
+    if (!slots.state) missing.push("state");
     if (!slots.zip) missing.push("zip");
     if (!slots.country) missing.push("country");
   }

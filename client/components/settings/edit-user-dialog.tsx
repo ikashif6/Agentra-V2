@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,15 +18,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { AgentCsatOverview, AgentCsatRecords } from "@/components/analytics/agent-csat-shared";
 import { usersApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
+import { emptyRatingSummary } from "@/lib/live-chat-rating";
 import {
   inviteRoleOptionsFor,
   ROLE_DISPLAY,
   getUserManagePermissions,
   type InvitableRole,
 } from "@/lib/user-roles";
-import type { User } from "@/lib/types";
+import type { AgentLiveChatEvaluation, User } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const schema = z.object({
@@ -65,6 +67,9 @@ export default function EditUserDialog({
   const perms = user && actor ? getUserManagePermissions(actor, user) : null;
   const isSelf = user && actor ? user._id === actor._id : false;
   const roleOptions = inviteRoleOptionsFor(actor?.role);
+  const canViewEvaluation = ["owner", "admin", "manager"].includes(actor?.role ?? "");
+  const [evaluation, setEvaluation] = useState<AgentLiveChatEvaluation | null>(null);
+  const [evaluationLoading, setEvaluationLoading] = useState(false);
 
   const {
     register,
@@ -92,6 +97,37 @@ export default function EditUserDialog({
           : undefined,
     });
   }, [user, open, reset]);
+
+  useEffect(() => {
+    if (!open || !user || !canViewEvaluation) {
+      setEvaluation(null);
+      return;
+    }
+
+    let cancelled = false;
+    setEvaluationLoading(true);
+    usersApi
+      .liveChatEvaluation(user._id)
+      .then((res) => {
+        if (!cancelled) setEvaluation(res.data.data as AgentLiveChatEvaluation);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEvaluation({
+            agent: user,
+            summary: emptyRatingSummary(),
+            records: [],
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setEvaluationLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, user, canViewEvaluation]);
 
   const onSubmit = async (values: FormData) => {
     if (!user) return;
@@ -128,7 +164,7 @@ export default function EditUserDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Manage user</DialogTitle>
           <DialogDescription>
@@ -229,6 +265,29 @@ export default function EditUserDialog({
             ) : null}
           </section>
 
+          {canViewEvaluation ? (
+            <section className="space-y-3 rounded-lg border border-border/80 bg-muted/10 p-4">
+              <div>
+                <SectionTitle>Live chat performance</SectionTitle>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Customer ratings from conversations this agent resolved.
+                </p>
+              </div>
+              <AgentCsatOverview
+                summary={evaluation?.summary ?? null}
+                loading={evaluationLoading}
+              />
+              {!evaluationLoading && (evaluation?.records?.length ?? 0) > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Rated conversations
+                  </p>
+                  <AgentCsatRecords records={evaluation?.records ?? []} />
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
           {perms?.canDelete && onRemove && user ? (
             <section className="space-y-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
               <SectionTitle>Remove from workspace</SectionTitle>
@@ -270,4 +329,4 @@ export default function EditUserDialog({
       </DialogContent>
     </Dialog>
   );
-};
+}

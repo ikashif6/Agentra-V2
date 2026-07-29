@@ -26,7 +26,10 @@ async function suggestReply(companyId, ticketId) {
     throw Object.assign(new Error('Suggested replies are disabled'), { statusCode: 400 });
   }
 
-  const ticket = await Ticket.findById(ticketId).populate('createdBy', 'email firstName lastName');
+  const ticket = await Ticket.findById(ticketId).populate(
+    'createdBy',
+    'email firstName lastName role',
+  );
   if (!ticket || String(ticket.company) !== String(company._id)) {
     throw Object.assign(new Error('Ticket not found'), { statusCode: 404 });
   }
@@ -58,11 +61,12 @@ async function suggestReply(companyId, ticketId) {
       {
         role: 'system',
         content:
-          'You draft support replies for human agents. Write a complete customer-ready reply. Do not invent order facts. Use knowledge when relevant. Return only the reply text.',
+          'You draft support replies for human agents. Write a complete customer-ready reply. Do not invent order facts. Use knowledge when relevant. Return only the reply text. In the transcript, CUSTOMER is the person being helped; AI_AGENT and HUMAN_AGENT are your own side and SYSTEM lines are internal notices, so names in those lines are staff, never the customer. Use the customer name only if it is given below. You are the human agent on this conversation — never offer to connect the customer with an agent.',
       },
       {
         role: 'user',
         content: `Ticket ${ticket.ticket_code}: ${ticket.ticket_title}
+Customer name: ${ctx.customerName || 'unknown — greet without a name'}
 Orders: ${JSON.stringify(ctx.orders)}
 Knowledge:\n${knowledgeBlock}
 AI overview summary: ${ticket.aiIntelligence?.summary || 'n/a'}

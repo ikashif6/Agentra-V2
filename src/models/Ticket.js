@@ -310,6 +310,17 @@ const ticketSchema = new Schema(
       model: { type: String },
     },
 
+    // Customer rating captured when a live-chat conversation is resolved.
+    // resolvedAgent remains stable even if the ticket is reassigned later.
+    customerSatisfaction: {
+      rating: { type: Number, min: 1, max: 5 },
+      label: { type: String },
+      agent: { type: Schema.Types.ObjectId, ref: 'User' },
+      session: { type: Schema.Types.ObjectId, ref: 'ChatSession' },
+      requestedAt: { type: Date },
+      submittedAt: { type: Date },
+    },
+
     // ── Attachments (top-level; messages can also have attachments) ───────────
     attachments: { type: [attachmentSchema], default: [] },
 
@@ -348,7 +359,7 @@ const ticketSchema = new Schema(
 // ─── Indexes ──────────────────────────────────────────────────────────────────
 ticketSchema.index({ company: 1, status: 1 });
 ticketSchema.index({ company: 1, createdAt: -1 });
-ticketSchema.index({ ticket_code: 1 }, { unique: true });
+// ticket_code already declares `unique: true` on the field itself.
 ticketSchema.index({ company_subdomain: 1, ticket_code: 1 });
 ticketSchema.index({ 'peoples.user': 1 });
 ticketSchema.index({ assigned_agent: 1 });
@@ -359,11 +370,87 @@ ticketSchema.index({ company: 1, source: 1, 'whatsapp.waId': 1 });
 ticketSchema.index({ company: 1, source: 1, 'email.fromAddress': 1 });
 
 // ─── Static: generate the next ticket code for a company ─────────────────────
+
+const CODE_COUNTER_KEY = 'ticketCodeSeq';
+
+/**
+ * Highest numeric suffix already used by this company, so existing workspaces
+ * continue their sequence instead of restarting at 1.
+ */
+async function highestUsedSequence(TicketModel, companyId) {
+  const [row] = await TicketModel.aggregate([
+    { $match: { company: new mongoose.Types.ObjectId(String(companyId)) } },
+    {
+      $project: {
+        seq: {
+          $convert: {
+            input: { $arrayElemAt: [{ $split: ['$ticket_code', '-'] }, -1] },
+            to: 'int',
+            onError: 0,
+            onNull: 0,
+          },
+        },
+      },
+    },
+    { $group: { _id: null, max: { $max: '$seq' } } },
+  ]);
+  return row?.max || 0;
+}
+
+/**
+ * Next ticket code for a company.
+ *
+ * Backed by an atomic per-company counter rather than a document count: counting
+ * reuses sequences after a ticket is deleted, which permanently collides with the
+ * unique ticket_code index. `ticket_code` is unique across the whole collection,
+ * so codes already claimed by another workspace are skipped too.
+ */
 ticketSchema.statics.generateCode = async function (companyId, prefix = 'TKT') {
-  // Count all tickets for this company and use +1 as the sequence
-  const count = await this.countDocuments({ company: companyId });
-  const seq = String(count + 1).padStart(5, '0');
-  return `${prefix.toUpperCase()}-${seq}`;
+  const Counter = require('./Counter');
+  const scope = `company:${companyId}`;
+  const cleanPrefix = String(prefix || 'TKT').toUpperCase();
+
+  // Seed once from existing tickets. $max keeps concurrent seeding idempotent.
+  const current = await Counter.get(scope, CODE_COUNTER_KEY);
+  if (!current) {
+    const seeded = await highestUsedSequence(this, companyId);
+    if (seeded > 0) {
+      await Counter.updateOne(
+        { scope, key: CODE_COUNTER_KEY },
+        { $max: { value: seeded } },
+        { upsert: true },
+      );
+    }
+  }
+
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const seq = await Counter.increment(scope, CODE_COUNTER_KEY);
+    const code = `${cleanPrefix}-${String(seq).padStart(5, '0')}`;
+    const taken = await this.exists({ ticket_code: code });
+    if (!taken) return code;
+  }
+
+  // Sequence space is unexpectedly crowded — fall back to a collision-proof code.
+  return `${cleanPrefix}-${Date.now().toString(36).toUpperCase()}`;
+};
+
+/**
+ * Create a ticket with a freshly generated code, retrying if another writer
+ * claims the same code in the gap between generating and inserting.
+ */
+ticketSchema.statics.createWithCode = async function (companyId, prefix, doc) {
+  let lastErr;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const ticket_code = await this.generateCode(companyId, prefix);
+    try {
+      return await this.create({ ...doc, ticket_code });
+    } catch (err) {
+      const duplicateCode = err?.code === 11000 && 'ticket_code' in (err.keyPattern || err.keyValue || {});
+      if (!duplicateCode) throw err;
+      lastErr = err;
+    }
+  }
+  throw lastErr;
 };
 
 module.exports = mongoose.model('Ticket', ticketSchema);

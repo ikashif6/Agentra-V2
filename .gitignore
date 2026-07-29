@@ -23,3 +23,7 @@ Chatbot AI Agent/apps/server/data/alerts/
 Chatbot AI Agent/apps/server/data/shopify/
 Chatbot AI Agent/apps/server/data/workspace/
 Chatbot AI Agent/apps/server/data/*.db
+
+# Separate repo: https://github.com/ikashif6/Agentra-Help-Center.git
+help-center/
+

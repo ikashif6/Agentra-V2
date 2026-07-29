@@ -1,28 +1,51 @@
-let groqClient = null;
+let aiClient = null;
+
+function selectedProvider() {
+  return String(process.env.HELPDESK_AI_PROVIDER || process.env.AI_PROVIDER || 'groq').toLowerCase();
+}
+
+function providerConfig() {
+  if (selectedProvider() === 'openai') {
+    return {
+      apiKey: process.env.OPENAI_API_KEY,
+      baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      fastModel: process.env.OPENAI_FAST_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      keyName: 'OPENAI_API_KEY',
+    };
+  }
+  return {
+    apiKey: process.env.GROQ_API_KEY,
+    baseURL: process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1',
+    model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+    fastModel: process.env.GROQ_FAST_MODEL || 'llama-3.1-8b-instant',
+    keyName: 'GROQ_API_KEY',
+  };
+}
 
 function getGroqClient() {
-  if (groqClient) return groqClient;
-  const apiKey = process.env.GROQ_API_KEY;
+  if (aiClient) return aiClient;
+  const { apiKey, baseURL } = providerConfig();
   if (!apiKey) return null;
   const OpenAI = require('openai');
-  groqClient = new OpenAI({
+  aiClient = new OpenAI({
     apiKey,
-    baseURL: process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1',
+    baseURL,
   });
-  return groqClient;
+  return aiClient;
 }
 
 function isGroqConfigured() {
-  return Boolean(process.env.GROQ_API_KEY);
+  return Boolean(providerConfig().apiKey);
 }
 
 async function groqChat({ messages, model, temperature = 0.4, maxTokens = 1200 }) {
   const client = getGroqClient();
   if (!client) {
-    throw new Error('GROQ_API_KEY is not configured');
+    throw new Error(`${providerConfig().keyName} is not configured`);
   }
   const response = await client.chat.completions.create({
-    model: model || process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+    model: model || providerConfig().model,
     messages,
     temperature,
     max_tokens: maxTokens,
@@ -35,7 +58,7 @@ async function groqClassify(text) {
   if (!client) return 'general';
   try {
     const response = await client.chat.completions.create({
-      model: process.env.GROQ_FAST_MODEL || 'llama-3.1-8b-instant',
+      model: providerConfig().fastModel,
       temperature: 0,
       max_tokens: 32,
       messages: [
@@ -76,7 +99,7 @@ function extractJsonObject(text) {
 async function groqJson({ messages, model, temperature = 0.2, maxTokens = 2000 }) {
   const content = await groqChat({
     messages,
-    model: model || process.env.GROQ_FAST_MODEL || process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+    model: model || providerConfig().fastModel,
     temperature,
     maxTokens,
   });

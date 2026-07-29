@@ -281,23 +281,28 @@ export function PrivacyPolicyContent() {
 
       <LegalSection id="retention" title="8. Data retention">
         <p>
-          We retain information for as long as necessary to provide the Service, fulfill the
-          purposes described in this policy, comply with legal obligations, resolve disputes, and
-          enforce agreements. Retention periods vary based on data type:
+          We retain information only as long as needed to provide the Service, fulfill the purposes
+          in this policy, meet legal and accounting requirements, resolve disputes, and enforce
+          agreements. Unless a longer period is required by law, we apply the following periods:
         </p>
         <LegalList
           items={[
-            "Account and workspace data: retained while your account or workspace is active and for a reasonable period afterward",
-            "Tickets and messages: retained according to workspace settings and operational needs unless deleted by authorized users or upon workspace closure",
-            "Connected integration tokens: retained while the integration remains connected",
-            "Billing records: retained as required for tax, accounting, and legal compliance",
-            "Security and audit logs: retained for a limited period appropriate for security monitoring and investigations",
+            "Account and workspace data: retained while the workspace is active, then deleted or anonymized within 90 days after workspace closure or a verified deletion request",
+            "Tickets, live chat sessions, messages, and attachments: retained while the workspace is active; deleted with the workspace within 90 days of closure, or sooner if an authorized workspace user deletes them",
+            "Synced store order snapshots used for support: retained while the store remains connected and for up to 90 days after disconnect or workspace closure",
+            "Integration tokens and channel credentials: retained only while the integration remains connected, then removed promptly on disconnect",
+            "Billing and tax records: retained for up to 7 years (or longer if required by applicable tax or accounting law)",
+            "Security, authentication, and activity logs: retained for up to 12 months for security monitoring, abuse prevention, and investigations",
           ]}
         />
         <p>
-          Workspace owners may request deletion of a workspace or specific data subject to technical
-          and legal limitations. Backup copies may persist for a limited time before being
-          overwritten.
+          Backup copies may persist for up to 30 days after deletion before being overwritten.
+          Workspace owners may request earlier deletion of a workspace or specific data subject to
+          technical and legal limitations by contacting{" "}
+          <a href={`mailto:${LEGAL.privacyEmail}`} className="text-[#D85A30] hover:underline">
+            {LEGAL.privacyEmail}
+          </a>
+          .
         </p>
       </LegalSection>
 
@@ -309,7 +314,7 @@ export function PrivacyPolicyContent() {
         <LegalList
           items={[
             "Encrypted transport (HTTPS/TLS) for data in transit",
-            "Encryption at rest for sensitive integration credentials where supported",
+            "Encryption at rest for databases and sensitive integration credentials where supported",
             "Password hashing for user passwords",
             "Role-based access controls within workspaces",
             "JWT-based authentication with refresh token rotation",
@@ -320,7 +325,12 @@ export function PrivacyPolicyContent() {
         <p>
           No method of transmission or storage is completely secure. You are responsible for
           maintaining the confidentiality of your login credentials and for configuring appropriate
-          access within your workspace.
+          access within your workspace. Our security incident response procedures are described in
+          our{" "}
+          <a href={`${LEGAL.portal}/incident-response`} className="text-[#D85A30] hover:underline">
+            Security Incident Response Policy
+          </a>
+          .
         </p>
       </LegalSection>
 

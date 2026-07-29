@@ -143,6 +143,7 @@ describe('permissions characterization', () => {
         productRecommendations: false,
         refundOrder: true,
         cancelOrder: true,
+        editOrder: true,
         requestHuman: false,
         maxRefundAmount: 75,
       },
@@ -150,6 +151,7 @@ describe('permissions characterization', () => {
     assert.equal(canPerform(perms, 'recommendProducts'), false);
     assert.equal(canPerform(perms, 'issueRefunds'), true);
     assert.equal(canPerform(perms, 'cancelOrders'), true);
+    assert.equal(canPerform(perms, 'changeDeliveryAddress'), true);
     assert.equal(canPerform(perms, 'handoffToHuman'), false);
     assert.equal(perms.maxRefundAmount, 75);
   });

@@ -1,5 +1,6 @@
 const imapService = require('./email-imap.service');
 const { processInboundEmail } = require('./email-inbound.service');
+const { ensureChannelIntegrations } = require('./channel-integrations.util');
 
 function getSupportedProviders() {
   return {
@@ -63,7 +64,7 @@ async function connectImap(company, input) {
 
   const { maxUid, smtp, outboundVia } = await imapService.testConnection(cfg, password);
 
-  company.channelIntegrations = company.channelIntegrations || {};
+  ensureChannelIntegrations(company);
   company.channelIntegrations.email = {
     status: 'connected',
     provider: 'imap',
@@ -91,7 +92,7 @@ async function connectImap(company, input) {
 }
 
 async function disconnectEmail(company) {
-  company.channelIntegrations = company.channelIntegrations || {};
+  ensureChannelIntegrations(company);
   company.channelIntegrations.email = defaultEmailIntegration();
   await company.save();
   return sanitizeEmailIntegration(company.channelIntegrations.email);
@@ -187,7 +188,17 @@ async function sendReplyForTicket(companyId, ticket, html) {
 // ─── Polling ──────────────────────────────────────────────────────────────────
 async function pollCompany(company) {
   const stored = getStoredImapConfig(company);
-  if (!stored) return { processed: 0 };
+  if (!stored) {
+    // Without a usable secret the mailbox can never sync, so stop reporting it
+    // as healthy — otherwise it sits "connected" while silently ingesting nothing.
+    if (company.channelIntegrations?.email?.status === 'connected') {
+      company.channelIntegrations.email.status = 'error';
+      company.channelIntegrations.email.lastError =
+        'Mailbox credentials are missing. Reconnect the mailbox to resume syncing.';
+      await company.save();
+    }
+    return { processed: 0 };
+  }
 
   const sinceUid = company.channelIntegrations.email.lastSeenUid || 0;
   const { messages, maxUid } = await imapService.fetchNewMessages(

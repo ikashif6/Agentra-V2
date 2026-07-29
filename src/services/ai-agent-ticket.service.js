@@ -1,11 +1,11 @@
 const Company = require('../models/Company');
 const Ticket = require('../models/Ticket');
 const User = require('../models/User');
-const StoreOrder = require('../models/StoreOrder');
 const { groqChat, groqClassify, isGroqConfigured } = require('./groq.service');
 const { retrieveKnowledge } = require('./live-chat-knowledge.service');
 const {
   extractOrderNumber,
+  extractEmail,
   searchProducts,
   lookupOrderForEmail,
   executeRefundIfAllowed,
@@ -28,7 +28,8 @@ const SUPPORT_PLAYBOOK = `You are Agentra's ecommerce support assistant.
 - Never invent order numbers, tracking, prices, or policies.
 - For order-specific details, only use data provided in tool results.
 - If unsure, offer to connect to a human agent.
-- Do not discuss competitors or unrelated topics.`;
+- Do not discuss competitors or unrelated topics.
+- Reply in plain text only (no HTML, markdown cards, or widgets).`;
 
 const STORE_SECRET_SELECT =
   '+storeIntegration.shopify.accessToken +storeIntegration.shopify.refreshToken ' +
@@ -36,20 +37,58 @@ const STORE_SECRET_SELECT =
   '+storeIntegration.woocommerce.consumerSecret ' +
   '+storeIntegration.custom.apiKey';
 
-function wantsHumanHandoff(text, keywords) {
-  const lower = String(text).toLowerCase();
-  return (keywords || []).some((kw) => lower.includes(String(kw).toLowerCase()));
+const ORDER_INTENTS = new Set(['order_status', 'refund', 'cancel', 'return', 'exchange']);
+
+/** Debounce rapid inbound messages per ticket (ms). */
+const REPLY_DEBOUNCE_MS = 1500;
+const pendingAiReplies = new Map();
+
+const AI_TICKET_STATUSES = new Set(['open', 'in_progress', 'on_hold', 'resolved']);
+
+function applyAiTicketStatus(ticket, status, actorId = null) {
+  if (!ticket || !AI_TICKET_STATUSES.has(status)) return;
+
+  ticket.status = status;
+  if (status === 'resolved') {
+    ticket.closedAt = new Date();
+    ticket.closedBy = actorId || null;
+  } else {
+    ticket.closedAt = undefined;
+    ticket.closedBy = undefined;
+  }
 }
 
-function isSyntheticEmail(email) {
-  const value = String(email || '').toLowerCase();
+function wantsHumanHandoff(text, keywords) {
+  const lower = String(text || '').toLowerCase();
+  if ((keywords || []).some((kw) => lower.includes(String(kw).toLowerCase()))) {
+    return true;
+  }
   return (
-    !value ||
+    /\b(talk to (a )?(human|agent|person|someone)|real (person|human)|speak to (a )?(human|agent)|customer service|manager)\b/i.test(
+      lower,
+    ) || /\b(this (is|isn't|is not) helping|useless bot|stupid ai)\b/i.test(lower)
+  );
+}
+
+/**
+ * Placeholder identities created for Messenger / IG / WhatsApp customers.
+ * Real checkout emails never use *.agentra.local.
+ */
+function isSyntheticEmail(email) {
+  const value = String(email || '').toLowerCase().trim();
+  if (!value) return true;
+  if (value.endsWith('@agentra.local')) return true;
+  if (value.includes('.agentra.local')) return true;
+  // Legacy / mistaken domains from older checks
+  if (
     value.includes('@messenger.local') ||
     value.includes('@instagram.local') ||
     value.includes('@whatsapp.local') ||
     value.endsWith('@fb.local')
-  );
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function buildTicketHistory(ticket, limit = 12) {
@@ -62,6 +101,58 @@ function buildTicketHistory(ticket, limit = 12) {
     }));
 }
 
+function recentCustomerText(ticket, latest) {
+  const prior = (ticket.messages || [])
+    .filter((m) => m.body && !m.isInternal && !m.isAi && !m.isSystem)
+    .slice(-6)
+    .map((m) => String(m.body))
+    .join('\n');
+  return `${prior}\n${latest || ''}`.trim();
+}
+
+function resolveLookupEmail(ticket, customer, messageText) {
+  const fromDetails = String(ticket.details?.customerEmail || '').trim().toLowerCase();
+  if (fromDetails && !isSyntheticEmail(fromDetails)) return fromDetails;
+
+  const fromCustomer = String(customer?.email || '').trim().toLowerCase();
+  if (fromCustomer && !isSyntheticEmail(fromCustomer)) return fromCustomer;
+
+  const fromMessage = extractEmail(messageText);
+  if (fromMessage && !isSyntheticEmail(fromMessage)) return fromMessage;
+
+  return '';
+}
+
+function formatOrderPlainText(card) {
+  if (!card) return '';
+  const lines = [
+    `Order ${card.orderNumber || ''}`.trim(),
+    card.fulfillmentStatus ? `Fulfillment: ${card.fulfillmentStatus}` : null,
+    card.financialStatus ? `Payment: ${card.financialStatus}` : null,
+    card.totalDisplay ? `Total: ${card.totalDisplay}` : null,
+    card.tracking?.number
+      ? `Tracking: ${[card.tracking.company, card.tracking.number].filter(Boolean).join(' ')}`
+      : null,
+    card.tracking?.url ? `Tracking link: ${card.tracking.url}` : null,
+    card.statusUrl ? `Order status: ${card.statusUrl}` : null,
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
+function formatProductsPlainText(cards) {
+  if (!cards?.length) return '';
+  return (
+    'Products:\n' +
+    cards
+      .map((p) => {
+        const price = p.price != null ? ` (${p.price}${p.currency ? ` ${p.currency}` : ''})` : '';
+        const url = p.url ? ` — ${p.url}` : '';
+        return `- ${p.title}${price}${url}`;
+      })
+      .join('\n')
+  );
+}
+
 async function resolveBotSender(company) {
   let bot = await User.findOne({
     company: company._id,
@@ -69,8 +160,6 @@ async function resolveBotSender(company) {
   });
   if (bot) return bot;
 
-  // Prefer company owner as message sender so Ticket schema (required sender) is satisfied;
-  // AI messages are flagged with isAi + bot@agentra.local.
   bot = await User.findById(company.owner).select('_id email firstName lastName');
   return bot;
 }
@@ -85,6 +174,39 @@ async function deliverChannelReply(companyId, ticket, body) {
   } else if (ticket.source === 'email') {
     await emailChannelService.sendReplyForTicket(companyId, ticket, body);
   }
+}
+
+async function markHandoff(ticket, company, agentName, customerReply) {
+  const {
+    CHANNEL_HANDOFF_REPLY,
+    pushHandoffRequestedEvent,
+  } = require('./ticket-system-events.service');
+
+  await appendAiMessageAndSend(
+    company,
+    ticket,
+    agentName,
+    customerReply || CHANNEL_HANDOFF_REPLY,
+    { nextStatus: 'open' },
+  );
+  await pushHandoffRequestedEvent(ticket, company);
+  ticket.isUnread = true;
+  ticket.lastActivity = new Date();
+  await ticket.save();
+
+  const { scheduleTicketIntelligence } = require('./ticket-intelligence.service');
+  scheduleTicketIntelligence(company._id, ticket._id, { force: true });
+}
+
+async function findOrderForLookup(companyId, email, orderNumber) {
+  if (!email) return null;
+  if (orderNumber) {
+    const matched = await lookupOrderForEmail(companyId, email, orderNumber);
+    if (matched.length) return matched[0];
+    return null;
+  }
+  const recent = await lookupOrderForEmail(companyId, email);
+  return recent[0] || null;
 }
 
 /**
@@ -107,7 +229,6 @@ async function processTicketAiReply(companyId, ticketId, customerText) {
 
   const channelKey = channelKeyFromTicketSource(ticket.source);
   if (!channelKey || channelKey === 'liveChat') {
-    // Live chat is handled by the widget AI path.
     return { skipped: true, reason: 'channel' };
   }
   if (!isChannelAiEnabled(company, channelKey)) {
@@ -128,24 +249,13 @@ async function processTicketAiReply(companyId, ticketId, customerText) {
       const reply =
         config.offlineMessage ||
         'Our team is currently away. Leave a message and we will get back to you.';
-      await appendAiMessageAndSend(company, ticket, agentName, reply);
+      await appendAiMessageAndSend(company, ticket, agentName, reply, {
+        nextStatus: 'open',
+      });
       return { skipped: false, handoff: false, offline: true };
     }
 
-    const {
-      CHANNEL_HANDOFF_REPLY,
-      pushHandoffRequestedEvent,
-    } = require('./ticket-system-events.service');
-
-    // Customer-visible note on email / social channels
-    await appendAiMessageAndSend(company, ticket, agentName, CHANNEL_HANDOFF_REPLY);
-    await pushHandoffRequestedEvent(ticket, company);
-    ticket.isUnread = true;
-    ticket.lastActivity = new Date();
-    await ticket.save();
-
-    const { scheduleTicketIntelligence } = require('./ticket-intelligence.service');
-    scheduleTicketIntelligence(company._id, ticket._id, { force: true });
+    await markHandoff(ticket, company, agentName);
     return { skipped: false, handoff: true };
   }
 
@@ -153,95 +263,162 @@ async function processTicketAiReply(companyId, ticketId, customerText) {
     return { skipped: true, reason: 'groq' };
   }
 
+  // The unassigned ticket is now actively being handled by the AI.
+  applyAiTicketStatus(ticket, 'in_progress');
+  ticket.lastActivity = new Date();
+  await ticket.save();
+
   const customer = await User.findById(ticket.createdBy).select('email firstName lastName');
-  const visitorEmail = customer?.email || '';
-  const canVerifyOrders = !isSyntheticEmail(visitorEmail);
+  const historyBlob = recentCustomerText(ticket, trimmed);
+  let lookupEmail = resolveLookupEmail(ticket, customer, historyBlob);
+  const orderNumber = extractOrderNumber(trimmed) || extractOrderNumber(historyBlob);
+
+  if (lookupEmail && isSyntheticEmail(String(customer?.email || ''))) {
+    ticket.details = ticket.details || {};
+    if (ticket.details.customerEmail !== lookupEmail) {
+      ticket.details.customerEmail = lookupEmail;
+      ticket.markModified('details');
+      await ticket.save();
+    }
+  }
 
   const intent = await groqClassify(trimmed);
+  const needsOrderHelp =
+    ORDER_INTENTS.has(intent) || Boolean(orderNumber) || /\b(order|tracking|shipment|delivery|refund|cancel)\b/i.test(trimmed);
+
   const knowledge = await retrieveKnowledge(company._id, trimmed, 4);
   const knowledgeBlock = knowledge.length
     ? knowledge.map((k, i) => `[${i + 1}] ${k.title}\n${k.content}`).join('\n\n')
     : 'No specific policy documents found.';
 
-  const orderNumber = extractOrderNumber(trimmed);
   let toolContext = '';
   const prefaceParts = [];
+  let matchedOrder = null;
 
-  if (
-    canVerifyOrders &&
-    (intent === 'order_status' || intent === 'refund' || intent === 'cancel' || orderNumber)
-  ) {
-    if (!orderNumber && config.requireOrderVerification) {
-      const reply =
-        'I can help with that. Please share your order number (for example #1042) so I can look it up with your email.';
+  if (needsOrderHelp && config.allowedActions?.lookupOrder !== false) {
+    const wantsSpecificOrder =
+      ORDER_INTENTS.has(intent) || Boolean(orderNumber) || /\b(tracking|shipment|delivery|refund|cancel)\b/i.test(trimmed);
+    const needOrderNumber =
+      Boolean(config.requireOrderVerification) &&
+      !orderNumber &&
+      (intent === 'order_status' || intent === 'refund' || intent === 'cancel');
+
+    if (wantsSpecificOrder && (!lookupEmail || needOrderNumber)) {
+      const askParts = [];
+      if (!orderNumber) askParts.push('your order number (for example #1042)');
+      if (!lookupEmail) askParts.push('the email address used when placing the order');
+      if (askParts.length) {
+        const reply =
+          askParts.length === 2
+            ? `I can help with that. Please reply with ${askParts[0]} and ${askParts[1]} so I can look it up securely.`
+            : `I can help with that. Please reply with ${askParts[0]} so I can look it up.`;
+        await appendAiMessageAndSend(company, ticket, agentName, reply);
+        return { skipped: false, handoff: false, askedIdentity: true };
+      }
+    }
+
+    matchedOrder = await findOrderForLookup(company._id, lookupEmail, orderNumber);
+
+    if (orderNumber && !matchedOrder) {
+      const reply = lookupEmail
+        ? "I couldn't find an order with that number for this email. Please double-check the details, or ask to speak with a human agent."
+        : "I couldn't find that order. Please share the email used on the order so I can look it up.";
       await appendAiMessageAndSend(company, ticket, agentName, reply);
       return { skipped: false, handoff: false };
     }
 
-    if (orderNumber) {
-      const orders = await lookupOrderForEmail(company._id, visitorEmail);
-      const match = orders.find((o) => {
-        const num = String(o.orderNumber || o.name || '').replace(/^#/, '');
-        return num === String(orderNumber).replace(/^#/, '');
-      });
-
-      if (!match) {
-        const byCode = await StoreOrder.findOne({
-          company: company._id,
-          $or: [
-            { orderNumber: orderNumber },
-            { orderNumber: `#${String(orderNumber).replace(/^#/, '')}` },
-            { name: orderNumber },
-            { name: `#${String(orderNumber).replace(/^#/, '')}` },
-          ],
-        });
-        if (!byCode) {
+    if (matchedOrder) {
+      // Social placeholders must not unlock order data without a real email match.
+      if (lookupEmail) {
+        const orderEmail = String(matchedOrder.customer?.email || '').toLowerCase();
+        if (orderEmail && orderEmail !== lookupEmail) {
           const reply =
-            "I couldn't find an order with that number for this email. Please check and try again, or ask to speak with a human agent.";
+            "That order number doesn't match the email you provided. Please check both and try again, or ask to speak with a human agent.";
           await appendAiMessageAndSend(company, ticket, agentName, reply);
           return { skipped: false, handoff: false };
         }
-        const card = formatOrderCard(byCode);
-        toolContext = `Order: ${JSON.stringify(card)}`;
-        prefaceParts.push(`Order ${card.orderNumber}: status ${card.status || 'unknown'}.`);
-      } else {
-        const card = formatOrderCard(match);
-        toolContext = `Order: ${JSON.stringify(card)}`;
-        prefaceParts.push(`Order ${card.orderNumber}: status ${card.status || 'unknown'}.`);
+      } else if (isSyntheticEmail(customer?.email)) {
+        const reply =
+          'To protect your privacy, please share the email address used on the order along with the order number.';
+        await appendAiMessageAndSend(company, ticket, agentName, reply);
+        return { skipped: false, handoff: false, askedIdentity: true };
       }
 
-      if (intent === 'refund' && config.allowedActions.refundOrder) {
-        // Ticket path: escalate refunds for human confirmation on non-chat channels.
-        ticket.isUnread = true;
-        const { pushHandoffRequestedEvent } = require('./ticket-system-events.service');
-        const reply =
-          'I can help start a refund request. A team member will review and complete it shortly.';
-        await appendAiMessageAndSend(company, ticket, agentName, reply);
-        await pushHandoffRequestedEvent(ticket, company);
-        await ticket.save();
-        const { scheduleTicketIntelligence } = require('./ticket-intelligence.service');
-        scheduleTicketIntelligence(company._id, ticket._id, { force: true });
+      const card = formatOrderCard(matchedOrder);
+      toolContext = `Order: ${JSON.stringify(card)}`;
+      prefaceParts.push(formatOrderPlainText(card));
+
+      if (intent === 'refund') {
+        if (!config.allowedActions?.refundOrder) {
+          await markHandoff(
+            ticket,
+            company,
+            agentName,
+            'I can help start a refund request. A team member will review and complete it shortly.',
+          );
+          return { skipped: false, handoff: true };
+        }
+
+        const verifiedSession = {
+          verifiedOrders: [{ externalId: matchedOrder.externalId }],
+        };
+        const refundResult = await executeRefundIfAllowed(company, verifiedSession, matchedOrder, {
+          allowedActions: config.allowedActions,
+        });
+
+        if (refundResult.ok) {
+          await appendAiMessageAndSend(company, ticket, agentName, refundResult.message, {
+            // A verified refund is a completed action, so the AI may resolve it.
+            nextStatus: 'resolved',
+          });
+          return { skipped: false, handoff: false, refunded: true };
+        }
+
+        await markHandoff(
+          ticket,
+          company,
+          agentName,
+          refundResult.message ||
+            'This refund needs a quick review from our support team. Someone will follow up shortly.',
+        );
+        return { skipped: false, handoff: true, escalate: true };
+      }
+
+      if (intent === 'cancel') {
+        if (!config.allowedActions?.cancelOrder) {
+          await markHandoff(
+            ticket,
+            company,
+            agentName,
+            'I can pass this cancellation request to our team. Someone will follow up shortly.',
+          );
+          return { skipped: false, handoff: true };
+        }
+        await markHandoff(
+          ticket,
+          company,
+          agentName,
+          'I found your order. A team member will confirm and complete the cancellation shortly.',
+        );
         return { skipped: false, handoff: true };
       }
-    } else {
-      const orders = await lookupOrderForEmail(company._id, visitorEmail);
+    } else if (lookupEmail) {
+      const orders = await lookupOrderForEmail(company._id, lookupEmail);
       toolContext = orders.length
         ? `Recent orders: ${JSON.stringify(orders.slice(0, 3).map((o) => formatOrderCard(o)))}`
         : 'No orders found for this email.';
+      if (orders.length === 1) {
+        prefaceParts.push(formatOrderPlainText(formatOrderCard(orders[0])));
+      }
     }
   }
 
-  if (intent === 'product_search' && config.allowedActions.productRecommendations) {
+  if (intent === 'product_search' && config.allowedActions?.productRecommendations) {
     const products = await searchProducts(company._id, trimmed, 4);
     if (products.length) {
       const cards = formatProductCards(products);
       toolContext += `\nProducts: ${JSON.stringify(cards)}`;
-      prefaceParts.push(
-        'Products:\n' +
-          cards
-            .map((p) => `- ${p.title}${p.price != null ? ` (${p.price})` : ''}`)
-            .join('\n'),
-      );
+      prefaceParts.push(formatProductsPlainText(cards));
     }
   }
 
@@ -265,7 +442,13 @@ async function processTicketAiReply(companyId, ticketId, customerText) {
   return { skipped: false, handoff: false };
 }
 
-async function appendAiMessageAndSend(company, ticket, agentName, replyText) {
+async function appendAiMessageAndSend(
+  company,
+  ticket,
+  agentName,
+  replyText,
+  { nextStatus = 'on_hold' } = {},
+) {
   const sender = await resolveBotSender(company);
   if (!sender) throw new Error('No sender available for AI reply');
 
@@ -282,6 +465,9 @@ async function appendAiMessageAndSend(company, ticket, agentName, replyText) {
     isAi: true,
     sentAt: new Date(),
   });
+  // Most AI replies wait for the customer to confirm, clarify, or continue.
+  // Human escalations explicitly use `open`; completed actions use `resolved`.
+  applyAiTicketStatus(ticket, nextStatus, sender._id);
   ticket.lastActivity = new Date();
   // Keep unread so humans see AI handled it and can take over.
   ticket.isUnread = true;
@@ -294,16 +480,34 @@ async function appendAiMessageAndSend(company, ticket, agentName, replyText) {
   }
 }
 
-/** Fire-and-forget wrapper for inbound hooks */
+/**
+ * Fire-and-forget wrapper for inbound hooks.
+ * Debounces per ticket so rapid DMs collapse into one reply on the latest text.
+ */
 function scheduleTicketAiReply(companyId, ticketId, customerText) {
-  setImmediate(() => {
-    processTicketAiReply(companyId, ticketId, customerText).catch((err) => {
+  const key = String(ticketId);
+  const existing = pendingAiReplies.get(key);
+  if (existing?.timer) clearTimeout(existing.timer);
+
+  const timer = setTimeout(() => {
+    const job = pendingAiReplies.get(key);
+    pendingAiReplies.delete(key);
+    const text = job?.text || customerText;
+    processTicketAiReply(companyId, ticketId, text).catch((err) => {
       console.error('[ai-agent] ticket reply failed', err.message);
     });
+  }, REPLY_DEBOUNCE_MS);
+
+  pendingAiReplies.set(key, {
+    timer,
+    text: customerText,
+    companyId,
   });
 }
 
 module.exports = {
   processTicketAiReply,
   scheduleTicketAiReply,
+  isSyntheticEmail,
+  wantsHumanHandoff,
 };

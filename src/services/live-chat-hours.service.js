@@ -178,7 +178,7 @@ function resolveSupportAvailability({
     onlineAgentCount,
     // An explicitly online agent may accept a chat outside configured hours.
     queueOpen: liveSupportEnabled && onlineAgentCount > 0,
-    estimatedWaitMinutes: onlineAgentCount > 0 ? Math.max(1, 8 - onlineAgentCount) : null,
+    estimatedWaitMinutes: onlineAgentCount > 0 ? Math.max(2, Math.ceil(4 / onlineAgentCount)) : null,
     reason,
   };
 }

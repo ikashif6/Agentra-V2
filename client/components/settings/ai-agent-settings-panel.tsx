@@ -56,31 +56,36 @@ const CHANNEL_OPTIONS: {
   {
     key: "liveChat",
     label: "Live chat",
-    description: "Website widget conversations in AI Agent.",
+    description:
+      "When on, AI answers website widget chats when it can, and hands off when it cannot.",
     requires: "Enable the widget under Channels › Live chat.",
   },
   {
     key: "email",
     label: "Email",
-    description: "Auto-reply to inbound support email tickets.",
+    description:
+      "When on, AI auto-replies to inbound support email when it can; otherwise the ticket waits in the inbox.",
     requires: "Connect a mailbox under Channels › Email.",
   },
   {
     key: "facebook",
     label: "Facebook Messenger",
-    description: "Reply to Facebook Page inbox messages.",
+    description:
+      "When on, AI auto-replies to Facebook Page DMs when it can; otherwise conversations wait in the inbox.",
     requires: "Connect Facebook under Channels › Facebook.",
   },
   {
     key: "instagram",
     label: "Instagram",
-    description: "Reply to Instagram direct messages.",
+    description:
+      "When on, AI auto-replies to Instagram DMs when it can; otherwise conversations wait in the inbox.",
     requires: "Connect Instagram under Channels › Instagram.",
   },
   {
     key: "whatsapp",
     label: "WhatsApp",
-    description: "Reply to WhatsApp Business conversations.",
+    description:
+      "When on, AI auto-replies to WhatsApp messages when it can; otherwise conversations wait in the inbox.",
     requires: "Connect WhatsApp under Channels › WhatsApp.",
   },
 ];
@@ -255,7 +260,15 @@ export default function AiAgentSettingsPanel() {
     const enabledChannels = { ...settings.enabledChannels, [key]: enabled };
     setSettings({ ...settings, enabledChannels });
     void persist({ enabledChannels });
-    if (enabled) setExpanded(key);
+    if (enabled) {
+      setExpanded(key);
+      if (key !== "liveChat") {
+        toast.message("AI will auto-reply on this channel when it can", {
+          description:
+            "Connect the channel under Channels settings if you have not already. Unassign tickets for AI to answer; assigned chats stay with your team.",
+        });
+      }
+    }
   };
 
   const saveDefaults = async () => {
@@ -466,8 +479,10 @@ export default function AiAgentSettingsPanel() {
           <div className="border-b border-border/60 px-5 py-4">
             <p className="text-sm font-medium text-foreground">Deploy on channels</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Turn AI on per channel, then expand to override instructions and permissions. Built-in
-              style guidance still applies (e.g. longer email, shorter Instagram).
+              Turn AI on per channel. When on, the agent auto-replies when it knows the answer
+              (policies, order status after verifying identity, products) and hands off to your
+              team when it does not. Expand a channel to override instructions and permissions.
+              Built-in style guidance still applies (e.g. longer email, shorter Instagram).
             </p>
           </div>
           <ul className="divide-y divide-border/60">

@@ -4,6 +4,8 @@ const { retrieveKnowledge } = require('./live-chat-knowledge.service');
 const {
   appendSessionMessage,
   verifyOrderForSession,
+  normalizeLiveChatAttachments,
+  isHumanAgentJoined,
 } = require('./live-chat-session.service');
 const {
   extractOrderNumber,
@@ -385,16 +387,30 @@ async function attemptHumanHandoff(company, session, config, channelAi, { reason
 
   session.status = 'waiting_human';
   session.handoffRequestedAt = new Date();
+  await session.save();
+
+  const { getLiveChatQueueStatus } = require('./live-chat-queue.service');
+  const queue = await getLiveChatQueueStatus(company, session);
   setHandoffStatus(session, HANDOFF_STATUSES.WAITING_FOR_AGENT, {
     requestedAt: new Date().toISOString(),
     activeResponder: ACTIVE_RESPONDERS.QUEUED,
+    customerFacingReason: queue.message,
+    queuePosition: queue.position,
+    estimatedWaitMinutes: queue.estimatedWaitMinutes,
+    queueLabel: queue.label,
   });
   await session.save();
   const handoffMsg = await appendSessionMessage(session, {
     role: 'system',
-    body: 'Connecting you with a support agent…',
+    body: queue.message,
     contentType: 'system_event',
-    payload: { type: 'handoff_requested' },
+    payload: {
+      type: 'handoff_connecting',
+      text: queue.message,
+      queuePosition: queue.position,
+      estimatedWaitMinutes: queue.estimatedWaitMinutes,
+      queueLabel: queue.label,
+    },
     senderName: 'System',
   });
   return {
@@ -404,11 +420,18 @@ async function attemptHumanHandoff(company, session, config, channelAi, { reason
   };
 }
 
-async function processCustomerMessage(company, session, text, { onStatus, widgetAction = null } = {}) {
+async function processCustomerMessage(company, session, text, { onStatus, widgetAction = null, attachments = [] } = {}) {
   const config = mergeLiveChatConfig(company);
   const channelAi = resolveChannelAiConfig(company, 'liveChat');
+  const files = normalizeLiveChatAttachments(attachments);
   const trimmed = String(text || '').trim();
-  if (!trimmed) throw new Error('Message is required');
+  if (!trimmed && !files.length) throw new Error('Message is required');
+  if (files.length && !isHumanAgentJoined(session)) {
+    throw Object.assign(new Error('Attachments are only available after an agent joins'), {
+      statusCode: 400,
+    });
+  }
+  const customerBody = trimmed || (files.length ? '(Attachment)' : '');
 
   ensureWorkflowState(session);
   ensureHandoffState(session);
@@ -416,8 +439,9 @@ async function processCustomerMessage(company, session, text, { onStatus, widget
   if (!isChannelAiEnabled(company, 'liveChat')) {
     await appendSessionMessage(session, {
       role: 'customer',
-      body: trimmed,
+      body: customerBody,
       contentType: 'text',
+      attachments: files,
       senderName: session.visitorEmail,
     });
     return attemptHumanHandoff(company, session, config, channelAi);
@@ -425,8 +449,9 @@ async function processCustomerMessage(company, session, text, { onStatus, widget
 
   await appendSessionMessage(session, {
     role: 'customer',
-    body: trimmed,
+    body: customerBody,
     contentType: 'text',
+    attachments: files,
     senderName: session.visitorEmail,
   });
 
@@ -437,6 +462,15 @@ async function processCustomerMessage(company, session, text, { onStatus, widget
       handoff: false,
       handoffState: buildHandoffWidgetPayload(session),
       activeResponder: ACTIVE_RESPONDERS.HUMAN,
+    };
+  }
+
+  // Attachment-only messages should never reach the bot path.
+  if (!trimmed) {
+    return {
+      messages: [],
+      handoff: false,
+      handoffState: buildHandoffWidgetPayload(session),
     };
   }
 

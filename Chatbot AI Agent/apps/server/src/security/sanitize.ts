@@ -65,17 +65,41 @@ export function hasProductPreferences(slots: Record<string, string | undefined>)
 /** Customer is fine browsing without specific prefs. */
 export function wantsProductBrowse(message: string): boolean {
   // Do NOT match bare "recommend" — that should ask preferences first.
-  return /\b(sure|anything|popular|just show|show me some|surprise( me)?|any(thing)?|no idea|idk|i don'?t know|dont know|don't know|not sure|whatever|you (pick|choose)|up to you)\b/i.test(
+  // Allow soft hedges like "I don't really know" / "I don't quite know".
+  return /\b(sure|anything|popular|just show|show me some|surprise( me)?|any(thing)?|no idea|idk|i\s*don'?t\s+(really\s+|quite\s+|even\s+)?know|dont\s+(really\s+|quite\s+|even\s+)?know|don't\s+(really\s+|quite\s+|even\s+)?know|not sure|whatever|you (pick|choose)|up to you)\b/i.test(
     message,
+  );
+}
+
+/** True when this message itself names a concrete product filter. */
+export function messageProvidesProductFilters(message: string): boolean {
+  return (
+    /\$\s?\d|\bbudget\b[\s\S]{0,24}\d|\b(?:under|upto|up to|around|about|only|just)\s+\$?\d/i.test(
+      message,
+    ) ||
+    /\b(?:size|xs|s|m|l|xl|xxl|2xl|3xl)\b/i.test(message) ||
+    /\b(ivory|white|champagne|black|blush|pearl|gold|silver|cream|beige|nude|red|navy|pink|blue|green|rose|taupe|mocha)\b/i.test(
+      message,
+    ) ||
+    /\b(dresses?|gowns?|veils?|accessor(?:y|ies)|shoes?)\b/i.test(message)
   );
 }
 
 /** Drop sticky budget/color/size filters — open-ended browse or explicit reset. */
 export function shouldClearProductPreferences(message: string): boolean {
-  if (wantsProductBrowse(message)) return true;
-  return /\b(never ?mind|forget (the |my )?(budget|filters?|color|size)|start over|something else entirely|ignore (the |my )?(budget|filters?|color|size)|any budget|no budget)\b/i.test(
-    message,
-  );
+  if (
+    /\b(never ?mind|forget (the |my )?(budget|filters?|color|size)|start over|something else entirely|ignore (the |my )?(budget|filters?|color|size)|any budget|no budget)\b/i.test(
+      message,
+    )
+  ) {
+    return true;
+  }
+  // "I don't know / show me anything" clears sticky filters — but NOT when the
+  // same turn also supplies a concrete filter like "budget is only 500".
+  if (wantsProductBrowse(message) && !messageProvidesProductFilters(message)) {
+    return true;
+  }
+  return false;
 }
 
 export function clearProductPreferenceSlots<T extends Record<string, string | undefined>>(

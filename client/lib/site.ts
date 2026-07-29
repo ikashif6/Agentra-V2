@@ -3,4 +3,5 @@ export const SITE_LEGAL = {
   getHelp: "https://agentraa.com/get-help",
   privacyPolicy: "https://agentraa.com/privacy-policy/",
   termsAndConditions: "https://agentraa.com/terms-conditions/",
+  incidentResponse: "https://app.agentraa.com/incident-response",
 } as const;

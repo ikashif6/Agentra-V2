@@ -168,6 +168,10 @@ async function findOrCreateCustomer(company, address, name) {
   return customer;
 }
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function findExistingTicket(company, subject, customer) {
   const code = parseTicketCode(subject);
   if (code) {
@@ -185,7 +189,7 @@ async function findExistingTicket(company, subject, customer) {
       company: company._id,
       source: 'email',
       'email.fromAddress': customer.email,
-      ticket_title: new RegExp(`^${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+      ticket_title: new RegExp(`^${escapeRegex(normalized)}$`, 'i'),
       status: { $in: ACTIVE_STATUSES },
       inboxFolder: { $nin: ['trash', 'spam'] },
     }).sort({ lastActivity: -1 });
@@ -211,6 +215,18 @@ async function processInboundEmail(company, parsed) {
   const { body, attachments } = await processEmailBodyAndAttachments(company, parsed);
   const messageId = parsed.messageId || null;
   const customer = await findOrCreateCustomer(company, address, name);
+
+  // Overlapping pollers (local + deployed) can fetch the same UID before either
+  // advances the cursor. Message-IDs are unique per email, so this keeps a
+  // second delivery from creating a duplicate ticket or message.
+  const alreadyIngested = messageId
+    ? await Ticket.findOne({
+        company: company._id,
+        source: 'email',
+        'email.references': { $regex: escapeRegex(messageId) },
+      })
+    : null;
+  if (alreadyIngested) return alreadyIngested;
 
   const existing = await findExistingTicket(company, subject, customer);
   const now = parsed.date ? new Date(parsed.date) : new Date();

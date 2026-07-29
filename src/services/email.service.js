@@ -376,6 +376,7 @@ async function sendChannelReplyViaResend({
 }
 
 module.exports = {
+  sendEmail,
   sendEmailVerification,
   sendMagicLink,
   sendOtpCode,

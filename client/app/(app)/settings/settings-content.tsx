@@ -25,6 +25,7 @@ import HelpdeskAiSettingsPanel from "@/components/settings/helpdesk-ai-settings-
 import BillingPanel from "@/components/settings/billing-panel";
 import AccessPermissionsPanel from "@/components/settings/access-permissions-panel";
 import UsersSettingsPanel from "@/components/settings/users-settings-panel";
+import CustomersSettingsPanel from "@/components/settings/customers-settings-panel";
 import TeamsSettingsPanel from "@/components/settings/teams-settings-panel";
 import ActivityLogPanel from "@/components/settings/activity-log-panel";
 import NotificationsPanel from "@/components/settings/notifications-panel";
@@ -100,6 +101,10 @@ export default function SettingsContent() {
         return canConfig ? <FacebookSettingsPanel /> : null;
       case "users":
         return canPeople ? <UsersSettingsPanel /> : null;
+      case "customers":
+        return ["owner", "admin", "manager", "agent"].includes(role) ? (
+          <CustomersSettingsPanel />
+        ) : null;
       case "teams":
         return canPeople ? <TeamsSettingsPanel /> : null;
       case "access":
@@ -113,7 +118,7 @@ export default function SettingsContent() {
       default:
         return <PasswordSecurityPanel />;
     }
-  }, [activeItem, canConfig, canPeople, isOwner]);
+  }, [activeItem, canConfig, canPeople, isOwner, role]);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] min-h-0 flex-col bg-background">

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { api, uploadApi } from "@/lib/api";
+import { resizeImageToSquare } from "@/lib/resize-image";
 import { getUserTimezone } from "@/lib/user-timezone";
 import { getTimezoneOptions } from "@/lib/timezones";
 import { cn } from "@/lib/utils";
@@ -156,7 +157,7 @@ export default function ProfileSettings() {
 
     setUploadingAvatar(true);
     try {
-      const { data } = await uploadApi.upload([file]);
+      const { data } = await uploadApi.upload([await resizeImageToSquare(file)]);
       const url = data.data.attachments?.[0]?.url as string | undefined;
       if (!url) throw new Error("Upload failed");
 

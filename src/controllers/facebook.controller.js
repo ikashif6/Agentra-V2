@@ -26,7 +26,16 @@ async function loadCompanyWithSecrets(companyId) {
 
 exports.getStatus = async (req, res, next) => {
   try {
-    const integration = getFacebookIntegration(req.company);
+    const company = await loadCompanyWithSecrets(req.company._id);
+    const integration = getFacebookIntegration(company);
+    // Without a page token we can neither send nor receive, so stop showing the
+    // page as connected — the workspace has to reconnect.
+    if (integration.status === 'connected' && !integration.pageAccessToken) {
+      integration.status = 'error';
+      integration.lastError =
+        'Facebook credentials are missing. Reconnect the page to resume messaging.';
+      await company.save();
+    }
     return response.success(res, {
       facebook: sanitizeFacebookIntegration(integration),
       configured: isFacebookConfigured(),

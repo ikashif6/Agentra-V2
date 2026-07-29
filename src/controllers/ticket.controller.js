@@ -534,9 +534,6 @@ exports.listTickets = async (req, res, next) => {
     const query = buildListQuery(req);
 
     if (isLiveChatScope(scope)) {
-      if (req.user.role === 'agent') {
-        return response.forbidden(res, 'AI Agent is only available to workspace owners, admins, and managers');
-      }
       const liveChatView = LIVE_CHAT_VIEWS.includes(view) ? view : 'queue';
       applyAiAgentView(query, liveChatView, req.user);
     } else if (scope === 'dashboard') {
@@ -667,9 +664,6 @@ exports.getInboxCounts = async (req, res, next) => {
     const scope = isLiveChatScope(req.query.scope) ? 'live_chat' : 'inbox';
 
     if (scope === 'live_chat') {
-      if (req.user.role === 'agent') {
-        return response.forbidden(res, 'AI Agent is only available to workspace owners, admins, and managers');
-      }
       const views = AI_AGENT_VIEWS;
 
       const entries = await Promise.all(
@@ -748,6 +742,7 @@ exports.updateTicket = async (req, res, next) => {
     }
 
     // Staff / owner update
+    const previousStatus = ticket.status;
     const previousAssignee = ticket.assigned_agent ? String(ticket.assigned_agent) : null;
     const allowedFields = [
       'ticket_title',
@@ -798,7 +793,8 @@ exports.updateTicket = async (req, res, next) => {
 
     // Track close metadata
     const justClosed =
-      ['closed', 'resolved'].includes(ticket.status) && !ticket.closedAt;
+      ['closed', 'resolved'].includes(ticket.status) &&
+      !['closed', 'resolved'].includes(previousStatus);
     if (justClosed) {
       ticket.closedAt = new Date();
       ticket.closedBy = user._id;
@@ -822,7 +818,9 @@ exports.updateTicket = async (req, res, next) => {
     if (nextAssignee && nextAssignee !== previousAssignee) {
       try {
         const { pushAgentJoinedEvent } = require('../services/ticket-system-events.service');
-        const assigneeUser = await User.findById(nextAssignee).select('firstName lastName email');
+        const assigneeUser = await User.findById(nextAssignee).select(
+          'firstName lastName email avatar',
+        );
         if (assigneeUser) {
           await pushAgentJoinedEvent(ticket, assigneeUser, company);
         }
@@ -843,7 +841,12 @@ exports.updateTicket = async (req, res, next) => {
               role: 'system',
               body: joinBody,
               contentType: 'system_event',
-              payload: { type: 'agent_joined', agentId: nextAssignee },
+              payload: {
+                type: 'agent_joined',
+                agentId: nextAssignee,
+                agentName: agentDisplayName(assigneeUser),
+                agentAvatar: assigneeUser?.avatar || undefined,
+              },
               senderName: 'System',
               sentAt: new Date(),
             };
@@ -865,6 +868,14 @@ exports.updateTicket = async (req, res, next) => {
     await ticket.save();
 
     if (justClosed) {
+      try {
+        const {
+          resolveLiveChatForTicket,
+        } = require('../services/live-chat-resolution.service');
+        await resolveLiveChatForTicket(company, ticket, user);
+      } catch (resolutionErr) {
+        console.error('[live-chat resolve]', resolutionErr.message);
+      }
       try {
         const { getHelpdeskAiConfig } = require('../services/helpdesk-ai-config.service');
         const { scheduleTicketQa } = require('../services/manager-ai.service');
@@ -939,6 +950,14 @@ exports.closeTicket = async (req, res, next) => {
 
     if (!isGuest && !isCustomerRole) {
       try {
+        const {
+          resolveLiveChatForTicket,
+        } = require('../services/live-chat-resolution.service');
+        await resolveLiveChatForTicket(company, ticket, req.user);
+      } catch (resolutionErr) {
+        console.error('[live-chat close]', resolutionErr.message);
+      }
+      try {
         const { getHelpdeskAiConfig } = require('../services/helpdesk-ai-config.service');
         const { scheduleTicketQa } = require('../services/manager-ai.service');
         if (getHelpdeskAiConfig(company).qualityAssurance) {
@@ -951,6 +970,48 @@ exports.closeTicket = async (req, res, next) => {
 
     return response.success(res, { ticket }, `Ticket ${newStatus.replace('_', ' ')}`);
   } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /tickets/:code/email-transcript
+ * Staff only — email the full live-chat conversation to the customer
+ */
+exports.emailTranscript = async (req, res, next) => {
+  try {
+    const { code } = req.params;
+    const company = req.company;
+    const force = Boolean(req.body?.force);
+
+    const ticket = await Ticket.findOne({
+      ticket_code: code.toUpperCase(),
+      company: company._id,
+    }).populate('createdBy', 'firstName lastName email');
+
+    if (!ticket) return response.notFound(res, 'Ticket not found');
+    if (!canAccessTicket(ticket, req)) return response.forbidden(res, 'Access denied');
+
+    const {
+      sendConversationTranscriptEmail,
+    } = require('../services/conversation-transcript-email.service');
+    const result = await sendConversationTranscriptEmail(company, ticket, { force });
+
+    if (result.skipped) {
+      return response.success(
+        res,
+        result,
+        'Conversation transcript was already emailed to the customer',
+      );
+    }
+
+    return response.success(
+      res,
+      result,
+      `Conversation transcript emailed to ${result.to}`,
+    );
+  } catch (err) {
+    if (err.statusCode === 400) return response.badRequest(res, err.message);
     next(err);
   }
 };
@@ -1091,11 +1152,14 @@ exports.addMessage = async (req, res, next) => {
       senderEmail = req.user.email;
     }
 
+    const files = Array.isArray(attachments) ? attachments : [];
+    const textBody = String(msgBody || '').trim() || (files.length ? '(Attachment)' : '');
+
     ticket.messages.push({
       sender: senderId,
       senderEmail,
-      body: msgBody,
-      attachments: attachments || [],
+      body: textBody,
+      attachments: files,
       isInternal: internal,
       sentAt: new Date(),
     });
@@ -1116,26 +1180,73 @@ exports.addMessage = async (req, res, next) => {
     if (!internal && isStaff(req)) {
       if (ticket.source === 'facebook') {
         facebookService
-          .sendReplyForTicket(company._id, ticket, msgBody)
+          .sendReplyForTicket(company._id, ticket, textBody)
           .catch((fbErr) => console.error('[facebook reply]', fbErr.message));
       } else if (ticket.source === 'instagram') {
         instagramService
-          .sendReplyForTicket(company._id, ticket, msgBody)
+          .sendReplyForTicket(company._id, ticket, textBody)
           .catch((igErr) => console.error('[instagram reply]', igErr.message));
       } else if (ticket.source === 'whatsapp') {
         whatsappService
-          .sendReplyForTicket(company._id, ticket, msgBody)
+          .sendReplyForTicket(company._id, ticket, textBody)
           .catch((waErr) => console.error('[whatsapp reply]', waErr.message));
       } else if (ticket.source === 'email') {
         emailChannelService
-          .sendReplyForTicket(company._id, ticket, msgBody)
+          .sendReplyForTicket(company._id, ticket, textBody)
           .catch((emErr) => console.error('[email reply]', emErr.message));
+      } else if (['chat', 'chatbot'].includes(String(ticket.source))) {
+        // Live chat has no outbound API — push into the session and the widget socket.
+        deliverLiveChatReply(company, ticket, textBody, req.user, files).catch((chatErr) =>
+          console.error('[live-chat reply]', chatErr.message),
+        );
       }
     }
   } catch (err) {
     next(err);
   }
 };
+
+/**
+ * Mirror a staff reply into the linked live chat session(s) so the widget shows it
+ * live over the websocket and again after a refresh.
+ */
+async function deliverLiveChatReply(company, ticket, body, agentUser, attachments = []) {
+  // The composer sends rich text; the widget renders message bodies as plain text,
+  // so tags would show up literally in the customer's bubble.
+  const text = facebookService.htmlToPlainText(body || '');
+  const {
+    normalizeLiveChatAttachments,
+  } = require('../services/live-chat-session.service');
+  const files = normalizeLiveChatAttachments(attachments);
+  if (!text && !files.length) return;
+  const ChatSession = require('../models/ChatSession');
+  const { appendSessionMessage } = require('../services/live-chat-session.service');
+  const { agentDisplayName } = require('../services/ticket-system-events.service');
+  const { broadcastToSession } = require('../services/live-chat-websocket.service');
+
+  const sessions = await ChatSession.find({
+    company: company._id,
+    ticket: ticket._id,
+    status: { $in: ['active', 'waiting_human', 'with_human'] },
+  });
+
+  const senderName = agentUser ? agentDisplayName(agentUser) : 'Support';
+  const senderAvatar = agentUser?.avatar || undefined;
+  for (const session of sessions) {
+    const saved = await appendSessionMessage(session, {
+      role: 'agent',
+      body: text || (files.length ? '(Attachment)' : ''),
+      contentType: 'text',
+      attachments: files,
+      senderName,
+      senderAvatar,
+    });
+    broadcastToSession(String(company._id), session.sessionToken, {
+      type: 'message',
+      data: saved,
+    });
+  }
+}
 
 // ─── Track Ticket (OTP flow — customers only) ────────────────────────────────
 

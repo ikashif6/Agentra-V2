@@ -92,7 +92,7 @@ function buildShippingAddressForm() {
       { name: 'address1', type: 'text', label: 'Address', placeholder: 'Street address', required: true, autocomplete: 'address-line1' },
       { name: 'address2', type: 'text', label: 'Apt / suite (optional)', placeholder: 'Apartment, suite, etc.', required: false, autocomplete: 'address-line2' },
       { name: 'city', type: 'text', label: 'City', placeholder: 'City', required: true, autocomplete: 'address-level2' },
-      { name: 'province', type: 'text', label: 'State / province', placeholder: 'State or province', required: false, autocomplete: 'address-level1' },
+      { name: 'province', type: 'text', label: 'State / province', placeholder: 'State or province', required: true, autocomplete: 'address-level1' },
       { name: 'zip', type: 'text', label: 'ZIP / postal code', placeholder: 'Postal code', required: true, autocomplete: 'postal-code' },
       { name: 'country', type: 'text', label: 'Country', placeholder: 'Country', required: true, autocomplete: 'country-name' },
       { name: 'phone', type: 'tel', label: 'Phone (optional)', placeholder: 'Phone number', required: false, autocomplete: 'tel' },

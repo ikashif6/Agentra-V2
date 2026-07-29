@@ -44,6 +44,20 @@ export function replyContradictsOrderSnapshot(
       if (!/only appears|hasn'?t shipped|not shipped|no tracking/i.test(t)) return true;
     }
   }
+
+  // Promising a cancellation the order is no longer eligible for (already shipped).
+  if (!cancelled && snap.cancelEligible === false) {
+    if (
+      /\b(i('ll| will)|i'?m going to|let me|going to|now)\s+(go ahead and\s+)?cancel\b/.test(t) ||
+      /\bcancel(l)?ing (your|the|this) order\b/.test(t) ||
+      /\b(can|could) (be )?cancel(led)?\b/.test(t) ||
+      /\b(process|start|submit|initiate) (the )?cancel/.test(t)
+    ) {
+      if (!/can'?t|cannot|unable|not (be )?possible|no longer|instead|return/i.test(t)) {
+        return true;
+      }
+    }
+  }
   return false;
 }
 
@@ -185,8 +199,21 @@ export function formatOrderSnapshotForPrompt(snap: VerifiedOrderSnapshot): strin
     `refundStatus=${snap.refundStatus}`,
     snap.stepperCurrent ? `stepper=${snap.stepperCurrent}` : "",
     snap.trackingNumber ? `tracking=${snap.trackingNumber}` : "",
-    snap.cancelEligible ? "cancelEligible=true" : "",
-    snap.addressChangeEligible ? "addressChangeEligible=true" : "",
+    snap.cancelEligible === false
+      ? "cancelEligible=false (CANCEL NOT ALLOWED — order is already fulfilled/shipped; never offer, promise, or start a cancellation. Offer a return instead.)"
+      : snap.cancelEligible
+        ? "cancelEligible=true"
+        : "",
+    snap.returnEligible === false
+      ? "returnEligible=false"
+      : snap.returnEligible
+        ? "returnEligible=true"
+        : "",
+    snap.addressChangeEligible === false
+      ? "addressChangeEligible=false (address can no longer be changed)"
+      : snap.addressChangeEligible
+        ? "addressChangeEligible=true"
+        : "",
   ]
     .filter(Boolean)
     .join(", ");

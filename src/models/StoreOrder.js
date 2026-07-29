@@ -106,7 +106,9 @@ const storeOrderSchema = new Schema(
     taxLines: [taxLineSchema],
     totalWeightGrams: { type: Number },
     fulfillmentService: { type: String },
-    closedAt: { type: Date },
+    closedAt: { type: Date }, // archived in Shopify — NOT cancelled
+    cancelledAt: { type: Date },
+    cancelReason: { type: String },
 
     customer: {
       externalId: { type: String },

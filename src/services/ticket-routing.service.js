@@ -54,7 +54,7 @@ async function maybeAutoAssignTicket(company, ticket, intelligence = {}) {
   const urgencyBoost = ['high', 'critical'].includes(intelligence.urgency);
 
   const candidates = await User.find({ _id: { $in: objectIds } })
-    .select('_id isOnline firstName lastName')
+    .select('_id isOnline firstName lastName avatar')
     .lean();
 
   // Live chat: only assign agents who are online (sidebar presence). Never fake a join.
@@ -141,7 +141,12 @@ async function maybeAutoAssignTicket(company, ticket, intelligence = {}) {
           role: 'system',
           body: joinBody,
           contentType: 'system_event',
-          payload: { type: 'agent_joined', agentId: String(chosen._id) },
+          payload: {
+            type: 'agent_joined',
+            agentId: String(chosen._id),
+            agentName: agentDisplayName(chosen),
+            agentAvatar: chosen.avatar || undefined,
+          },
           senderName: 'System',
           sentAt: new Date(),
         };

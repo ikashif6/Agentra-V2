@@ -428,13 +428,25 @@ function buildHandoffWidgetPayload(session) {
     HANDOFF_STATUSES.OFFERED,
   ].includes(status);
 
+  const titleSource = state.customerFacingReason || null;
+  const titleParts = titleSource ? String(titleSource).split(/\n/) : [];
+  const title = titleParts[0] || titleSource;
+  const queueLabel =
+    state.queueLabel ||
+    (titleParts.length > 1 ? titleParts.slice(1).join(' ').trim() : null) ||
+    null;
+
   return {
     id: `handoff_${session._id || 'session'}_${state.version || 0}`,
     status,
     activeResponder: state.activeResponder || ACTIVE_RESPONDERS.AI,
     version: state.version || 0,
+    queuePosition: state.queuePosition ?? null,
+    estimatedWaitMinutes: state.estimatedWaitMinutes ?? null,
+    queueLabel,
     display: {
-      title: state.customerFacingReason || null,
+      title,
+      queueLabel,
       showSpinner,
       removeStatusComponent,
     },

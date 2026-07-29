@@ -14,5 +14,5 @@ export const LEGAL = {
   supportEmail: "agentraa0@gmail.com",
   privacyEmail: "agentraa0@gmail.com",
   effectiveDate: "July 9, 2026",
-  lastUpdated: "July 9, 2026",
+  lastUpdated: "July 26, 2026",
 } as const;

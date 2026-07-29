@@ -9,7 +9,8 @@ import { useAuth } from "@/contexts/AuthContext";
 export default function AiAgentPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const canViewAiAgent = ["owner", "admin", "manager"].includes(user?.role ?? "");
+  // Agents can view/work AI Agent conversations; setup stays in Settings (owner/admin).
+  const canViewAiAgent = ["owner", "admin", "manager", "agent"].includes(user?.role ?? "");
 
   useEffect(() => {
     if (user && !canViewAiAgent) {

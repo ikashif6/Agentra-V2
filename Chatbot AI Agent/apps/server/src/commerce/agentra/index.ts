@@ -70,6 +70,15 @@ export function createAgentraAdapter(workspaceId: string): StoreAdapter {
       return data?.order || null;
     },
     async requestCancellation(orderId: string, reason?: string) {
+      const existing = await this.getOrder(orderId);
+      if (existing && existing.cancelEligible === false) {
+        return {
+          ok: false,
+          message:
+            "This order has already been fulfilled, so it can no longer be cancelled. A return is the path once it arrives.",
+          order: existing,
+        };
+      }
       const data = await agentraFetch(
         workspaceId,
         `/orders/${encodeURIComponent(orderId)}/cancel`,

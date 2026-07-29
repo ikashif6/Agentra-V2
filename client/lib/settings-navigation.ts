@@ -6,6 +6,7 @@ import {
   MessageCircle,
   Users,
   UsersRound,
+  ContactRound,
   Shield,
   CreditCard,
   ScrollText,
@@ -28,6 +29,7 @@ export type SettingsItemId =
   | "instagram"
   | "facebook"
   | "users"
+  | "customers"
   | "teams"
   | "access"
   | "billing"
@@ -102,6 +104,11 @@ export const SETTINGS_SECTIONS: SettingsNavSection[] = [
     items: [
       { id: "password-security", label: "Password & security" },
       { id: "users", label: "Users", description: "Invite and manage workspace members", peopleOk: true },
+      {
+        id: "customers",
+        label: "Customers",
+        description: "CRM of people who contacted you and what they bought",
+      },
       { id: "teams", label: "Teams", description: "Groups and routing", peopleOk: true },
       { id: "access", label: "Roles & permissions", description: "Who can do what", ownerOnly: true },
       { id: "billing", label: "Plan & billing", description: "Subscription and usage", ownerOnly: true },
@@ -179,6 +186,7 @@ export const SETTINGS_ITEM_ICONS: Partial<Record<SettingsItemId, LucideIcon>> = 
   email: Mail,
   chat: MessageCircle,
   users: Users,
+  customers: ContactRound,
   teams: UsersRound,
   access: Shield,
   billing: CreditCard,

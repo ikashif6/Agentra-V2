@@ -29,14 +29,13 @@ async function findOrCreateCustomerByEmail(company, email) {
 }
 
 async function createChatTicket(company, customer, email, firstMessage) {
-  const ticketCode = await Ticket.generateCode(company._id, 'TKT');
   const config = mergeLiveChatConfig(company);
+  const prefix = company.settings?.ticketPrefix || 'TKT';
   const title = firstMessage
     ? String(firstMessage).replace(/\s+/g, ' ').trim().slice(0, 80) || 'Live chat conversation'
     : 'Live chat conversation';
 
-  const ticket = await Ticket.create({
-    ticket_code: ticketCode,
+  const ticket = await Ticket.createWithCode(company._id, prefix, {
     company_subdomain: company.subdomain,
     company: company._id,
     ticket_title: title,
@@ -74,12 +73,15 @@ async function appendSessionMessage(session, message) {
   if ((message.role === 'bot' || message.role === 'system') && body) {
     body = sanitizeCustomerFacingText(body);
   }
+  const attachments = normalizeLiveChatAttachments(message.attachments);
   session.messages.push({
     role: message.role,
     body,
     contentType: message.contentType || 'text',
     payload: message.payload,
+    attachments,
     senderName: message.senderName,
+    senderAvatar: message.senderAvatar,
     sentAt: message.sentAt || new Date(),
   });
   session.lastActivityAt = new Date();
@@ -87,8 +89,52 @@ async function appendSessionMessage(session, message) {
   return session.messages[session.messages.length - 1];
 }
 
-async function syncMessageToTicket(ticket, { role, body, senderName, customerUser, agentUser, eventType }) {
-  if (!ticket || !body) return;
+function uploadsBaseUrl() {
+  return (
+    process.env.APP_API_URL ||
+    process.env.API_PUBLIC_URL ||
+    `http://localhost:${process.env.PORT || 5000}`
+  ).replace(/\/$/, '');
+}
+
+function isAllowedUploadUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return false;
+  const base = `${uploadsBaseUrl()}/api/uploads/`;
+  try {
+    const parsed = new URL(raw);
+    const allowed = new URL(base);
+    return parsed.origin === allowed.origin && parsed.pathname.startsWith('/api/uploads/');
+  } catch {
+    return false;
+  }
+}
+
+function normalizeLiveChatAttachments(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item) => item && item.url && item.filename && isAllowedUploadUrl(item.url))
+    .slice(0, 5)
+    .map((item) => ({
+      url: String(item.url).trim().slice(0, 2000),
+      filename: String(item.filename).trim().slice(0, 255),
+      mimetype: item.mimetype ? String(item.mimetype).slice(0, 120) : undefined,
+      size: Number.isFinite(Number(item.size)) ? Number(item.size) : undefined,
+    }));
+}
+
+function isHumanAgentJoined(session) {
+  if (!session) return false;
+  if (session.status === 'with_human' && session.assignedAgent) return true;
+  const status = session.handoffState?.status;
+  const responder = session.handoffState?.activeResponder;
+  return status === 'agent_joined' || responder === 'human';
+}
+
+async function syncMessageToTicket(ticket, { role, body, senderName, customerUser, agentUser, eventType, attachments }) {
+  const files = normalizeLiveChatAttachments(attachments);
+  const text = String(body || '').trim() || (files.length ? '(Attachment)' : '');
+  if (!ticket || !text) return;
   let senderId;
   let senderEmail;
   let isAi = false;
@@ -119,7 +165,8 @@ async function syncMessageToTicket(ticket, { role, body, senderName, customerUse
     sender: senderId,
     senderEmail,
     senderName: isSystem ? undefined : senderName || undefined,
-    body: String(body),
+    body: text,
+    attachments: files,
     sentAt: new Date(),
     isInternal: false,
     isAi,
@@ -127,17 +174,30 @@ async function syncMessageToTicket(ticket, { role, body, senderName, customerUse
     contentType,
     eventType: isSystem ? eventType || 'notice' : undefined,
   });
-  ticket.lastActivity = new Date();
-  if (ticket.status === 'closed' || ticket.status === 'resolved') {
-    ticket.status = 'open';
+
+  // Keep the helpdesk ticket lifecycle in sync with the live-chat responder.
+  // Customer/agent activity is active work; an AI answer waits on the customer.
+  if (role === 'customer' || role === 'agent') {
+    ticket.status = 'in_progress';
+    ticket.closedAt = undefined;
+    ticket.closedBy = undefined;
+  } else if (role === 'bot' && !ticket.assigned_agent) {
+    ticket.status = 'on_hold';
+    ticket.closedAt = undefined;
+    ticket.closedBy = undefined;
   }
+
+  ticket.lastActivity = new Date();
   await ticket.save();
 }
 
 async function startSession(company, { email, pageUrl, origin, userAgent }) {
   const normalizedEmail = String(email).toLowerCase().trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-    throw new Error('A valid email address is required');
+    const err = new Error('A valid email address is required');
+    err.statusCode = 400;
+    err.expose = true;
+    throw err;
   }
 
   const customer = await findOrCreateCustomerByEmail(company, normalizedEmail);
@@ -229,4 +289,7 @@ module.exports = {
   isOrderVerified,
   findOrCreateCustomerByEmail,
   sanitizeCustomerFacingText,
+  normalizeLiveChatAttachments,
+  isHumanAgentJoined,
+  isAllowedUploadUrl,
 };

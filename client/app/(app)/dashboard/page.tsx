@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserLocalTime } from "@/hooks/use-user-local-time";
 import { ticketApi } from "@/lib/api";
@@ -29,7 +27,6 @@ export default function HomePage() {
   const { greeting } = useUserLocalTime();
   const [recent, setRecent] = useState<TicketType[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingDemo, setLoadingDemo] = useState(false);
   const [todayStats, setTodayStats] = useState<HomeTodayStats>({
     assigned: 0,
     unassigned: 0,
@@ -113,22 +110,6 @@ export default function HomePage() {
     }
   };
 
-  const loadDemoData = async () => {
-    setLoadingDemo(true);
-    try {
-      const { data } = await ticketApi.createDemo();
-      const payload = data.data;
-      toast.success(
-        `Demo data ready: ${payload.inboxCount ?? 20} inbox + ${payload.liveChatCount ?? payload.aiAgentCount ?? 20} AI Agent conversations (${payload.created ?? 0} new)`,
-      );
-      await Promise.all([loadRecent(), loadTodayStats(), loadSetupStatus()]);
-    } catch {
-      toast.error("Could not load demo data");
-    } finally {
-      setLoadingDemo(false);
-    }
-  };
-
   useEffect(() => {
     let cancelled = false;
     const loadAll = async () => {
@@ -189,29 +170,7 @@ export default function HomePage() {
           {loading ? (
             <AppEmptyState>Loading conversations…</AppEmptyState>
           ) : recent.length === 0 ? (
-            <AppEmptyState>
-              <div className="space-y-3">
-                <p>No conversations yet</p>
-                {isWorkspaceAdmin ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={loadingDemo}
-                    onClick={() => void loadDemoData()}
-                  >
-                    {loadingDemo ? (
-                      <>
-                        <Loader2 className="mr-2 size-3.5 animate-spin" />
-                        Loading demo data…
-                      </>
-                    ) : (
-                      "Load demo data (20 inbox + 20 AI Agent)"
-                    )}
-                  </Button>
-                ) : null}
-              </div>
-            </AppEmptyState>
+            <AppEmptyState>No conversations yet</AppEmptyState>
           ) : (
             recent.map((t, i) => (
               <div key={t._id}>

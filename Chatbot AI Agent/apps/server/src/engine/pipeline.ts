@@ -39,10 +39,12 @@ import {
   languageInstruction,
   type DetectedLanguage,
 } from "./featureHelpers.js";
-import { containsSensitiveRequest, looksLikeDeferredAction, hasProductPreferences, wantsProductBrowse, shouldClearProductPreferences, clearProductPreferenceSlots } from "../security/sanitize.js";
+import { containsSensitiveRequest, looksLikeDeferredAction, hasProductPreferences, wantsProductBrowse, shouldClearProductPreferences, clearProductPreferenceSlots, messageProvidesProductFilters } from "../security/sanitize.js";
 import { publish } from "../realtime/hub.js";
 import { env } from "../config/env.js";
 import type { LastTurnOutcome, VerifiedOrderSnapshot } from "@chatbot/shared";
+import { getWorkspaceConfig } from "../workspace/resolve.js";
+import { isFeatureEnabled } from "../workspace/features.js";
 
 function sanitizeAttachments(raw: unknown): ChatAttachment[] {
   if (!Array.isArray(raw)) return [];
@@ -74,6 +76,30 @@ function hasAiKey(): boolean {
   if (env.aiProvider === "openai") return Boolean(env.openaiApiKey);
   if (env.aiProvider === "anthropic") return Boolean(env.anthropicApiKey);
   return Boolean(env.groqApiKey);
+}
+
+/**
+ * Direct request for a human. Kept deliberately narrow: an explicit ask only,
+ * so questions like "do you have agents?" don't trigger a queue.
+ */
+function asksForHumanAgent(message: string): boolean {
+  const m = String(message || "").trim();
+  if (!m) return false;
+  if (/\b(don'?t|do not|no need|not?) (want|need).{0,20}\b(agent|human|person)\b/i.test(m)) {
+    return false;
+  }
+  return (
+    /\b(connect|transfer|escalate|forward)\s+(me\s+)?(to|with)?\s*(a\s+|an\s+|the\s+)?(human|real\s+person|person|agent|representative|rep|someone|support\s+agent|customer\s+service)\b/i.test(
+      m,
+    ) ||
+    /\b(talk|speak|chat)\s+(to|with)\s+(a\s+|an\s+|the\s+)?(human|real\s+person|person|agent|representative|rep|someone|advisor|manager)\b/i.test(
+      m,
+    ) ||
+    /\b(i\s+want|i\s+need|can\s+i\s+(get|have)|give\s+me|get\s+me)\s+(to\s+)?(a\s+|an\s+)?(human|real\s+person|live\s+agent|real\s+agent|agent|representative)\b/i.test(
+      m,
+    ) ||
+    /^(human|agent|live agent|real person|customer service)\s*(please)?[.!?]*$/i.test(m)
+  );
 }
 
 async function heuristicToolPlan(input: {
@@ -108,7 +134,10 @@ async function heuristicToolPlan(input: {
     const preferenceQuery = clearPrefs
       ? undefined
       : [slots.productQuery].filter(Boolean).join(" ");
-    const wantsAnything = wantsProductBrowse(message) || clearPrefs;
+    const wantsAnything =
+      (wantsProductBrowse(message) || clearPrefs) &&
+      !messageProvidesProductFilters(message) &&
+      (clearPrefs || !hasProductPreferences(slots));
     // Search when we have prefs (incl. budget/size alone), or customer asked to just show something
     if (
       preferenceQuery ||
@@ -118,7 +147,7 @@ async function heuristicToolPlan(input: {
     ) {
       calls.push({
         name: "recommendProducts",
-        arguments: clearPrefs
+        arguments: wantsAnything
           ? {}
           : {
               query: preferenceQuery || undefined,
@@ -287,11 +316,12 @@ async function heuristicToolPlan(input: {
         });
       else if (goal === "address_change") {
         const hasAddress =
-          slots.addressLine1 && slots.city && slots.zip && slots.country;
+          slots.addressLine1 && slots.city && slots.state && slots.zip && slots.country;
         if (hasAddress) {
           const confirmed =
-            /yes|confirm|update address/i.test(message) ||
-            /New shipping address:|Address\s*:/i.test(message);
+            /^(yes|yeah|yep|yup|confirm|confirmed|go ahead|update (it|the address)|looks (good|correct))[\s.!]*$/i.test(
+              message.trim(),
+            );
           calls.push({
             name: "requestAddressChange",
             arguments: {
@@ -652,13 +682,21 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
   if (req.formSubmission) {
     const values = req.formSubmission.values || {};
     Object.assign(conversation.state.slots, values);
+    if (req.formSubmission.formId === "shipping_address") {
+      // Normalize widget field names into conversation slots before
+      // understanding runs. A ZIP must never be mistaken for a new order
+      // number, which would invalidate the already verified order.
+      if (values.address1) conversation.state.slots.addressLine1 = values.address1;
+      if (values.address2) conversation.state.slots.addressLine2 = values.address2;
+      if (values.province) conversation.state.slots.state = values.province;
+    }
     if (values.email) conversation.visitorEmail = values.email;
     if (values.phone) conversation.visitorPhone = values.phone;
     inboundText =
       req.message ||
       Object.entries(values)
         .map(([k, v]) => `${k}: ${v}`)
-        .join(", ");
+        .join("\n");
 
     const pending = conversation.state.pendingAction;
     if (
@@ -697,6 +735,40 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
         handoffState: conversation.handoffState,
       };
     }
+  }
+
+  // Confirmation cards have a button, but customers commonly type "yes"
+  // instead. Execute the exact pending address action so a bare confirmation
+  // cannot fall through to the LLM, lose the stored address, or invent a
+  // capability failure.
+  if (
+    conversation.state.pendingAction?.tool === "requestAddressChange" &&
+    /^(yes|yeah|yep|yup|confirm|confirmed|go ahead|update (it|the address)|looks (good|correct))[\s.!]*$/i.test(
+      inboundText.trim(),
+    )
+  ) {
+    const pending = conversation.state.pendingAction;
+    const toolResult = await executeTool(
+      pending.tool,
+      { ...pending.args, confirmed: true },
+      { workspaceId, conversation },
+    );
+    const assistant = buildAssistantMessages(undefined, [toolResult]);
+    const customerMsg = makeMessage({
+      role: "customer",
+      contentType: "text",
+      body: inboundText,
+    });
+    await appendMessages(conversation.id, [customerMsg, ...assistant]);
+    await saveConversation(conversation);
+    publish(conversation.id, { type: "assistant_messages", messages: assistant });
+    return {
+      conversationId: conversation.id,
+      sessionToken: conversation.sessionToken,
+      messages: assistant,
+      conversationState: conversation.state,
+      handoffState: conversation.handoffState,
+    };
   }
 
   if (req.choiceId === "confirm_cancel" || /yes, cancel my order/i.test(inboundText)) {
@@ -794,11 +866,12 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
     conversation.state.pendingAction = null;
   }
 
-  // Refund → connect with agent (chat cannot process refunds)
+  // Explicit "get me a human" — handle deterministically. A sticky goal from the
+  // previous turn must never swallow this, or the customer waits on a promise.
   if (
     req.choiceId === "connect_agent_refund" ||
     req.choiceId === "connect_agent_return" ||
-    /^connect with (an )?agent\b/i.test(inboundText.trim()) ||
+    asksForHumanAgent(inboundText) ||
     /^please connect me with an agent about a return/i.test(inboundText.trim())
   ) {
     const toolResult = await executeTool(
@@ -1026,6 +1099,19 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
     understood.goal = "partial_return";
   }
 
+  // Mid-flow address replies ("D-17, Defence view") match no intent pattern, so
+  // they would drop to `general` and clear the flow — leaving the model to ask
+  // for the address in prose instead of re-showing the address form.
+  if (req.formSubmission?.actionId === "shipping_address") {
+    understood.goal = "address_change";
+    understood.switchedTopic = true;
+  } else if (
+    conversation.state.activeFlow === "address_change" &&
+    understood.goal === "general"
+  ) {
+    understood.goal = "address_change";
+  }
+
   if (
     req.choiceId === "connect_agent_payment" ||
     req.choiceId === "connect_agent_delivery" ||
@@ -1081,6 +1167,28 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
     conversation.state.flowStep = "start";
   } else if (flow && !conversation.state.activeFlow) {
     conversation.state.activeFlow = flow;
+  }
+
+  // A fresh "change my address" ask must never reuse address parts left over
+  // from an earlier attempt in the same chat — that confirmed the old address
+  // back to the customer. Anything repeated in this message is kept.
+  if (
+    conversation.state.activeFlow === "address_change" &&
+    !req.formSubmission &&
+    /\b(change|update|correct|fix)\b[^.?!]{0,40}\b(address|shipping)\b/i.test(inboundText)
+  ) {
+    const statedHere = (value?: string) =>
+      Boolean(value) && inboundText.toLowerCase().includes(String(value).toLowerCase());
+    for (const key of [
+      "addressLine1",
+      "addressLine2",
+      "city",
+      "state",
+      "zip",
+      "country",
+    ] as const) {
+      if (!statedHere(conversation.state.slots[key])) delete conversation.state.slots[key];
+    }
   }
 
   // Persist goal/slots before tools so disk reloads cannot wipe topic switches
@@ -1335,18 +1443,36 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
     const cancelled =
       String(snap.cancellationStatus || "").toLowerCase() === "cancelled";
     if (activeFlow === "address_change" && (cancelled || snap.addressChangeEligible === false)) {
-      const body = cancelled
+      const fallback = cancelled
         ? `Order #${snap.orderNumber} is already cancelled, so the shipping address can’t be changed. I can help with something else if you need.`
         : `Order #${snap.orderNumber} can’t have its address updated anymore (it’s already being fulfilled or shipped). Want help with something else?`;
       conversation.state.activeFlow = null;
       conversation.state.flowStep = null;
+      const body = await contextualAiReply({
+        brand,
+        hoursSummary: hours.summary,
+        conversation,
+        history,
+        inboundText,
+        fallback,
+        clarifyFollowUp: true,
+      });
       return finishTextTurn(conversation, body);
     }
     if (activeFlow === "cancellation" && (cancelled || snap.cancelEligible === false)) {
-      const body = cancelled
+      const fallback = cancelled
         ? `Order #${snap.orderNumber} is already cancelled.`
         : `Order #${snap.orderNumber} can’t be cancelled now. After delivery, a return may be the path instead.`;
       conversation.state.activeFlow = null;
+      const body = await contextualAiReply({
+        brand,
+        hoursSummary: hours.summary,
+        conversation,
+        history,
+        inboundText,
+        fallback,
+        clarifyFollowUp: true,
+      });
       return finishTextTurn(conversation, body);
     }
     if (activeFlow === "return" && (cancelled || snap.returnEligible === false)) {
@@ -1373,6 +1499,21 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
       conversation.state.flowStep = null;
       return finishTextTurn(conversation, body);
     }
+  }
+
+  // Check capability before collecting a customer's new address. Previously
+  // the form and confirmation were shown first, then the mutation failed with
+  // FEATURE_DISABLED, which made the assistant appear to reject the address.
+  if (
+    activeFlow === "address_change" &&
+    !isFeatureEnabled(getWorkspaceConfig(workspaceId).features, "address_change")
+  ) {
+    conversation.state.activeFlow = null;
+    conversation.state.flowStep = null;
+    return finishTextTurn(
+      conversation,
+      "Address changes aren’t enabled for this chat. I can connect you with a support agent who can update it.",
+    );
   }
 
   const missing = activeFlow
@@ -1424,11 +1565,19 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
   let toolCalls: Array<{ name: string; arguments: Record<string, unknown> }> = [];
   let aiText: string | undefined;
 
-  // Product recommend with zero preferences → ask one short question (don't empty-search)
+  // Product recommend with zero preferences → ask one short question (don't empty-search).
+  // Soft answers after we already asked ("I don't really know…") must browse, not re-ask.
+  const answeringProductClarify =
+    conversation.state.lastTurnOutcome?.type === "clarify" &&
+    /product|looking for|budget|dress|veil|accessor/i.test(
+      String(conversation.state.lastTurnOutcome?.summary || ""),
+    );
   const openEndedRecommend =
     understood.goal === "product_recommend" &&
     !hasProductPreferences(conversation.state.slots) &&
-    !wantsProductBrowse(inboundText);
+    !wantsProductBrowse(inboundText) &&
+    !answeringProductClarify &&
+    !messageProvidesProductFilters(inboundText);
 
   if (openEndedRecommend) {
     const ask = [
@@ -1439,6 +1588,11 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
         senderName: env.agentName,
       }),
     ];
+    conversation.state.lastTurnOutcome = {
+      type: "clarify",
+      summary: "product_recommend_preferences",
+      at: new Date().toISOString(),
+    };
     await appendMessages(conversation.id, ask);
     await saveConversation(conversation);
     publish(conversation.id, { type: "typing", value: false });
@@ -1535,6 +1689,7 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
         forceGoal === "product_compare" ||
         forceGoal === "back_in_stock" ||
         forceGoal === "refund_status" ||
+        forceGoal === "address_change" ||
         (forceGoal === "product_availability" &&
           /\bin stock\b|\bout of stock\b|\bavailability\b/i.test(inboundText))
       ) {
@@ -1570,6 +1725,8 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
           if (!toolCalls.some((c) => c.name === "subscribeBackInStock") && forced.length) {
             toolCalls = [...forced, ...toolCalls];
           } else {
+            const alertEmail =
+              conversation.state.slots.email || conversation.visitorEmail;
             toolCalls = toolCalls.map((c) =>
               c.name === "subscribeBackInStock"
                 ? {
@@ -1579,9 +1736,7 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
                       query: c.arguments.query || inboundText,
                       message: inboundText,
                       email:
-                        c.arguments.email ||
-                        conversation.state.slots.email ||
-                        conversation.visitorEmail,
+                        c.arguments.email || alertEmail,
                     },
                   }
                 : c,
@@ -1602,6 +1757,12 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
                   },
                 },
               ];
+        } else if (forceGoal === "address_change") {
+          // Address mutations must always use the deterministic workflow. This
+          // produces the structured confirmation card and prevents the model
+          // from merely promising an update in prose.
+          toolCalls = forced.filter((c) => c.name === "requestAddressChange");
+          aiText = undefined;
         } else if (forceGoal === "product_availability") {
           toolCalls = toolCalls.filter((c) => c.name !== "recommendProducts");
           if (
@@ -1641,6 +1802,9 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
     });
   }
 
+  // The model sometimes promises to connect an agent without calling the tool,
+  // leaving the customer waiting forever. Run only the handoff tool — never a
+  // full tool plan, which would re-run an order lookup and re-show the card.
   // Never leave the customer with "I'll check…" and no tools — execute now
   // But do NOT re-fetch order status on every sticky-goal turn.
   const needsForcedTools =
@@ -1701,7 +1865,12 @@ export async function runTurn(req: TurnRequest): Promise<TurnResponse> {
   if (shouldClearProductPreferences(inboundText)) {
     conversation.state.slots = clearProductPreferenceSlots(conversation.state.slots);
   }
-  const openBrowse = wantsProductBrowse(inboundText) || shouldClearProductPreferences(inboundText);
+  // Pure open browse (no filters this turn) → search with empty args.
+  // If the same turn also names a budget/color/size, keep those filters.
+  const openBrowse =
+    (wantsProductBrowse(inboundText) || shouldClearProductPreferences(inboundText)) &&
+    !messageProvidesProductFilters(inboundText) &&
+    !hasProductPreferences(conversation.state.slots);
   toolCalls = toolCalls.map((c) => {
     if (c.name !== "recommendProducts" && c.name !== "searchProducts") return c;
     const slots = slotState.slots;
@@ -2104,6 +2273,7 @@ function hasEnoughToProceed(
       [
         "addressLine1",
         "city",
+        "state",
         "zip",
         "country",
         "returnReason",
@@ -2186,6 +2356,11 @@ function shouldForceToolsForGoal(
     return (
       hasProductPreferences(ctx.slots) ||
       wantsProductBrowse(message) ||
+      messageProvidesProductFilters(message) ||
+      (ctx.lastOutcome?.type === "clarify" &&
+        /product|looking for|budget|dress|veil|accessor/i.test(
+          String(ctx.lastOutcome?.summary || ""),
+        )) ||
       goal === "product_search" ||
       /where (are|is) (they|it|those)|show (them|me )?again|those options|the options/i.test(
         message,
@@ -2296,7 +2471,11 @@ function shouldForceToolsForGoal(
 async function contextualAiReply(input: {
   brand: { storeName: string; agentName: string };
   hoursSummary: string;
-  conversation: { state: import("@chatbot/shared").ConversationState };
+  conversation: {
+    state: import("@chatbot/shared").ConversationState;
+    channel: string;
+    workspaceId: string;
+  };
   history: import("@chatbot/shared").ChatMessage[];
   inboundText: string;
   fallback: string;

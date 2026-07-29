@@ -44,9 +44,16 @@ function mapOrder(doc) {
     ? doc.fulfillments[0]
     : null;
   const unfulfilled = !doc.fulfillmentStatus || /unfulfilled|null/i.test(String(doc.fulfillmentStatus));
+  // closedAt only means "archived" in Shopify — cancellation is cancelledAt / status.
+  const cancelled = Boolean(
+    doc.cancelledAt ||
+      /cancel/i.test(String(doc.financialStatus || '')) ||
+      /cancel|void/i.test(String(doc.fulfillmentStatus || '')),
+  );
   return {
     id: String(doc.externalId || doc._id),
-    orderNumber: String(doc.orderNumber || doc.name || doc.externalId || ''),
+    // Engine/UI templates add their own "#" — keep the bare number here.
+    orderNumber: String(doc.orderNumber || doc.name || doc.externalId || '').replace(/^#+/, ''),
     email: doc.customer?.email || '',
     phone: doc.customer?.phone || undefined,
     total: Number(doc.totalPrice || 0),
@@ -55,7 +62,7 @@ function mapOrder(doc) {
     fulfillmentStatus: String(doc.fulfillmentStatus || 'unfulfilled'),
     shipmentStatus: fulfillment?.status || (unfulfilled ? 'unshipped' : 'shipped'),
     refundStatus: /refund/i.test(String(doc.financialStatus || '')) ? 'refunded' : 'none',
-    cancellationStatus: doc.closedAt ? 'cancelled' : 'open',
+    cancellationStatus: cancelled ? 'cancelled' : 'open',
     createdAt: (doc.createdAt || doc.orderedAt || new Date()).toISOString?.()
       || new Date(doc.createdAt || Date.now()).toISOString(),
     items: (doc.lineItems || []).map((item) => ({
@@ -81,9 +88,9 @@ function mapOrder(doc) {
           url: fulfillment.trackingUrl || undefined,
         }
       : undefined,
-    returnEligible: !unfulfilled,
-    cancelEligible: unfulfilled,
-    addressChangeEligible: unfulfilled,
+    returnEligible: !unfulfilled && !cancelled,
+    cancelEligible: unfulfilled && !cancelled,
+    addressChangeEligible: unfulfilled && !cancelled,
     deliveredAt: null,
     fulfilledAt: fulfillment?.shippedAt
       ? new Date(fulfillment.shippedAt).toISOString()
@@ -170,7 +177,19 @@ async function findOrder(workspaceId, input = {}) {
     ],
   }).lean();
 
-  return doc ? mapOrder(doc) : null;
+  if (doc) return mapOrder(doc);
+
+  const syncedCount = await StoreOrder.countDocuments({ company: company._id });
+  if (syncedCount === 0) {
+    const err = new Error(
+      company.storeIntegration?.lastError ||
+        'No orders are synced into Agentra yet. Open Settings › Store and click Sync now. If Shopify blocks the sync, request Protected customer data access for this app in the Partner Dashboard, then sync again.',
+    );
+    err.code = 'ORDERS_NOT_SYNCED';
+    throw err;
+  }
+
+  return null;
 }
 
 async function getOrder(workspaceId, orderId) {

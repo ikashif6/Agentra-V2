@@ -2,6 +2,7 @@ const User       = require('../models/User');
 const Team       = require('../models/Team');
 const Department = require('../models/Department');
 const Company    = require('../models/Company');
+const LiveChatRating = require('../models/LiveChatRating');
 const response   = require('../utils/apiResponse');
 const {
   logUserInvited,
@@ -34,6 +35,163 @@ function getManagePermissions(actor, target) {
 
   return { canEdit: false, canChangeRole: false, canDelete: false };
 }
+
+/**
+ * GET /users/:id/live-chat-evaluation
+ * Per-agent customer satisfaction summary and its underlying conversation records.
+ */
+exports.getLiveChatEvaluation = async (req, res, next) => {
+  try {
+    const agent = await User.findOne({
+      _id: req.params.id,
+      company: req.company._id,
+      role: { $in: ['owner', 'admin', 'manager', 'agent'] },
+    }).select('_id firstName lastName email avatar role');
+    if (!agent) return response.notFound(res, 'Agent not found');
+
+    const match = { company: req.company._id, agent: agent._id };
+    const [summaryRows, records] = await Promise.all([
+      LiveChatRating.aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: null,
+            totalRatings: { $sum: 1 },
+            averageRating: { $avg: '$rating' },
+            one: { $sum: { $cond: [{ $eq: ['$rating', 1] }, 1, 0] } },
+            two: { $sum: { $cond: [{ $eq: ['$rating', 2] }, 1, 0] } },
+            three: { $sum: { $cond: [{ $eq: ['$rating', 3] }, 1, 0] } },
+            four: { $sum: { $cond: [{ $eq: ['$rating', 4] }, 1, 0] } },
+            five: { $sum: { $cond: [{ $eq: ['$rating', 5] }, 1, 0] } },
+          },
+        },
+      ]),
+      LiveChatRating.find(match)
+        .sort({ submittedAt: -1 })
+        .limit(100)
+        .populate('ticket', 'ticket_code ticket_title status')
+        .select('ticket session rating label resolvedAt submittedAt')
+        .lean(),
+    ]);
+
+    const row = summaryRows[0] || {};
+    return response.success(res, {
+      agent,
+      summary: {
+        totalRatings: row.totalRatings || 0,
+        averageRating: row.averageRating ? Number(row.averageRating.toFixed(2)) : null,
+        distribution: {
+          1: row.one || 0,
+          2: row.two || 0,
+          3: row.three || 0,
+          4: row.four || 0,
+          5: row.five || 0,
+        },
+      },
+      records,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * GET /users/live-chat-evaluation
+ * Workspace-wide live-chat CSAT rollup for analytics.
+ */
+exports.listLiveChatEvaluations = async (req, res, next) => {
+  try {
+    const companyId = req.company._id;
+    const [workspaceRows, recent] = await Promise.all([
+      LiveChatRating.aggregate([
+        { $match: { company: companyId } },
+        {
+          $group: {
+            _id: '$agent',
+            totalRatings: { $sum: 1 },
+            averageRating: { $avg: '$rating' },
+            one: { $sum: { $cond: [{ $eq: ['$rating', 1] }, 1, 0] } },
+            two: { $sum: { $cond: [{ $eq: ['$rating', 2] }, 1, 0] } },
+            three: { $sum: { $cond: [{ $eq: ['$rating', 3] }, 1, 0] } },
+            four: { $sum: { $cond: [{ $eq: ['$rating', 4] }, 1, 0] } },
+            five: { $sum: { $cond: [{ $eq: ['$rating', 5] }, 1, 0] } },
+            lastRatedAt: { $max: '$submittedAt' },
+          },
+        },
+        { $sort: { averageRating: -1, totalRatings: -1 } },
+      ]),
+      LiveChatRating.find({ company: companyId })
+        .sort({ submittedAt: -1 })
+        .limit(12)
+        .populate('agent', 'firstName lastName email avatar role')
+        .populate('ticket', 'ticket_code ticket_title status')
+        .select('agent ticket rating label submittedAt')
+        .lean(),
+    ]);
+
+    const agentIds = workspaceRows.map((row) => row._id).filter(Boolean);
+    const agents = await User.find({
+      _id: { $in: agentIds },
+      company: companyId,
+    })
+      .select('_id firstName lastName email avatar role isOnline')
+      .lean();
+    const byId = new Map(agents.map((agent) => [String(agent._id), agent]));
+
+    const overall = workspaceRows.reduce(
+      (acc, row) => {
+        acc.totalRatings += row.totalRatings || 0;
+        acc.weightedSum += (row.averageRating || 0) * (row.totalRatings || 0);
+        acc.distribution[1] += row.one || 0;
+        acc.distribution[2] += row.two || 0;
+        acc.distribution[3] += row.three || 0;
+        acc.distribution[4] += row.four || 0;
+        acc.distribution[5] += row.five || 0;
+        return acc;
+      },
+      {
+        totalRatings: 0,
+        weightedSum: 0,
+        distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      },
+    );
+
+    return response.success(res, {
+      summary: {
+        totalRatings: overall.totalRatings,
+        averageRating: overall.totalRatings
+          ? Number((overall.weightedSum / overall.totalRatings).toFixed(2))
+          : null,
+        distribution: overall.distribution,
+        agentsRated: workspaceRows.length,
+      },
+      agents: workspaceRows
+        .map((row) => {
+          const agent = byId.get(String(row._id));
+          if (!agent) return null;
+          return {
+            agent,
+            summary: {
+              totalRatings: row.totalRatings || 0,
+              averageRating: row.averageRating ? Number(row.averageRating.toFixed(2)) : null,
+              distribution: {
+                1: row.one || 0,
+                2: row.two || 0,
+                3: row.three || 0,
+                4: row.four || 0,
+                5: row.five || 0,
+              },
+              lastRatedAt: row.lastRatedAt || null,
+            },
+          };
+        })
+        .filter(Boolean),
+      recent,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 
 /**
  * GET /users/workspace

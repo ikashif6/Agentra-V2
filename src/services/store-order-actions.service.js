@@ -856,6 +856,9 @@ function isFulfilled(order) {
 async function cancelStoreOrder(company, orderId, options = {}) {
   const storeOrder = await loadStoreOrder(company._id, orderId);
   if (isCancelled(storeOrder)) throw new Error('This order is already cancelled');
+  if (isFulfilled(storeOrder)) {
+    throw new Error('This order is already fulfilled and can no longer be cancelled — use a return');
+  }
 
   const integration = company.storeIntegration;
   const secrets = getStoreSecrets(integration);

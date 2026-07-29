@@ -140,6 +140,8 @@ export const ticketApi = {
   update: (code: string, data: Record<string, unknown>) =>
     api.patch(`/tickets/${code}`, data),
   close: (code: string) => api.post(`/tickets/${code}/close`),
+  emailTranscript: (code: string, data?: { force?: boolean }) =>
+    api.post(`/tickets/${code}/email-transcript`, data ?? {}),
   reopen: (code: string) => api.post(`/tickets/${code}/reopen`),
   addMessage: (code: string, data: Record<string, unknown>) =>
     api.post(`/tickets/${code}/messages`, data),
@@ -215,6 +217,14 @@ export const usersApi = {
     },
   ) => api.patch(`/users/${id}`, data),
   remove: (id: string) => api.delete(`/users/${id}`),
+  liveChatEvaluation: (id: string) => api.get(`/users/${id}/live-chat-evaluation`),
+  liveChatEvaluations: () => api.get("/users/live-chat-evaluation"),
+};
+
+export const customersApi = {
+  list: (search = "", page = 1, limit = 20) =>
+    api.get("/customers", { params: { search, page, limit } }),
+  get: (email: string) => api.get(`/customers/${encodeURIComponent(email)}`),
 };
 
 export const billingApi = {

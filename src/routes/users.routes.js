@@ -64,6 +64,20 @@ router.post(
   usersController.inviteUser
 );
 
+router.get(
+  '/live-chat-evaluation',
+  authorize('owner', 'admin', 'manager'),
+  usersController.listLiveChatEvaluations,
+);
+
+router.get(
+  '/:id/live-chat-evaluation',
+  authorize('owner', 'admin', 'manager'),
+  [param('id').isMongoId().withMessage('Valid user id required')],
+  validate,
+  usersController.getLiveChatEvaluation,
+);
+
 // PATCH /users/:id
 router.patch(
   '/:id',

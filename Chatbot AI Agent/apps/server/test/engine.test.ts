@@ -5,7 +5,7 @@ import { createCustomAdapter } from "../src/commerce/custom/index.js";
 import { executeTool } from "../src/tools/executor.js";
 import { runTurn } from "../src/engine/pipeline.js";
 import { getBusinessHoursStatus } from "../src/handoff/hours.js";
-import { sanitizeCustomerText, containsSensitiveRequest } from "../src/security/sanitize.js";
+import { sanitizeCustomerText, containsSensitiveRequest, wantsProductBrowse, shouldClearProductPreferences, hasProductPreferences, messageProvidesProductFilters } from "../src/security/sanitize.js";
 import { resetStoreAdapter } from "../src/commerce/factory.js";
 
 before(() => {
@@ -103,6 +103,35 @@ describe("understand", () => {
     });
     assert.equal(understood.isCrossCustomerPrivacyAsk, true);
     assert.notEqual(understood.goal, "product_recommend");
+  });
+
+  it("extracts budget with filler words like 'only'", () => {
+    const slots = extractSlots("I don't really know, my budget is only 500", {});
+    assert.equal(slots.budget, "500");
+  });
+
+  it("extracts budget from 'under about $300'", () => {
+    const slots = extractSlots("looking for something under about $300", {});
+    assert.equal(slots.budget, "300");
+  });
+});
+
+describe("product recommend helpers", () => {
+  it("treats soft 'I don't really know' as browse", () => {
+    assert.equal(wantsProductBrowse("I don't really know, my budget is only 500"), true);
+    assert.equal(wantsProductBrowse("I don't know"), true);
+    assert.equal(wantsProductBrowse("Product Recommendation"), false);
+  });
+
+  it("does not clear prefs when browse and budget arrive together", () => {
+    const msg = "I don't really know, my budget is only 500";
+    assert.equal(messageProvidesProductFilters(msg), true);
+    assert.equal(shouldClearProductPreferences(msg), false);
+    assert.equal(hasProductPreferences({ budget: "500" }), true);
+  });
+
+  it("still clears sticky prefs for pure browse", () => {
+    assert.equal(shouldClearProductPreferences("I don't know, just show me anything"), true);
   });
 });
 
@@ -215,6 +244,123 @@ describe("turn pipeline", () => {
     });
     const hasOrder = result.messages.some((m) => m.contentType === "order_card");
     assert.equal(hasOrder, true);
+  });
+
+  it("uses address cards and accepts typed confirmation", async () => {
+    const session = `test_address_change_${Date.now()}`;
+    const lookup = await runTurn({
+      workspaceId: "default",
+      sessionToken: session,
+      message: "Find order 1002 for sam@example.com",
+      visitorEmail: "sam@example.com",
+      channel: "web",
+    });
+    assert.equal(
+      lookup.messages.some((m) => m.contentType === "order_card"),
+      true,
+    );
+
+    const request = await runTurn({
+      workspaceId: "default",
+      sessionToken: session,
+      conversationId: lookup.conversationId,
+      message: "I need to change the shipping address",
+      channel: "web",
+    });
+    assert.equal(
+      request.messages.some(
+        (m) => m.contentType === "input_form" && m.form?.formId === "shipping_address",
+      ),
+      true,
+    );
+
+    // Customers often type the address instead of using the form. That wording
+    // matches no intent pattern, so the goal fell back to `general` and cleared
+    // the flow, leaving the model to ask for the address in prose.
+    const typedAddress = await runTurn({
+      workspaceId: "default",
+      sessionToken: session,
+      conversationId: lookup.conversationId,
+      message: "New address is D-17, Defence view",
+      channel: "web",
+    });
+    assert.equal(typedAddress.conversationState.activeFlow, "address_change");
+    assert.equal(typedAddress.conversationState.verifiedOrderId, "o-1002");
+    assert.equal(
+      typedAddress.messages.some(
+        (m) => m.contentType === "input_form" && m.form?.formId === "shipping_address",
+      ),
+      true,
+    );
+
+    const address = await runTurn({
+      workspaceId: "default",
+      sessionToken: session,
+      conversationId: lookup.conversationId,
+      message: "",
+      channel: "web",
+      formSubmission: {
+        formId: "shipping_address",
+        actionId: "shipping_address",
+        values: {
+          address1: "D-18 Defence View Phase 1",
+          city: "Karachi",
+          province: "Sindh",
+          zip: "75500",
+          country: "PK",
+        },
+      },
+    });
+    assert.equal(
+      address.messages.some(
+        (m) => m.contentType === "input_form" && m.form?.formId === "address_confirm",
+      ),
+      true,
+    );
+    assert.equal(address.conversationState.pendingAction?.tool, "requestAddressChange");
+
+    const confirmed = await runTurn({
+      workspaceId: "default",
+      sessionToken: session,
+      conversationId: lookup.conversationId,
+      message: "Yes",
+      channel: "web",
+    });
+    assert.equal(
+      confirmed.messages.some((m) => m.contentType === "order_card"),
+      true,
+    );
+    assert.equal(confirmed.conversationState.pendingAction, null);
+  });
+
+  it("product recommend advances after budget follow-up instead of re-asking", async () => {
+    const session = `test_product_loop_${Date.now()}`;
+    const first = await runTurn({
+      workspaceId: "default",
+      sessionToken: session,
+      message: "Product Recommendation",
+      channel: "web",
+    });
+    assert.equal(first.conversationState.goal, "product_recommend");
+    const clarified = first.messages.some((m) =>
+      /what are you looking for/i.test(String(m.body || "")),
+    );
+    assert.equal(clarified, true);
+
+    const second = await runTurn({
+      workspaceId: "default",
+      sessionToken: session,
+      conversationId: first.conversationId,
+      message: "I don't really know, my budget is only 500",
+      channel: "web",
+    });
+    const reAsked = second.messages.some((m) =>
+      /what are you looking for/i.test(String(m.body || "")),
+    );
+    assert.equal(reAsked, false);
+    assert.equal(second.conversationState.slots.budget, "500");
+    const hasProducts = second.messages.some((m) => m.contentType === "product_cards");
+    assert.equal(hasProducts, true);
   });
 
   it("switches topic from tracking to return", async () => {

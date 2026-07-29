@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Printer,
   Search,
+  Send,
   Trash2,
   UserRound,
   Users,
@@ -56,6 +57,7 @@ type AiAgentTicketToolbarProps = {
   onTrash: () => void;
   onTransfer: (agent: User) => void;
   onPrint: () => void;
+  onEmailTranscript?: () => void;
   busy?: boolean;
 };
 
@@ -72,6 +74,7 @@ export function LiveChatTicketToolbar({
   onTrash,
   onTransfer,
   onPrint,
+  onEmailTranscript,
   busy,
 }: AiAgentTicketToolbarProps) {
   const [assignSearch, setAssignSearch] = useState("");
@@ -303,6 +306,12 @@ export function LiveChatTicketToolbar({
             <Mail className="size-4 text-muted-foreground" />
             Mark as unread
           </DropdownMenuItem>
+          {onEmailTranscript ? (
+            <DropdownMenuItem className="gap-2.5 px-3 py-2" onClick={onEmailTranscript}>
+              <Send className="size-4 text-muted-foreground" />
+              Email transcript
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem className="gap-2.5 px-3 py-2" onClick={() => toast.message("Activity timeline is coming soon")}>
             <List className="size-4 text-muted-foreground" />
             Show all events

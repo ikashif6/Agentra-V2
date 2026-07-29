@@ -517,6 +517,8 @@ function normalizeShopifyOrder(o, shopDomain) {
     totalWeightGrams: lineItemWeightGrams(lineItems) ?? toNumber(o.total_weight) ?? undefined,
     fulfillmentService: lineItems[0]?.fulfillment_service || undefined,
     closedAt: o.closed_at ? new Date(o.closed_at) : undefined,
+    cancelledAt: o.cancelled_at ? new Date(o.cancelled_at) : undefined,
+    cancelReason: o.cancel_reason || undefined,
     customer: {
       externalId: customer.id ? String(customer.id) : undefined,
       name: fullName(customer.first_name, customer.last_name) || shipping.name,

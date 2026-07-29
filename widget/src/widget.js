@@ -24,9 +24,22 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
   let messagesEl, inputEl, sendBtnEl, typingEl, badgeEl, processStepsEl;
   let tabHomeEl, tabChatEl, emailGateEl, emailInputEl, emailBtnEl, emailErrorEl;
   let inputBarEl;
+  let attachBtnEl, fileInputEl, attachPreviewEl;
+  let pendingAttachments = [];
+  let uploadingAttachments = false;
   let unreadCount = 0;
   let notificationAudio = null;
   let notificationEventsWired = false;
+  // A human agent already joined — the HTTP turn response can still carry the
+  // older "waiting_for_agent" state, so never re-show the spinner after this.
+  let agentJoined = false;
+  let handoffVersion = -1;
+  // Identity of the human agent handling the chat — the header and their bubbles
+  // show them instead of the AI assistant once they take over.
+  let humanAgentName = '';
+  let humanAgentAvatar = '';
+  let conversationResolved = false;
+  let endingConversation = false;
   const seenMessageKeys = new Set();
 
   function resetMessagesCanvas() {
@@ -516,7 +529,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
           const msg = JSON.parse(ev.data);
           if (msg.type === 'message' && msg.data) renderServerMessage(msg.data, true);
           if (msg.type === 'system_event' && msg.data?.event === 'agent_joined') {
-            clearConnectingIndicator();
+            markAgentJoined();
             addSystemEvent((msg.data.agentName || 'An agent') + ' joined the chat');
           }
           if (msg.type === 'status' && msg.data?.status) {
@@ -665,18 +678,44 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       setScrollTop(messagesEl.scrollTop + e.deltaY);
     }, { passive: false });
 
+    let touchStartX = 0;
+    let touchRail = null;
+    let touchRailLeft = 0;
+    let touchIsHorizontal = null;
+
     messagesEl.addEventListener('touchstart', function (e) {
       if (!e.touches || !e.touches.length) return;
-      touchStartY = e.touches[0].clientY;
+      const touch = e.touches[0];
+      touchStartY = touch.clientY;
       touchStartScroll = messagesEl.scrollTop;
+      touchStartX = touch.clientX;
+      touchRail = e.target && e.target.closest ? e.target.closest('.agt-product-grid') : null;
+      touchRailLeft = touchRail ? touchRail.scrollLeft : 0;
+      touchIsHorizontal = null;
     }, { passive: true });
 
     messagesEl.addEventListener('touchmove', function (e) {
       if (!e.touches || !e.touches.length) return;
+      const touch = e.touches[0];
+
+      // Swiping a product carousel must pan the rail, not the thread.
+      if (touchRail && touchRail.scrollWidth > touchRail.clientWidth + 2) {
+        const dx = touchStartX - touch.clientX;
+        const dy = touchStartY - touch.clientY;
+        if (touchIsHorizontal === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+          touchIsHorizontal = Math.abs(dx) > Math.abs(dy);
+        }
+        if (touchIsHorizontal) {
+          e.preventDefault();
+          touchRail.scrollLeft = touchRailLeft + dx;
+          return;
+        }
+      }
+
       // Block page scroll even when the thread itself cannot move further.
       e.preventDefault();
       if (maxScrollTop() <= 0) return;
-      const dy = touchStartY - e.touches[0].clientY;
+      const dy = touchStartY - touch.clientY;
       setScrollTop(touchStartScroll + dy);
     }, { passive: false });
 
@@ -844,11 +883,22 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     lastMessageTs = at;
   }
 
-  function addCustomerMessage(text) {
+  function addCustomerMessage(text, attachments) {
     addTimeSepIfNeeded(new Date());
     const row = document.createElement('div');
     row.className = 'agt-msg-row customer';
-    row.innerHTML = '<div class="agt-bubble">' + esc(text) + '</div>';
+    const body =
+      text && text !== '(Attachment)'
+        ? '<div class="agt-bubble">' + esc(text) + '</div>'
+        : '';
+    const filesHtml = renderAttachmentsHtml(attachments);
+    // Keep text + files in one right-aligned stack so images never fall to the
+    // agent (left) side when they sit outside the purple bubble.
+    const stack =
+      body || filesHtml
+        ? '<div class="agt-customer-stack">' + body + filesHtml + '</div>'
+        : '<div class="agt-customer-stack"><div class="agt-bubble">' + esc(text || '') + '</div></div>';
+    row.innerHTML = stack;
     messagesEl.appendChild(row);
     pinLiveIndicators();
     scrollMessages();
@@ -863,6 +913,395 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     scrollMessages();
   }
 
+  const RATING_OPTIONS = [
+    { value: 1, emoji: '😞', label: 'Very bad' },
+    { value: 2, emoji: '🙁', label: 'Bad' },
+    { value: 3, emoji: '😐', label: 'Okay' },
+    { value: 4, emoji: '🙂', label: 'Good' },
+    { value: 5, emoji: '😍', label: 'Excellent' },
+  ];
+
+  // Confirm dialogs for destructive header actions (end chat / new chat / leave).
+  function closeHeaderMenu() {
+    const menu = document.getElementById('agt-header-menu');
+    const btn = document.getElementById('agt-menu-btn');
+    if (menu) menu.hidden = true;
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleHeaderMenu(force) {
+    const menu = document.getElementById('agt-header-menu');
+    const btn = document.getElementById('agt-menu-btn');
+    if (!menu || !btn) return;
+    const open = force == null ? menu.hidden : Boolean(force);
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function updateHeaderMenuState() {
+    const endItem = document.querySelector('#agt-header-menu [data-menu-action="end-chat"]');
+    const newItem = document.querySelector('#agt-header-menu [data-menu-action="new-chat"]');
+    const canAct = Boolean(sessionToken && inChat);
+    if (endItem) {
+      endItem.disabled = !canAct || conversationResolved || endingConversation;
+      endItem.textContent = endingConversation ? 'Ending…' : 'End chat';
+    }
+    if (newItem) {
+      newItem.disabled = !canAct && !conversationResolved;
+    }
+  }
+
+  function hideConfirm() {
+    const overlay = document.getElementById('agt-confirm');
+    if (!overlay) return;
+    overlay.hidden = true;
+    const actions = document.getElementById('agt-confirm-actions');
+    if (actions) actions.innerHTML = '';
+  }
+
+  function showConfirm({ title, body, actions }) {
+    return new Promise(function (resolve) {
+      const overlay = document.getElementById('agt-confirm');
+      const titleEl = document.getElementById('agt-confirm-title');
+      const bodyEl = document.getElementById('agt-confirm-body');
+      const actionsEl = document.getElementById('agt-confirm-actions');
+      if (!overlay || !titleEl || !bodyEl || !actionsEl) {
+        resolve('cancel');
+        return;
+      }
+      closeHeaderMenu();
+      titleEl.textContent = title || '';
+      bodyEl.textContent = body || '';
+      actionsEl.innerHTML = '';
+      (actions || []).forEach(function (action) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className =
+          'agt-confirm-btn' +
+          (action.variant ? ' ' + action.variant : '');
+        button.textContent = action.label;
+        button.addEventListener('click', function () {
+          hideConfirm();
+          resolve(action.value);
+        });
+        actionsEl.appendChild(button);
+      });
+      overlay.hidden = false;
+    });
+  }
+
+  function goHome() {
+    tabHomeEl?.classList.add('active');
+    tabChatEl?.classList.remove('active');
+    document.getElementById('agt-home')?.classList.remove('gone');
+    document.getElementById('agt-chat')?.classList.add('gone');
+    emailGateEl?.classList.add('gone');
+    document.getElementById('agt-chat-header')?.style.setProperty('display', 'none');
+    if (emailInputEl) delete emailInputEl.dataset.initialMsg;
+    inChat = false;
+    closeHeaderMenu();
+    hideConfirm();
+    updateHeaderMenuState();
+    renderChatHistory();
+  }
+
+  function setConversationResolved(resolved) {
+    conversationResolved = Boolean(resolved);
+    updateHeaderMenuState();
+    if (!inputEl || !sendBtnEl) return;
+    inputEl.disabled = conversationResolved;
+    updateSendEnabled();
+    inputEl.placeholder = conversationResolved
+      ? 'This conversation has been solved'
+      : 'Type your message...';
+    inputBarEl?.classList.toggle('agt-conversation-resolved', conversationResolved);
+    updateAttachVisibility();
+  }
+
+  async function endConversation() {
+    if (!sessionToken || conversationResolved || endingConversation) return;
+    endingConversation = true;
+    updateHeaderMenuState();
+    try {
+      const result = await api('/session/end', 'POST', {
+        sessionToken: sessionToken,
+      });
+      setConversationResolved(true);
+      if (result?.message) {
+        addAgentMessage(result.message);
+      } else {
+        addSystemEvent('You ended this conversation.');
+        appendRatingRequest();
+      }
+    } catch (err) {
+      addSystemEvent(err.message || 'Could not end the conversation. Please try again.');
+    } finally {
+      endingConversation = false;
+      updateHeaderMenuState();
+    }
+  }
+
+  async function confirmEndChat() {
+    if (!sessionToken || conversationResolved || endingConversation) return;
+    const choice = await showConfirm({
+      title: 'End this chat?',
+      body: 'We’ll email your transcript and ask for a quick rating.',
+      actions: [
+        { label: 'End chat', value: 'end', variant: 'danger' },
+        { label: 'Keep chatting', value: 'cancel', variant: 'ghost' },
+      ],
+    });
+    if (choice === 'end') await endConversation();
+  }
+
+  async function confirmStartNewChat() {
+    if (!sessionToken && !conversationResolved) {
+      startNewChat();
+      return;
+    }
+    const choice = await showConfirm({
+      title: 'Start a new conversation?',
+      body: conversationResolved
+        ? 'This opens a fresh chat. Your previous conversation stays in history.'
+        : 'This leaves your current chat and starts a new one.',
+      actions: [
+        { label: 'Start new conversation', value: 'new', variant: 'primary' },
+        { label: 'Cancel', value: 'cancel', variant: 'ghost' },
+      ],
+    });
+    if (choice === 'new') startNewChat();
+  }
+
+  async function confirmLeaveChat() {
+    if (!sessionToken || conversationResolved) {
+      goHome();
+      return;
+    }
+    const choice = await showConfirm({
+      title: 'Leave this chat?',
+      body: 'You can end the chat now, or leave and come back later from your history.',
+      actions: [
+        { label: 'End chat', value: 'end', variant: 'danger' },
+        { label: 'Just leave', value: 'leave', variant: 'primary' },
+        { label: 'Stay', value: 'cancel', variant: 'ghost' },
+      ],
+    });
+    if (choice === 'end') {
+      await endConversation();
+    } else if (choice === 'leave') {
+      goHome();
+    }
+  }
+
+  function updateSendEnabled() {
+    if (!sendBtnEl) return;
+    const hasText = Boolean(inputEl && inputEl.value.trim());
+    const hasFiles = pendingAttachments.length > 0;
+    sendBtnEl.disabled =
+      conversationResolved || uploadingAttachments || (!hasText && !hasFiles);
+  }
+
+  function updateAttachVisibility() {
+    if (!attachBtnEl) return;
+    const show = agentJoined && !conversationResolved;
+    attachBtnEl.classList.toggle('gone', !show);
+    attachBtnEl.disabled = !show || uploadingAttachments;
+    if (!show) {
+      pendingAttachments = [];
+      renderAttachPreview();
+    }
+  }
+
+  function isImageAttachment(file) {
+    const type = String(file?.mimetype || '');
+    const name = String(file?.filename || file?.url || '');
+    return /^image\//i.test(type) || /\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(name);
+  }
+
+  function renderAttachmentsHtml(attachments) {
+    const list = Array.isArray(attachments) ? attachments.filter((a) => a && a.url) : [];
+    if (!list.length) return '';
+    return (
+      '<div class="agt-msg-attachments">' +
+      list
+        .map(function (file) {
+          const url = absoluteMediaUrl(file.url);
+          const name = esc(file.filename || 'Attachment');
+          if (isImageAttachment(file)) {
+            return (
+              '<a href="' +
+              esc(url) +
+              '" target="_blank" rel="noopener noreferrer">' +
+              '<img src="' +
+              esc(url) +
+              '" alt="' +
+              name +
+              '" loading="lazy" />' +
+              '</a>'
+            );
+          }
+          return (
+            '<a href="' +
+            esc(url) +
+            '" target="_blank" rel="noopener noreferrer">' +
+            name +
+            '</a>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function renderAttachPreview() {
+    if (!attachPreviewEl) return;
+    if (!pendingAttachments.length) {
+      attachPreviewEl.innerHTML = '';
+      attachPreviewEl.classList.add('gone');
+      updateSendEnabled();
+      return;
+    }
+    attachPreviewEl.classList.remove('gone');
+    attachPreviewEl.innerHTML = pendingAttachments
+      .map(function (file, index) {
+        return (
+          '<div class="agt-attach-chip">' +
+          '<span title="' +
+          esc(file.filename) +
+          '">' +
+          esc(file.filename) +
+          '</span>' +
+          '<button type="button" data-attach-index="' +
+          index +
+          '" aria-label="Remove attachment">×</button>' +
+          '</div>'
+        );
+      })
+      .join('');
+    updateSendEnabled();
+  }
+
+  async function uploadWidgetFiles(fileList) {
+    const files = Array.from(fileList || []).slice(0, 5 - pendingAttachments.length);
+    if (!files.length || !sessionToken || !agentJoined) return;
+    uploadingAttachments = true;
+    updateAttachVisibility();
+    updateSendEnabled();
+    try {
+      const form = new FormData();
+      form.append('sessionToken', sessionToken);
+      form.append('widgetKey', WIDGET_KEY);
+      files.forEach(function (file) {
+        form.append('files', file);
+      });
+      const url =
+        API_BASE +
+        '/session/upload?widgetKey=' +
+        encodeURIComponent(WIDGET_KEY);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'x-widget-key': WIDGET_KEY,
+          'x-session-token': sessionToken,
+        },
+        body: form,
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Upload failed');
+      const uploaded = (data.data && data.data.attachments) || [];
+      pendingAttachments = pendingAttachments.concat(uploaded).slice(0, 5);
+      renderAttachPreview();
+    } catch (err) {
+      console.error('[Agentra widget] Upload failed:', err);
+      addSystemEvent(err.message || 'Could not upload that file.');
+    } finally {
+      uploadingAttachments = false;
+      updateAttachVisibility();
+      updateSendEnabled();
+    }
+  }
+
+  function appendRatingRequest(selectedRating) {
+    let card = document.getElementById('agt-conversation-rating');
+    if (!card) {
+      card = document.createElement('div');
+      card.id = 'agt-conversation-rating';
+      card.className = 'agt-rating';
+      card.innerHTML =
+        '<div class="agt-rating-label">How was your conversation?</div>' +
+        '<div class="agt-rating-options" role="radiogroup" aria-label="Rate this conversation">' +
+        RATING_OPTIONS.map(function (option) {
+          return (
+            '<button type="button" class="agt-rating-option" data-rating="' +
+            option.value +
+            '" role="radio" aria-checked="false" aria-label="' +
+            esc(option.label) +
+            '" title="' +
+            esc(option.label) +
+            '"><span class="agt-rating-emoji">' +
+            option.emoji +
+            '</span><span>' +
+            esc(option.label) +
+            '</span></button>'
+          );
+        }).join('') +
+        '</div><div class="agt-rating-thanks" aria-live="polite"></div>';
+      messagesEl.appendChild(card);
+      card.querySelectorAll('.agt-rating-option').forEach(function (button) {
+        button.addEventListener('click', function () {
+          submitConversationRating(Number(button.dataset.rating));
+        });
+      });
+    }
+    if (selectedRating) applyStoredFeedback(selectedRating);
+    pinLiveIndicators();
+    scrollMessages();
+  }
+
+  async function submitConversationRating(rating) {
+    const card = document.getElementById('agt-conversation-rating');
+    if (!card || !sessionToken) return;
+    const buttons = card.querySelectorAll('.agt-rating-option');
+    buttons.forEach(function (button) {
+      button.disabled = true;
+    });
+    const thanks = card.querySelector('.agt-rating-thanks');
+    if (thanks) {
+      thanks.textContent = 'Saving your feedback…';
+      thanks.style.display = 'block';
+    }
+    try {
+      await api('/session/feedback', 'POST', {
+        sessionToken: sessionToken,
+        rating: rating,
+      });
+      applyStoredFeedback(rating);
+    } catch (err) {
+      buttons.forEach(function (button) {
+        button.disabled = false;
+      });
+      if (thanks) thanks.textContent = err.message || 'Could not save your feedback. Please try again.';
+    }
+  }
+
+  function applyStoredFeedback(rating) {
+    const numeric = Number(rating);
+    if (!numeric) return;
+    appendRatingRequest();
+    const card = document.getElementById('agt-conversation-rating');
+    card?.querySelectorAll('.agt-rating-option').forEach(function (button) {
+      const selected = Number(button.dataset.rating) === numeric;
+      button.classList.toggle('selected', selected);
+      button.setAttribute('aria-checked', selected ? 'true' : 'false');
+      button.disabled = true;
+    });
+    const thanks = card?.querySelector('.agt-rating-thanks');
+    if (thanks) {
+      thanks.textContent = 'Thanks — your feedback helps us improve.';
+      thanks.style.display = 'block';
+    }
+  }
+
   function clearConnectingIndicator() {
     if (!messagesEl) return;
     messagesEl.querySelectorAll('.agt-connecting').forEach(function (el) {
@@ -870,7 +1309,90 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     });
   }
 
+  function markAgentJoined(name, avatarUrl) {
+    agentJoined = true;
+    if (name || avatarUrl) setHumanAgent(name, avatarUrl);
+    clearConnectingIndicator();
+    updateAttachVisibility();
+  }
+
+  function resetHandoffTracking() {
+    agentJoined = false;
+    handoffVersion = -1;
+    humanAgentName = '';
+    humanAgentAvatar = '';
+    conversationResolved = false;
+    endingConversation = false;
+    pendingAttachments = [];
+    setConversationResolved(false);
+    renderAttachPreview();
+    updateAttachVisibility();
+    applyHeaderIdentity();
+  }
+
+  /** Name from a join notice like "Daniel has joined the conversation". */
+  function agentNameFromJoinText(text) {
+    const match = /^(.+?)\s+has joined the conversation/i.exec(String(text || '').trim());
+    return match ? match[1].trim() : '';
+  }
+
+  function setHumanAgent(name, avatarUrl) {
+    const clean = String(name || '').trim();
+    const avatar = absoluteMediaUrl(avatarUrl);
+    if (clean === 'System') return;
+    if ((!clean || clean === humanAgentName) && (!avatar || avatar === humanAgentAvatar)) return;
+    if (clean) humanAgentName = clean;
+    if (avatar) humanAgentAvatar = avatar;
+    applyHeaderIdentity();
+  }
+
+  /** Avatars may be stored as a path on the API host rather than a full URL. */
+  function absoluteMediaUrl(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    if (/^(https?:|data:)/i.test(raw)) return raw;
+    try {
+      return new URL(raw, new URL(API_BASE).origin).href;
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  function applyHeaderIdentity() {
+    const nameEl = document.querySelector('#agt-chat-header .agt-chat-header-name');
+    const statusEl = document.querySelector('#agt-chat-header .agt-chat-header-status span:last-child');
+    const avEl = document.querySelector('#agt-chat-header .agt-chat-header-av');
+    if (!nameEl) return;
+    if (humanAgentName || humanAgentAvatar) {
+      if (humanAgentName) nameEl.textContent = humanAgentName;
+      if (statusEl) statusEl.textContent = 'Support agent · online';
+      if (avEl) {
+        avEl.innerHTML = humanAvatarInner(humanAgentName, humanAgentAvatar);
+        avEl.classList.add('agt-header-av-human');
+      }
+      return;
+    }
+    nameEl.textContent = agentCfg?.agentName || 'Assistant';
+    if (statusEl) statusEl.textContent = 'Online · replies instantly';
+    if (avEl && avEl.dataset.botInner != null) {
+      avEl.innerHTML = avEl.dataset.botInner;
+      avEl.classList.remove('agt-header-av-human');
+    }
+  }
+
+  function humanAvatarInner(name, avatarUrl) {
+    if (avatarUrl) {
+      return '<img src="' + esc(avatarUrl) + '" alt="' + esc(name || 'Support agent') + '">';
+    }
+    const initial = String(name || 'A').trim().charAt(0).toUpperCase() || 'A';
+    return '<span class="agt-av-initial">' + esc(initial) + '</span>';
+  }
+
   function addConnectingIndicator(text) {
+    if (agentJoined) {
+      clearConnectingIndicator();
+      return;
+    }
     clearConnectingIndicator();
     const el = document.createElement('div');
     el.className = 'agt-connecting';
@@ -889,6 +1411,27 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       return;
     }
     if (!handoffState || !handoffState.display) return;
+
+    // Ignore a state snapshot older than one we already applied (join races).
+    const version = Number(handoffState.version);
+    if (Number.isFinite(version)) {
+      if (version < handoffVersion) return;
+      handoffVersion = version;
+    }
+
+    if (handoffState.status === 'agent_joined' || handoffState.activeResponder === 'human') {
+      markAgentJoined();
+      return;
+    }
+    if (
+      handoffState.status === 'not_requested' ||
+      handoffState.status === 'completed' ||
+      handoffState.status === 'cancelled_by_customer' ||
+      handoffState.status === 'cancelled_by_system'
+    ) {
+      agentJoined = false;
+      updateAttachVisibility();
+    }
     if (handoffState.display.removeStatusComponent || handoffState.display.showSpinner === false) {
       if (
         handoffState.status === 'cancelled_by_customer' ||
@@ -1017,7 +1560,11 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       '<div class="agt-order-card">' +
       '<div class="agt-order-top">' +
       '<div><div class="agt-order-id">' +
-      esc(payload.orderNumber ? 'Order ' + payload.orderNumber : 'Order update') +
+      esc(
+        payload.orderNumber
+          ? 'Order #' + String(payload.orderNumber).replace(/^#+/, '')
+          : 'Order update',
+      ) +
       '</div>' +
       (total ? '<div class="agt-order-total">' + esc(total) + '</div>' : '') +
       '</div>' +
@@ -1186,34 +1733,167 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     );
   }
 
-  function buildProductGrid(products) {
+  function formatProductPrice(value, currency) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return String(value || '');
     return (
-      '<div class="agt-product-grid">' +
-      products
-        .map(function (p) {
-          const img = p.imageUrl
-            ? '<img src="' + esc(p.imageUrl) + '" alt="' + esc(p.title) + '">'
-            : '<div style="height:72px;background:#f3f4f6;"></div>';
-          const price = p.price != null ? (p.currency || '$') + p.price : '';
-          const href = p.url ? ' href="' + esc(p.url) + '" target="_blank" rel="noopener"' : '';
-          return (
-            '<a class="agt-product-card"' +
-            href +
-            '><div>' +
-            img +
-            '</div><div class="agt-product-body"><div class="agt-product-title">' +
-            esc(p.title) +
-            '</div><div class="agt-product-price">' +
-            esc(price) +
-            '</div></div></a>'
-          );
-        })
-        .join('') +
-      '</div>'
+      (currency || '$') +
+      amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     );
   }
 
-  function agentAvatarHtml() {
+  const PRODUCT_NAV_PREV_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const PRODUCT_NAV_NEXT_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function buildProductGrid(products) {
+    const list = (products || []).slice(0, 8);
+    const cards = list
+      .map(function (p) {
+        const img = p.imageUrl
+          ? '<img src="' + esc(p.imageUrl) + '" alt="' + esc(p.title) + '" draggable="false">'
+          : '<div style="aspect-ratio:1/1;background:#f3f4f6;"></div>';
+        const price = p.price != null ? formatProductPrice(p.price, p.currency) : '';
+        const href = p.url ? esc(p.url) : '';
+        const buyBtn = href
+          ? '<a class="agt-product-view" href="' +
+            href +
+            '" target="_blank" rel="noopener">Buy It Now</a>'
+          : '<span class="agt-product-view is-disabled">Buy It Now</span>';
+        return (
+          '<div class="agt-product-card"><div class="agt-product-media">' +
+          img +
+          '</div><div class="agt-product-body">' +
+          '<div class="agt-product-title">' +
+          esc(p.title) +
+          '</div>' +
+          '<div class="agt-product-row"><div class="agt-product-price">' +
+          esc(price) +
+          '</div></div>' +
+          buyBtn +
+          '</div></div>'
+        );
+      })
+      .join('');
+
+    // Arrows only earn their space once the rail actually overflows.
+    const nav =
+      list.length > 2
+        ? '<button type="button" class="agt-product-nav agt-product-nav-prev" aria-label="Previous products">' +
+          PRODUCT_NAV_PREV_SVG +
+          '</button><button type="button" class="agt-product-nav agt-product-nav-next" aria-label="Next products">' +
+          PRODUCT_NAV_NEXT_SVG +
+          '</button>'
+        : '';
+
+    return (
+      '<div class="agt-product-rail">' +
+      nav +
+      '<div class="agt-product-grid">' +
+      cards +
+      '</div></div>'
+    );
+  }
+
+  /** Wire arrow buttons + touch drag for any unbound product carousels. */
+  function bindProductRails(scope) {
+    const root = scope || messagesEl;
+    if (!root) return;
+    root.querySelectorAll('.agt-product-rail').forEach(function (rail) {
+      if (rail.dataset.bound === '1') return;
+      rail.dataset.bound = '1';
+
+      const grid = rail.querySelector('.agt-product-grid');
+      if (!grid) return;
+      const prev = rail.querySelector('.agt-product-nav-prev');
+      const next = rail.querySelector('.agt-product-nav-next');
+
+      function syncNav() {
+        const max = grid.scrollWidth - grid.clientWidth - 4;
+        if (prev) prev.disabled = grid.scrollLeft <= 4;
+        if (next) next.disabled = grid.scrollLeft >= max;
+      }
+
+      function scrollByDir(dir) {
+        const step = Math.max(160, Math.floor(grid.clientWidth * 0.85));
+        grid.scrollBy({ left: dir * step, behavior: 'smooth' });
+      }
+
+      if (prev) {
+        prev.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          scrollByDir(-1);
+        });
+      }
+      if (next) {
+        next.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          scrollByDir(1);
+        });
+      }
+
+      grid.addEventListener('scroll', syncNav, { passive: true });
+
+      // Mouse uses the arrows; touch/pen may drag the rail directly.
+      let drag = false;
+      let startX = 0;
+      let startLeft = 0;
+      grid.addEventListener('pointerdown', function (e) {
+        if (e.pointerType === 'mouse') return;
+        if (e.button && e.button !== 0) return;
+        drag = true;
+        startX = e.clientX;
+        startLeft = grid.scrollLeft;
+        grid.classList.add('is-dragging');
+        try {
+          grid.setPointerCapture(e.pointerId);
+        } catch (_) {
+          /* capture is best-effort */
+        }
+      });
+      grid.addEventListener('pointermove', function (e) {
+        if (!drag) return;
+        grid.scrollLeft = startLeft - (e.clientX - startX);
+      });
+      function endDrag(e) {
+        if (!drag) return;
+        drag = false;
+        grid.classList.remove('is-dragging');
+        try {
+          grid.releasePointerCapture(e.pointerId);
+        } catch (_) {
+          /* capture is best-effort */
+        }
+        syncNav();
+      }
+      grid.addEventListener('pointerup', endDrag);
+      grid.addEventListener('pointercancel', endDrag);
+
+      // The thread owns vertical wheel scrolling; don't let it drift the rail.
+      grid.addEventListener(
+        'wheel',
+        function (e) {
+          e.preventDefault();
+        },
+        { passive: false },
+      );
+
+      syncNav();
+    });
+  }
+
+  function agentAvatarHtml(human) {
+    // A human agent gets their own photo or initial — the brand logo reads as the bot.
+    if (human) {
+      return (
+        '<div class="agt-agent-av agt-agent-av-human">' +
+        humanAvatarInner(human.name, human.avatar) +
+        '</div>'
+      );
+    }
     const url = agentCfg?.faviconUrl || agentCfg?.logoUrl || '';
     const name = agentCfg?.agentName || 'Assistant';
     if (url) {
@@ -1227,10 +1907,10 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     return '<div class="agt-agent-av agt-agent-av-fallback">' + initial + '</div>';
   }
 
-  function agentMessageShell(name, bodyHtml, extraHtml) {
+  function agentMessageShell(name, bodyHtml, extraHtml, human) {
     return (
       '<div class="agt-agent-row">' +
-      agentAvatarHtml() +
+      agentAvatarHtml(human) +
       '<div class="agt-agent-col">' +
       '<div class="agt-msg-meta"><span class="agt-msg-name">' +
       esc(name) +
@@ -1254,7 +1934,17 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
         return false;
       }
       if (msg.payload?.type === 'agent_joined') {
+        markAgentJoined(
+          msg.payload.agentName || agentNameFromJoinText(msg.body),
+          msg.payload.agentAvatar,
+        );
+      }
+      if (msg.payload?.type === 'conversation_resolved') {
         clearConnectingIndicator();
+        setConversationResolved(true);
+        addSystemEvent(msg.body || 'This conversation was marked as solved.');
+        if (msg.payload.ratingRequested !== false) appendRatingRequest(msg.payload.rating);
+        return false;
       }
       addSystemEvent(msg.body || 'Update');
       return false;
@@ -1262,25 +1952,46 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
 
     const row = document.createElement('div');
     row.className = 'agt-msg-row agent';
-    const name = msg.senderName || agentCfg?.agentName || 'Assistant';
-    const bodyHtml = msg.body
-      ? '<div class="agt-bubble">' + formatAgentText(msg.body) + '</div>'
-      : '';
+    if (msg.role === 'agent') setHumanAgent(msg.senderName, msg.senderAvatar);
+    const human =
+      msg.role === 'agent'
+        ? {
+            name: msg.senderName || humanAgentName || 'Agent',
+            avatar: absoluteMediaUrl(msg.senderAvatar) || humanAgentAvatar,
+          }
+        : null;
+    const name = human ? human.name : msg.senderName || agentCfg?.agentName || 'Assistant';
+    const attachHtml = renderAttachmentsHtml(msg.attachments);
+    const plainBody =
+      msg.body && msg.body !== '(Attachment)' ? formatAgentText(msg.body) : '';
+    const bodyHtml = plainBody
+      ? '<div class="agt-bubble">' + plainBody + attachHtml + '</div>'
+      : attachHtml
+        ? '<div class="agt-bubble">' + attachHtml + '</div>'
+        : '';
 
     if (msg.contentType === 'order_card' && msg.payload) {
-      row.innerHTML = agentMessageShell(name, bodyHtml, buildOrderCard(msg.payload));
+      row.innerHTML = agentMessageShell(name, bodyHtml, buildOrderCard(msg.payload), human);
     } else if (msg.contentType === 'product_cards' && msg.payload?.products) {
-      row.innerHTML = agentMessageShell(name, bodyHtml, buildProductGrid(msg.payload.products));
+      row.innerHTML = agentMessageShell(
+        name,
+        bodyHtml,
+        buildProductGrid(msg.payload.products),
+        human,
+      );
     } else if (msg.contentType === 'input_form' && msg.payload?.fields) {
-      row.innerHTML = agentMessageShell(name, bodyHtml, buildInputForm(msg.payload));
+      row.innerHTML = agentMessageShell(name, bodyHtml, buildInputForm(msg.payload), human);
     } else {
       row.innerHTML = agentMessageShell(
         name,
-        '<div class="agt-bubble">' + formatAgentText(msg.body || '') + '</div>',
+        bodyHtml || '<div class="agt-bubble">' + formatAgentText(msg.body || '') + '</div>',
+        '',
+        human,
       );
     }
 
     messagesEl.appendChild(row);
+    bindProductRails(row);
     if (
       msg.role === 'bot' &&
       msg.contentType === 'text' &&
@@ -1341,6 +2052,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     document.getElementById('agt-chat')?.classList.remove('gone');
     inChat = true;
     document.getElementById('agt-chat-header')?.style.setProperty('display', 'flex');
+    updateHeaderMenuState();
     tabChatEl?.classList.add('active');
     tabHomeEl?.classList.remove('active');
     clearUnreadMessages();
@@ -1365,11 +2077,13 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       visitorEmail = email;
       emailVerified = true;
       freeHandMode = false;
+      resetHandoffTracking();
       seenMessageKeys.clear();
       resetMessagesCanvas();
       (data.messages || []).forEach(function (m) {
         renderServerMessage(m);
       });
+      if (data.feedback?.rating) applyStoredFeedback(data.feedback.rating);
       const preview =
         (data.messages || []).find(function (m) {
           return m.role === 'bot' && m.body;
@@ -1399,16 +2113,32 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       visitorEmail = email || data?.session?.visitorEmail || visitorEmail;
       emailVerified = true;
       freeHandMode = true;
+      resetHandoffTracking();
       seenMessageKeys.clear();
       resetMessagesCanvas();
       (data.session?.messages || []).forEach(function (m) {
         if (m.role === 'customer') {
-          addCustomerMessage(m.body || '');
+          addCustomerMessage(m.body || '', m.attachments);
           markMessageSeen(m);
         } else {
           renderServerMessage(m);
         }
       });
+      applyHandoffState(data.session?.handoffState);
+      if (
+        data.session?.status === 'with_human' ||
+        data.session?.handoffState?.status === 'agent_joined' ||
+        data.session?.handoffState?.activeResponder === 'human'
+      ) {
+        markAgentJoined(
+          data.session?.assignedAgent?.name,
+          data.session?.assignedAgent?.avatar,
+        );
+      }
+      if (data.session?.status === 'closed') setConversationResolved(true);
+      if (data.session?.feedback?.rating) {
+        applyStoredFeedback(data.session.feedback.rating);
+      }
       connectWebSocket();
       setFreeHandMode(true);
       showChatScreen();
@@ -1429,6 +2159,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     }
     sessionToken = null;
     freeHandMode = false;
+    resetHandoffTracking();
     seenMessageKeys.clear();
     resetMessagesCanvas();
     if (inputEl) {
@@ -1441,11 +2172,15 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     } else {
       showEmailGate();
     }
+    updateHeaderMenuState();
   }
 
   async function sendMessage(text) {
     const trimmed = String(text || '').trim();
-    if (!trimmed || !sessionToken) return;
+    const files = pendingAttachments.slice();
+    if ((!trimmed && !files.length) || !sessionToken || conversationResolved || uploadingAttachments) {
+      return;
+    }
     // Choosing a suggestion or typing enters free-hand thereafter
     setFreeHandMode(true);
     document.querySelectorAll('.agt-choice-stack').forEach(function (el) {
@@ -1462,9 +2197,11 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       clearConnectingIndicator();
     }
 
-    addCustomerMessage(trimmed);
+    addCustomerMessage(trimmed, files);
+    pendingAttachments = [];
+    renderAttachPreview();
     inputEl.value = '';
-    sendBtnEl.disabled = true;
+    updateSendEnabled();
     resizeComposerInput();
     toggleTyping(true);
     showProcessStatus('thinking');
@@ -1472,10 +2209,11 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       const data = await api('/session/message', 'POST', {
         sessionToken: sessionToken,
         message: trimmed,
+        attachments: files,
       });
       if (data && (data.widgetBuild || data.orchestratorBuild)) {
         console.info('[Agentra builds]', {
-          widgetBuild: data.widgetBuild || '2026-07-16-01',
+          widgetBuild: data.widgetBuild || '2026-07-30-01',
           orchestratorBuild: data.orchestratorBuild,
           turnDebug: data.turnDebug || null,
         });
@@ -1489,7 +2227,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
       saveChatHistoryEntry({
         sessionToken: sessionToken,
         email: visitorEmail,
-        preview: trimmed.slice(0, 80),
+        preview: (trimmed || (files[0] && files[0].filename) || 'Attachment').slice(0, 80),
         agentName: agentCfg?.agentName,
         updatedAt: new Date().toISOString(),
       });
@@ -1511,13 +2249,14 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     } catch (err) {
       toggleTyping(false);
       hideProcessStatus();
+      console.error('[Agentra widget] Message request failed:', err);
       addAgentMessage({
         role: 'bot',
-        body: err.message || 'Something went wrong. Please try again.',
+        body: 'I could not send that message. Please try again in a moment.',
         senderName: agentCfg?.agentName,
       });
     } finally {
-      sendBtnEl.disabled = !inputEl.value.trim();
+      updateSendEnabled();
     }
   }
 
@@ -1542,6 +2281,9 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     messagesEl = document.getElementById('agt-messages');
     inputEl = document.getElementById('agt-input');
     sendBtnEl = document.getElementById('agt-send-btn');
+    attachBtnEl = document.getElementById('agt-attach-btn');
+    fileInputEl = document.getElementById('agt-file-input');
+    attachPreviewEl = document.getElementById('agt-attach-preview');
     typingEl = document.getElementById('agt-typing');
     processStepsEl = document.getElementById('agt-process-steps');
     badgeEl = document.getElementById('agt-badge');
@@ -1552,6 +2294,12 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     emailBtnEl = document.getElementById('agt-email-btn');
     emailErrorEl = document.getElementById('agt-email-error');
     inputBarEl = document.getElementById('agt-input-bar');
+    updateAttachVisibility();
+    // Remembered so the bot identity can be restored when a new chat starts.
+    const headerAv = document.querySelector('#agt-chat-header .agt-chat-header-av');
+    if (headerAv && headerAv.dataset.botInner == null) {
+      headerAv.dataset.botInner = headerAv.innerHTML;
+    }
     wireNotificationEvents();
     wireCustomScrollbar();
     wirePanelScrollContainment();
@@ -1575,15 +2323,11 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     closeBtn?.addEventListener('click', closePanel);
 
     tabHomeEl?.addEventListener('click', function () {
-      tabHomeEl.classList.add('active');
-      tabChatEl.classList.remove('active');
-      document.getElementById('agt-home')?.classList.remove('gone');
-      document.getElementById('agt-chat')?.classList.add('gone');
-      emailGateEl?.classList.add('gone');
-      document.getElementById('agt-chat-header')?.style.setProperty('display', 'none');
-      if (emailInputEl) delete emailInputEl.dataset.initialMsg;
-      inChat = false;
-      renderChatHistory();
+      if (inChat && sessionToken && !conversationResolved) {
+        confirmLeaveChat();
+        return;
+      }
+      goHome();
     });
 
     tabChatEl?.addEventListener('click', function () {
@@ -1592,11 +2336,31 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     });
 
     backBtn?.addEventListener('click', function () {
-      tabHomeEl?.click();
+      confirmLeaveChat();
     });
 
-    document.getElementById('agt-new-chat-btn')?.addEventListener('click', function () {
-      startNewChat();
+    document.getElementById('agt-menu-btn')?.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      const menu = document.getElementById('agt-header-menu');
+      toggleHeaderMenu(menu ? menu.hidden : true);
+    });
+    document.getElementById('agt-header-menu')?.addEventListener('click', function (ev) {
+      const item =
+        ev.target && ev.target.closest ? ev.target.closest('[data-menu-action]') : null;
+      if (!item || item.disabled) return;
+      const action = item.getAttribute('data-menu-action');
+      closeHeaderMenu();
+      if (action === 'new-chat') confirmStartNewChat();
+      if (action === 'end-chat') confirmEndChat();
+    });
+    document.addEventListener('click', function (ev) {
+      const wrap = document.getElementById('agt-menu-wrap');
+      if (!wrap) return;
+      if (ev.target && wrap.contains(ev.target)) return;
+      closeHeaderMenu();
+    });
+    document.getElementById('agt-confirm')?.addEventListener('click', function (ev) {
+      if (ev.target === ev.currentTarget) hideConfirm();
     });
 
     document.querySelectorAll('.agt-qr-item').forEach(function (el) {
@@ -1666,11 +2430,29 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     });
 
     inputEl?.addEventListener('input', function () {
-      sendBtnEl.disabled = !inputEl.value.trim();
+      updateSendEnabled();
       resizeComposerInput();
     });
     inputEl?.addEventListener('focus', function () {
       resizeComposerInput();
+    });
+
+    attachBtnEl?.addEventListener('click', function () {
+      if (!agentJoined || conversationResolved || uploadingAttachments) return;
+      fileInputEl?.click();
+    });
+    fileInputEl?.addEventListener('change', function () {
+      const files = fileInputEl.files;
+      if (files && files.length) uploadWidgetFiles(files);
+      fileInputEl.value = '';
+    });
+    attachPreviewEl?.addEventListener('click', function (ev) {
+      const btn = ev.target && ev.target.closest ? ev.target.closest('[data-attach-index]') : null;
+      if (!btn) return;
+      const index = Number(btn.getAttribute('data-attach-index'));
+      if (!Number.isInteger(index)) return;
+      pendingAttachments.splice(index, 1);
+      renderAttachPreview();
     });
 
     sendBtnEl?.addEventListener('click', function () {
@@ -1738,6 +2520,7 @@ import { buildHTML, buildCSS, esc, formatAgentText } from './widgetTemplate.js';
     freeHandMode = false;
     lastMessageTs = null;
     unreadCount = 0;
+    resetHandoffTracking();
     seenMessageKeys.clear();
     isOpen = false;
 

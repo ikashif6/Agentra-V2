@@ -59,6 +59,11 @@ export function buildAssistantMessages(
       }),
     );
   } else if (uiResult?.ui?.contentType === "input_form") {
+    // The confirmation card already lists the address. Model prose here has
+    // claimed the address was unchanged, so state the ask deterministically.
+    if (uiResult.ui.form?.formId === "address_confirm") {
+      body = "Here's the new shipping address I'll send to. Confirm and I'll update the order.";
+    }
     messages.push(
       makeMessage({
         role: "assistant",
@@ -426,7 +431,10 @@ function orderIntroText(
     return sanitizeCustomerText(text);
   }
 
-  if (text && text.length < 220 && !/myshopify/i.test(text)) {
+  // Keep the model's own answer — it addresses what was actually asked. Only very
+  // long replies fall through to the status summary, since the summary answers a
+  // status question and nothing else.
+  if (text && text.length < 700 && !/myshopify/i.test(text)) {
     return sanitizeCustomerText(text);
   }
 
