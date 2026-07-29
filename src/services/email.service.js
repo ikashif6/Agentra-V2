@@ -346,6 +346,7 @@ async function sendChannelReplyViaResend({
   to,
   subject,
   html,
+  text,
   headers = {},
 }) {
   if (!process.env.RESEND_API_KEY) {
@@ -361,6 +362,7 @@ async function sendChannelReplyViaResend({
     replyTo: fromAddress,
     subject,
     html,
+    text,
     headers: Object.keys(headers).length ? headers : undefined,
   });
 

@@ -123,22 +123,6 @@ function resolveLookupEmail(ticket, customer, messageText) {
   return '';
 }
 
-function formatOrderPlainText(card) {
-  if (!card) return '';
-  const lines = [
-    `Order ${card.orderNumber || ''}`.trim(),
-    card.fulfillmentStatus ? `Fulfillment: ${card.fulfillmentStatus}` : null,
-    card.financialStatus ? `Payment: ${card.financialStatus}` : null,
-    card.totalDisplay ? `Total: ${card.totalDisplay}` : null,
-    card.tracking?.number
-      ? `Tracking: ${[card.tracking.company, card.tracking.number].filter(Boolean).join(' ')}`
-      : null,
-    card.tracking?.url ? `Tracking link: ${card.tracking.url}` : null,
-    card.statusUrl ? `Order status: ${card.statusUrl}` : null,
-  ].filter(Boolean);
-  return lines.join('\n');
-}
-
 function formatProductsPlainText(cards) {
   if (!cards?.length) return '';
   return (
@@ -283,8 +267,13 @@ async function processTicketAiReply(companyId, ticketId, customerText) {
   }
 
   const intent = await groqClassify(trimmed);
+  const explicitlyNeedsOrderLookup =
+    /\b(track(?:ing)?|shipment|delivery|refund|cancel(?:lation)?|return|exchange)\b/i.test(
+      trimmed,
+    ) ||
+    /\b(?:where is|status of|what happened to)\s+(?:my\s+)?order\b/i.test(trimmed);
   const needsOrderHelp =
-    ORDER_INTENTS.has(intent) || Boolean(orderNumber) || /\b(order|tracking|shipment|delivery|refund|cancel)\b/i.test(trimmed);
+    ORDER_INTENTS.has(intent) || Boolean(orderNumber) || explicitlyNeedsOrderLookup;
 
   const knowledge = await retrieveKnowledge(company._id, trimmed, 4);
   const knowledgeBlock = knowledge.length
@@ -297,7 +286,7 @@ async function processTicketAiReply(companyId, ticketId, customerText) {
 
   if (needsOrderHelp && config.allowedActions?.lookupOrder !== false) {
     const wantsSpecificOrder =
-      ORDER_INTENTS.has(intent) || Boolean(orderNumber) || /\b(tracking|shipment|delivery|refund|cancel)\b/i.test(trimmed);
+      ORDER_INTENTS.has(intent) || Boolean(orderNumber) || explicitlyNeedsOrderLookup;
     const needOrderNumber =
       Boolean(config.requireOrderVerification) &&
       !orderNumber &&
@@ -346,7 +335,6 @@ async function processTicketAiReply(companyId, ticketId, customerText) {
 
       const card = formatOrderCard(matchedOrder);
       toolContext = `Order: ${JSON.stringify(card)}`;
-      prefaceParts.push(formatOrderPlainText(card));
 
       if (intent === 'refund') {
         if (!config.allowedActions?.refundOrder) {
@@ -407,9 +395,6 @@ async function processTicketAiReply(companyId, ticketId, customerText) {
       toolContext = orders.length
         ? `Recent orders: ${JSON.stringify(orders.slice(0, 3).map((o) => formatOrderCard(o)))}`
         : 'No orders found for this email.';
-      if (orders.length === 1) {
-        prefaceParts.push(formatOrderPlainText(formatOrderCard(orders[0])));
-      }
     }
   }
 

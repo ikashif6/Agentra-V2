@@ -121,8 +121,70 @@ function getStoredImapConfig(company) {
   };
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function linkify(value) {
+  return value.replace(
+    /(https?:\/\/[^\s<]+)/g,
+    (url) =>
+      `<a href="${url}" style="color:#5b35b5;text-decoration:underline;word-break:break-word;">${url}</a>`,
+  );
+}
+
+/**
+ * AI replies are plain text, but the email transport expects HTML. Convert
+ * paragraphs and lists into a small email-safe layout instead of letting mail
+ * clients collapse every newline into one long line.
+ *
+ * Manual replies from the rich-text editor already contain HTML and pass
+ * through unchanged.
+ */
+function formatSupportEmail(content) {
+  const raw = String(content || '').trim();
+  if (!raw) return { html: '', text: '' };
+  if (
+    /<\/?(?:p|div|br|span|strong|em|b|i|u|a|ul|ol|li|blockquote|h[1-6]|table|tr|td|th)\b[^>]*>/i.test(
+      raw,
+    )
+  ) {
+    return { html: raw, text: require('./facebook.service').htmlToPlainText(raw) };
+  }
+
+  const text = raw.replace(/\r\n?/g, '\n');
+  const blocks = text.split(/\n{2,}/).filter((block) => block.trim());
+  const html = blocks
+    .map((block) => {
+      const lines = block.split('\n').map((line) => line.trim());
+      if (lines.every((line) => /^[-*]\s+/.test(line))) {
+        const items = lines
+          .map((line) => `<li style="margin:0 0 6px;">${linkify(escapeHtml(line.replace(/^[-*]\s+/, '')))}</li>`)
+          .join('');
+        return `<ul style="margin:0 0 16px;padding-left:22px;">${items}</ul>`;
+      }
+      return `<p style="margin:0 0 16px;line-height:1.65;">${linkify(
+        escapeHtml(lines.join('\n')),
+      ).replace(/\n/g, '<br>')}</p>`;
+    })
+    .join('');
+
+  return {
+    text,
+    html:
+      '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#273142;max-width:640px;">' +
+      html +
+      '</div>',
+  };
+}
+
 // ─── Outbound reply ───────────────────────────────────────────────────────────
-async function sendReplyForTicket(companyId, ticket, html) {
+async function sendReplyForTicket(companyId, ticket, content) {
   const to = ticket.email?.fromAddress;
   if (!to) throw new Error('This ticket has no email recipient');
 
@@ -153,6 +215,7 @@ async function sendReplyForTicket(companyId, ticket, html) {
     headers['References'] = (ticket.email.references || ticket.email.lastMessageId).trim();
   }
 
+  const formatted = formatSupportEmail(content);
   let info;
   if (integration.outboundVia === 'resend') {
     const { sendChannelReplyViaResend } = require('./email.service');
@@ -161,7 +224,8 @@ async function sendReplyForTicket(companyId, ticket, html) {
       fromAddress: stored.address,
       to,
       subject,
-      html,
+      html: formatted.html,
+      text: formatted.text,
       headers,
     });
   } else {
@@ -169,7 +233,8 @@ async function sendReplyForTicket(companyId, ticket, html) {
       from,
       to,
       subject,
-      html,
+      html: formatted.html,
+      text: formatted.text,
       headers,
     });
   }
@@ -254,6 +319,7 @@ module.exports = {
   connectImap,
   disconnectEmail,
   sendReplyForTicket,
+  formatSupportEmail,
   pollCompany,
   pollAllMailboxes,
   providerPresets: imapService.PROVIDER_PRESETS,
