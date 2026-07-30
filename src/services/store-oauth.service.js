@@ -273,37 +273,9 @@ function buildShopifyInstallUrl({
       'Shopify is not configured on the server. Add SHOPIFY_API_KEY and SHOPIFY_API_SECRET.',
     );
   }
-  const domain = normalizeShopDomain(shopDomain);
-
-  if (usesCustomInstallFlow()) {
-    try {
-      const customInstallUrl = buildShopifyCustomInstallUrl(domain);
-      if (customInstallUrl) return customInstallUrl;
-    } catch (err) {
-      const message = String(err?.message || '');
-      // Partner Dashboard only shows Copy — expired custom links cannot be refreshed in-UI.
-      // If the app is still installed on the shop, standard OAuth can re-authorize.
-      // First-time installs after uninstall still need Partner Support / a new app distribution.
-      if (/install link has expired/i.test(message)) {
-        console.warn(
-          '[shopify] custom install link expired — falling back to oauth/authorize for',
-          domain,
-        );
-        return buildShopifyAuthorizeUrl({
-          shopDomain: domain,
-          companyId,
-          subdomain,
-          userId,
-          returnOrigin,
-          returnPath,
-        });
-      }
-      throw err;
-    }
-  }
-
+  // Public Partner apps use standard OAuth for any shop (no per-store custom install links).
   return buildShopifyAuthorizeUrl({
-    shopDomain: domain,
+    shopDomain: normalizeShopDomain(shopDomain),
     companyId,
     subdomain,
     userId,

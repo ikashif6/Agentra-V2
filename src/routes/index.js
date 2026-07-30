@@ -24,6 +24,7 @@ const workspaceRoutes    = require('./workspace.routes');
 const businessHoursRoutes = require('./business-hours.routes');
 const storeRoutes        = require('./store.routes');
 const storeWebhookRoutes = require('./store-webhook.routes');
+const shopifyComplianceRoutes = require('./shopify-compliance.routes');
 const liveChatRoutes     = require('./live-chat.routes');
 const widgetRoutes       = require('./widget.routes');
 const aiAgentRoutes      = require('./ai-agent.routes');
@@ -76,5 +77,6 @@ router.use('/widget',        widgetRoutes);
 router.use('/webhooks/facebook', facebookWebhookRoutes);
 router.use('/webhooks/tiktok', tiktokWebhookRoutes);
 router.use('/webhooks/store', storeWebhookRoutes);
+router.use('/webhooks/shopify', shopifyComplianceRoutes);
 
 module.exports = router;
