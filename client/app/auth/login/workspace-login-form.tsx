@@ -21,6 +21,7 @@ import { Company, User } from "@/lib/types";
 import { getWorkspaceDisplayHost } from "@/lib/workspace-host";
 import { useMainLoginUrl } from "@/hooks/use-main-login-url";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const schema = z.object({
   email: z.string().email("Valid email required"),
@@ -76,19 +77,21 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
   }, [searchParams, router]);
 
   const startSocialLogin = async (provider: "google" | "microsoft") => {
+    if (provider === "microsoft") {
+      toast.message("Microsoft sign-in is coming soon.");
+      return;
+    }
+
     setLoading(true);
     setFormError(null);
     try {
       const returnOrigin = window.location.origin;
-      const { data } =
-        provider === "google"
-          ? await authApi.googleLoginUrl(workspace, returnOrigin)
-          : await authApi.microsoftLoginUrl(workspace, returnOrigin);
+      const { data } = await authApi.googleLoginUrl(workspace, returnOrigin);
       const url = data.data?.url as string | undefined;
       if (!url) throw new Error("Missing OAuth URL");
       window.location.assign(url);
     } catch (err: unknown) {
-      const { message } = getApiError(err, `Unable to start ${provider} sign-in`);
+      const { message } = getApiError(err, "Unable to start Google sign-in");
       setFormError({ message });
       setLoading(false);
     }

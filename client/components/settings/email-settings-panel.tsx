@@ -20,12 +20,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { emailChannelApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
-import type { EmailChannelIntegration, EmailProviderSupport } from "@/lib/types";
+import type { EmailChannelIntegration } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import SettingsPanelShell from "./settings-panel-shell";
 
 const DEFAULT_EMAIL: EmailChannelIntegration = { status: "disconnected" };
-const DEFAULT_PROVIDERS: EmailProviderSupport = { imap: true, google: false, microsoft: false };
 
 const CAPABILITIES = [
   {
@@ -88,7 +87,6 @@ function formatConnectedAt(value?: string | null) {
 
 export default function EmailSettingsPanel() {
   const [email, setEmail] = useState<EmailChannelIntegration>(DEFAULT_EMAIL);
-  const [providers, setProviders] = useState<EmailProviderSupport>(DEFAULT_PROVIDERS);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState(false);
 
@@ -111,7 +109,6 @@ export default function EmailSettingsPanel() {
     try {
       const { data } = await emailChannelApi.getStatus();
       setEmail(data.data.email ?? DEFAULT_EMAIL);
-      setProviders(data.data.providers ?? DEFAULT_PROVIDERS);
     } catch (err: unknown) {
       const { message } = getApiError(err, "Failed to load email settings");
       toast.error(message);
@@ -144,23 +141,6 @@ export default function EmailSettingsPanel() {
       /* best effort */
     }
   }, [form.email]);
-
-  const startOAuth = async (provider: "google" | "microsoft") => {
-    try {
-      const returnOrigin = window.location.origin;
-      const returnPath = "/settings?item=email";
-      const { data } =
-        provider === "google"
-          ? await emailChannelApi.googleOAuthUrl(returnOrigin, returnPath)
-          : await emailChannelApi.microsoftOAuthUrl(returnOrigin, returnPath);
-      const url = data.data?.url as string | undefined;
-      if (!url) throw new Error("Missing OAuth URL");
-      window.location.assign(url);
-    } catch (err: unknown) {
-      const { message } = getApiError(err, `Could not start ${provider} connect`);
-      toast.error(message);
-    }
-  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -353,38 +333,32 @@ export default function EmailSettingsPanel() {
         <div className="mt-6 space-y-3">
           <button
             type="button"
-            onClick={() => void startOAuth("google")}
-            disabled={!providers.google}
-            className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => toast.message("Gmail connect is coming soon.")}
+            className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60 opacity-60"
           >
             <GoogleGlyph className="size-6 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-foreground">Connect with Google</p>
               <p className="text-xs text-muted-foreground">Gmail &amp; Google Workspace · one click</p>
             </div>
-            {!providers.google ? (
-              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Soon
-              </span>
-            ) : null}
+            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Coming soon
+            </span>
           </button>
 
           <button
             type="button"
-            onClick={() => void startOAuth("microsoft")}
-            disabled={!providers.microsoft}
-            className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => toast.message("Microsoft email connect is coming soon.")}
+            className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 opacity-60"
           >
             <MicrosoftGlyph className="size-6 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-foreground">Connect with Microsoft</p>
               <p className="text-xs text-muted-foreground">Outlook &amp; Microsoft 365 · one click</p>
             </div>
-            {!providers.microsoft ? (
-              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Soon
-              </span>
-            ) : null}
+            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Coming soon
+            </span>
           </button>
 
           <button

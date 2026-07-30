@@ -23,6 +23,7 @@ import {
   normalizeWebsiteUrl,
 } from "@/lib/workspace-host";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const schema = z.object({
   companyName: z
@@ -197,6 +198,11 @@ export function CreateAccountForm() {
   };
 
   const startSocialSignup = async (provider: "google" | "microsoft") => {
+    if (provider === "microsoft") {
+      toast.message("Microsoft sign-up is coming soon.");
+      return;
+    }
+
     setFormError(null);
     const valid = await trigger(["companyName", "websiteUrl"]);
     if (!valid) {
@@ -223,15 +229,12 @@ export function CreateAccountForm() {
         website: normalizeWebsiteUrl(values.websiteUrl),
         returnOrigin: window.location.origin,
       };
-      const { data } =
-        provider === "google"
-          ? await authApi.googleSignupUrl(payload)
-          : await authApi.microsoftSignupUrl(payload);
+      const { data } = await authApi.googleSignupUrl(payload);
       const url = data.data?.url as string | undefined;
       if (!url) throw new Error("Missing OAuth URL");
       window.location.assign(url);
     } catch (err: unknown) {
-      const { message } = getApiError(err, `Unable to start ${provider} signup`);
+      const { message } = getApiError(err, "Unable to start Google signup");
       setFormError(message);
       setLoading(false);
     }
