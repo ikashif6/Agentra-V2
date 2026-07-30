@@ -139,6 +139,18 @@ export const authApi = {
       },
       headers: { "x-tenant": workspace },
     }),
+  googleSignupUrl: (data: {
+    companyName: string;
+    subdomain: string;
+    website: string;
+    returnOrigin?: string;
+  }) => api.post("/auth/google/signup-url", data),
+  microsoftSignupUrl: (data: {
+    companyName: string;
+    subdomain: string;
+    website: string;
+    returnOrigin?: string;
+  }) => api.post("/auth/microsoft/signup-url", data),
   completeOAuthLogin: (code: string) => api.post("/auth/oauth/complete", { code }),
 };
 

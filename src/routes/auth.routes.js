@@ -137,12 +137,14 @@ router.get(
   authLimiter,
   authController.getGoogleLoginUrl,
 );
+router.post('/google/signup-url', authLimiter, authController.getGoogleSignupUrl);
 router.get('/google/callback', authController.googleLoginCallback);
 router.get(
   '/microsoft/url',
   authLimiter,
   authController.getMicrosoftLoginUrl,
 );
+router.post('/microsoft/signup-url', authLimiter, authController.getMicrosoftSignupUrl);
 router.get('/microsoft/callback', authController.microsoftLoginCallback);
 router.post(
   '/oauth/complete',

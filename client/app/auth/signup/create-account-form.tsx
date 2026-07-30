@@ -6,12 +6,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
 import { Check, Eye, EyeOff, Loader2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthFormAlert } from "@/components/auth/auth-form-alert";
 import { authInputClassName, authRadiusClass } from "@/components/auth/auth-panel-background";
-import { onboardingApi } from "@/lib/api";
+import { GoogleIcon, MicrosoftIcon } from "@/components/auth/social-auth-icons";
+import { authApi, onboardingApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
 import {
   deriveSubdomainFromWebsite,
@@ -90,6 +92,7 @@ function PasswordRequirements({ password }: { password: string }) {
 }
 
 export function CreateAccountForm() {
+  const searchParams = useSearchParams();
   const [showPwd, setShowPwd] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -102,6 +105,8 @@ export function CreateAccountForm() {
     register,
     handleSubmit,
     watch,
+    getValues,
+    trigger,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -116,6 +121,12 @@ export function CreateAccountForm() {
     () => deriveSubdomainFromWebsite(websiteUrl ?? ""),
     [websiteUrl],
   );
+
+  useEffect(() => {
+    if (searchParams.get("oauth") === "error") {
+      setFormError(searchParams.get("message") || "Social signup failed. Please try again.");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!derivedSubdomain || derivedSubdomain.length < 2) {
@@ -180,6 +191,47 @@ export function CreateAccountForm() {
       const { message } = getApiError(err, "Something went wrong. Please try again.");
       setFormError(message);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const startSocialSignup = async (provider: "google" | "microsoft") => {
+    setFormError(null);
+    const valid = await trigger(["companyName", "websiteUrl"]);
+    if (!valid) {
+      setFormError("Enter your company name and website before continuing.");
+      return;
+    }
+
+    const values = getValues();
+    const subdomain = deriveSubdomainFromWebsite(values.websiteUrl);
+    if (!isValidSubdomainFormat(subdomain)) {
+      setFormError("Could not derive a valid workspace URL from that website.");
+      return;
+    }
+    if (subdomainStatus === "taken") {
+      setFormError("That workspace URL is already taken. Try a different website.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        companyName: values.companyName.trim(),
+        subdomain,
+        website: normalizeWebsiteUrl(values.websiteUrl),
+        returnOrigin: window.location.origin,
+      };
+      const { data } =
+        provider === "google"
+          ? await authApi.googleSignupUrl(payload)
+          : await authApi.microsoftSignupUrl(payload);
+      const url = data.data?.url as string | undefined;
+      if (!url) throw new Error("Missing OAuth URL");
+      window.location.assign(url);
+    } catch (err: unknown) {
+      const { message } = getApiError(err, `Unable to start ${provider} signup`);
+      setFormError(message);
       setLoading(false);
     }
   };
@@ -331,6 +383,41 @@ export function CreateAccountForm() {
           Create account
         </Button>
       </form>
+
+      <div className="relative py-1">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-background px-2 text-muted-foreground">Or sign up with</span>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Button
+          type="button"
+          variant="outline"
+          className={`h-10 w-full ${authRadiusClass}`}
+          disabled={loading}
+          onClick={() => void startSocialSignup("google")}
+        >
+          <GoogleIcon className="mr-2 size-4" />
+          Google
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className={`h-10 w-full ${authRadiusClass}`}
+          disabled={loading}
+          onClick={() => void startSocialSignup("microsoft")}
+        >
+          <MicrosoftIcon className="mr-2 size-4" />
+          Microsoft
+        </Button>
+      </div>
+      <p className="-mt-2 text-center text-xs text-muted-foreground">
+        Enter your company name and website first. Your name and email come from your provider.
+      </p>
 
       <p className="text-sm text-muted-foreground">
         Already have an account?{" "}

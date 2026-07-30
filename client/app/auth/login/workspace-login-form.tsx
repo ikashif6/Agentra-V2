@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthFormAlert } from "@/components/auth/auth-form-alert";
 import { authInputClassName, authRadiusClass } from "@/components/auth/auth-panel-background";
+import { GoogleIcon, MicrosoftIcon } from "@/components/auth/social-auth-icons";
 import { authApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
 import { setSubdomain } from "@/lib/auth";
@@ -226,6 +227,7 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
           disabled={loading}
           onClick={() => void startSocialLogin("google")}
         >
+          <GoogleIcon className="mr-2 size-4" />
           Google
         </Button>
         <Button
@@ -235,6 +237,7 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
           disabled={loading}
           onClick={() => void startSocialLogin("microsoft")}
         >
+          <MicrosoftIcon className="mr-2 size-4" />
           Microsoft
         </Button>
       </div>

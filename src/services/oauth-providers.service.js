@@ -109,7 +109,15 @@ const MS_EMAIL_SCOPES = [
   'Mail.Send',
 ].join(' ');
 
-function buildGoogleAuthUrl({ purpose, companyId, subdomain, userId, returnOrigin, returnPath }) {
+function buildGoogleAuthUrl({
+  purpose,
+  companyId,
+  subdomain,
+  userId,
+  returnOrigin,
+  returnPath,
+  signupData,
+}) {
   if (!isGoogleConfigured()) throw new Error('Google OAuth is not configured');
   const kind = purpose.includes('email') ? 'email' : 'auth';
   const state = signOAuthState({
@@ -119,6 +127,7 @@ function buildGoogleAuthUrl({ purpose, companyId, subdomain, userId, returnOrigi
     userId: userId?.toString(),
     returnOrigin: normalizeReturnOrigin(returnOrigin),
     returnPath: normalizeReturnPath(returnPath),
+    signupData,
   });
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   url.searchParams.set('client_id', process.env.GOOGLE_CLIENT_ID);
@@ -131,7 +140,15 @@ function buildGoogleAuthUrl({ purpose, companyId, subdomain, userId, returnOrigi
   return url.toString();
 }
 
-function buildMicrosoftAuthUrl({ purpose, companyId, subdomain, userId, returnOrigin, returnPath }) {
+function buildMicrosoftAuthUrl({
+  purpose,
+  companyId,
+  subdomain,
+  userId,
+  returnOrigin,
+  returnPath,
+  signupData,
+}) {
   if (!isMicrosoftConfigured()) throw new Error('Microsoft OAuth is not configured');
   const kind = purpose.includes('email') ? 'email' : 'auth';
   const state = signOAuthState({
@@ -141,6 +158,7 @@ function buildMicrosoftAuthUrl({ purpose, companyId, subdomain, userId, returnOr
     userId: userId?.toString(),
     returnOrigin: normalizeReturnOrigin(returnOrigin),
     returnPath: normalizeReturnPath(returnPath),
+    signupData,
   });
   const url = new URL(`https://login.microsoftonline.com/${microsoftTenant()}/oauth2/v2.0/authorize`);
   url.searchParams.set('client_id', process.env.MS_CLIENT_ID);

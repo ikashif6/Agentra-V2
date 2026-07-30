@@ -903,6 +903,158 @@ exports.getMicrosoftLoginUrl = async (req, res, next) => {
   }
 };
 
+function validateSocialSignupInput(body) {
+  const companyName = String(body.companyName || '').trim();
+  const subdomain = String(body.subdomain || '').trim().toLowerCase();
+  const website = String(body.website || '').trim();
+
+  if (companyName.length < 2 || companyName.length > 100) {
+    throw new Error('Company name must be between 2 and 100 characters');
+  }
+  if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain)) {
+    throw new Error('Invalid workspace URL');
+  }
+  let parsedWebsite;
+  try {
+    parsedWebsite = new URL(website);
+  } catch {
+    throw new Error('Enter a valid website URL');
+  }
+  if (!['http:', 'https:'].includes(parsedWebsite.protocol)) {
+    throw new Error('Website must use HTTP or HTTPS');
+  }
+
+  return {
+    companyName,
+    subdomain,
+    website: parsedWebsite.toString(),
+  };
+}
+
+async function getSocialSignupUrl(req, res, next, provider) {
+  try {
+    const oauth = require('../services/oauth-providers.service');
+    const configured =
+      provider === 'google' ? oauth.isGoogleConfigured() : oauth.isMicrosoftConfigured();
+    if (!configured) {
+      return response.badRequest(res, `${provider === 'google' ? 'Google' : 'Microsoft'} signup is not configured`);
+    }
+
+    let signupData;
+    try {
+      signupData = validateSocialSignupInput(req.body);
+    } catch (err) {
+      return response.badRequest(res, err.message);
+    }
+
+    const existing = await Company.findOne({ subdomain: signupData.subdomain }).select('_id');
+    if (existing) return response.conflict(res, 'That workspace URL is already taken');
+
+    const builder =
+      provider === 'google' ? oauth.buildGoogleAuthUrl : oauth.buildMicrosoftAuthUrl;
+    const url = builder({
+      purpose: `${provider}_signup`,
+      subdomain: signupData.subdomain,
+      returnOrigin: req.body.returnOrigin || req.headers.origin,
+      returnPath: '/auth/signup',
+      signupData,
+    });
+    return response.success(res, { url });
+  } catch (err) {
+    next(err);
+  }
+}
+
+exports.getGoogleSignupUrl = (req, res, next) =>
+  getSocialSignupUrl(req, res, next, 'google');
+
+exports.getMicrosoftSignupUrl = (req, res, next) =>
+  getSocialSignupUrl(req, res, next, 'microsoft');
+
+async function finishSocialSignup({ provider, profile, signupData, req, res }) {
+  const mongoose = require('mongoose');
+  const oauth = require('../services/oauth-providers.service');
+  const data = validateSocialSignupInput(signupData || {});
+  const idField = provider === 'google' ? 'googleId' : 'microsoftId';
+
+  const [subdomainTaken, existingOwner] = await Promise.all([
+    Company.findOne({ subdomain: data.subdomain }).select('_id'),
+    User.findOne({ email: profile.email, role: 'owner' }).select('_id'),
+  ]);
+  if (subdomainTaken) {
+    return res.redirect(
+      oauth.buildAppRedirect(
+        data.subdomain,
+        '/auth/signup',
+        { oauth: 'error', message: 'That workspace URL is already taken' },
+        signupData.returnOrigin,
+      ),
+    );
+  }
+  if (existingOwner) {
+    return res.redirect(
+      oauth.buildAppRedirect(
+        data.subdomain,
+        '/auth/signup',
+        { oauth: 'error', message: 'An owner account already exists for this email. Sign in instead.' },
+        signupData.returnOrigin,
+      ),
+    );
+  }
+
+  let company;
+  try {
+    company = await Company.create({
+      name: data.companyName,
+      subdomain: data.subdomain,
+      website: data.website,
+      owner: new mongoose.Types.ObjectId(),
+      plan: {
+        name: 'pro',
+        status: 'trialing',
+        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const user = await User.create({
+      firstName: profile.firstName || profile.name || 'Workspace',
+      lastName: profile.lastName || '',
+      email: profile.email,
+      company: company._id,
+      role: 'owner',
+      isEmailVerified: true,
+      [idField]: profile.id,
+    });
+
+    company.owner = user._id;
+    company.usage.totalUsers = 1;
+    await company.save();
+
+    const loaded = await User.findById(user._id).select('+refreshTokens');
+    const { accessToken, refreshToken } = await issueTokenPair(loaded, company, clientMeta(req));
+    logUserLogin({ company, user: loaded, req });
+
+    const resultCode = tokenUtil.signOAuthState({
+      purpose: 'oauth_login_result',
+      accessToken,
+      refreshToken,
+      subdomain: company.subdomain,
+    });
+
+    return res.redirect(
+      oauth.buildAppRedirect(
+        company.subdomain,
+        '/auth/oauth/complete',
+        { code: resultCode, provider, created: '1' },
+        null,
+      ),
+    );
+  } catch (err) {
+    if (company?._id) await Company.findByIdAndDelete(company._id).catch(() => {});
+    throw err;
+  }
+}
+
 async function finishStaffSocialLogin({
   provider,
   profile,
@@ -983,13 +1135,16 @@ exports.googleLoginCallback = async (req, res) => {
     } catch {
       return res.status(400).send('OAuth session expired');
     }
-    if (payload.purpose !== 'google_auth') return res.status(400).send('Invalid OAuth state');
+    if (!['google_auth', 'google_signup'].includes(payload.purpose)) {
+      return res.status(400).send('Invalid OAuth state');
+    }
 
     if (error || !code) {
+      const targetPath = payload.purpose === 'google_signup' ? '/auth/signup' : '/auth/login';
       return res.redirect(
         oauth.buildAppRedirect(
           payload.subdomain,
-          '/auth/login',
+          targetPath,
           { oauth: 'error', message: errorDescription || error || 'Google login cancelled' },
           payload.returnOrigin,
         ),
@@ -999,14 +1154,25 @@ exports.googleLoginCallback = async (req, res) => {
     const tokens = await oauth.exchangeGoogleCode(String(code), 'auth');
     const profile = await oauth.fetchGoogleProfile(tokens.access_token);
     if (!profile.email) {
+      const targetPath = payload.purpose === 'google_signup' ? '/auth/signup' : '/auth/login';
       return res.redirect(
         oauth.buildAppRedirect(
           payload.subdomain,
-          '/auth/login',
+          targetPath,
           { oauth: 'error', message: 'Google did not return an email' },
           payload.returnOrigin,
         ),
       );
+    }
+
+    if (payload.purpose === 'google_signup') {
+      return finishSocialSignup({
+        provider: 'google',
+        profile,
+        signupData: { ...payload.signupData, returnOrigin: payload.returnOrigin },
+        req,
+        res,
+      });
     }
 
     return finishStaffSocialLogin({
@@ -1035,13 +1201,17 @@ exports.microsoftLoginCallback = async (req, res) => {
     } catch {
       return res.status(400).send('OAuth session expired');
     }
-    if (payload.purpose !== 'microsoft_auth') return res.status(400).send('Invalid OAuth state');
+    if (!['microsoft_auth', 'microsoft_signup'].includes(payload.purpose)) {
+      return res.status(400).send('Invalid OAuth state');
+    }
 
     if (error || !code) {
+      const targetPath =
+        payload.purpose === 'microsoft_signup' ? '/auth/signup' : '/auth/login';
       return res.redirect(
         oauth.buildAppRedirect(
           payload.subdomain,
-          '/auth/login',
+          targetPath,
           { oauth: 'error', message: errorDescription || error || 'Microsoft login cancelled' },
           payload.returnOrigin,
         ),
@@ -1051,14 +1221,26 @@ exports.microsoftLoginCallback = async (req, res) => {
     const tokens = await oauth.exchangeMicrosoftCode(String(code), 'auth');
     const profile = await oauth.fetchMicrosoftProfile(tokens.access_token);
     if (!profile.email) {
+      const targetPath =
+        payload.purpose === 'microsoft_signup' ? '/auth/signup' : '/auth/login';
       return res.redirect(
         oauth.buildAppRedirect(
           payload.subdomain,
-          '/auth/login',
+          targetPath,
           { oauth: 'error', message: 'Microsoft did not return an email' },
           payload.returnOrigin,
         ),
       );
+    }
+
+    if (payload.purpose === 'microsoft_signup') {
+      return finishSocialSignup({
+        provider: 'microsoft',
+        profile,
+        signupData: { ...payload.signupData, returnOrigin: payload.returnOrigin },
+        req,
+        res,
+      });
     }
 
     return finishStaffSocialLogin({
