@@ -91,6 +91,58 @@ async function connectImap(company, input) {
   return sanitizeEmailIntegration(company.channelIntegrations.email);
 }
 
+async function connectGoogleOAuth(company, { tokens, profile }) {
+  const oauth = require('./oauth-providers.service');
+  ensureChannelIntegrations(company);
+  company.channelIntegrations.email = {
+    status: 'connected',
+    provider: 'google',
+    address: profile.email,
+    displayName: profile.name || company.name,
+    outboundVia: 'smtp',
+    connectedAt: new Date(),
+    lastSyncAt: new Date(),
+    lastError: null,
+    lastSeenUid: 0,
+    imap: undefined,
+    secret: oauth.packOAuthSecret({
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiresAt: oauth.tokenExpiryDate(tokens.expires_in).toISOString(),
+      lastPolledAt: new Date().toISOString(),
+      scope: tokens.scope || '',
+    }),
+  };
+  await company.save();
+  return sanitizeEmailIntegration(company.channelIntegrations.email);
+}
+
+async function connectMicrosoftOAuth(company, { tokens, profile }) {
+  const oauth = require('./oauth-providers.service');
+  ensureChannelIntegrations(company);
+  company.channelIntegrations.email = {
+    status: 'connected',
+    provider: 'microsoft',
+    address: profile.email,
+    displayName: profile.name || company.name,
+    outboundVia: 'smtp',
+    connectedAt: new Date(),
+    lastSyncAt: new Date(),
+    lastError: null,
+    lastSeenUid: 0,
+    imap: undefined,
+    secret: oauth.packOAuthSecret({
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiresAt: oauth.tokenExpiryDate(tokens.expires_in).toISOString(),
+      lastPolledAt: new Date().toISOString(),
+      scope: tokens.scope || '',
+    }),
+  };
+  await company.save();
+  return sanitizeEmailIntegration(company.channelIntegrations.email);
+}
+
 async function disconnectEmail(company) {
   ensureChannelIntegrations(company);
   company.channelIntegrations.email = defaultEmailIntegration();
@@ -197,6 +249,44 @@ async function sendReplyForTicket(companyId, ticket, content) {
     throw new Error('Email is not connected for this workspace');
   }
 
+  const baseTitle = ticket.ticket_title || 'your request';
+  const subject = `Re: [${ticket.ticket_code}] ${baseTitle}`;
+  const headers = {};
+  if (ticket.email?.lastMessageId) {
+    headers['In-Reply-To'] = ticket.email.lastMessageId;
+    headers['References'] = (ticket.email.references || ticket.email.lastMessageId).trim();
+  }
+  const formatted = formatSupportEmail(content);
+
+  if (integration.provider === 'google') {
+    const gmailApi = require('./gmail-api.service');
+    const info = await gmailApi.sendGmailMessage(company, {
+      to,
+      subject,
+      html: formatted.html,
+      text: formatted.text,
+      headers,
+    });
+    if (info?.messageId) {
+      ticket.email = ticket.email || {};
+      ticket.email.lastMessageId = info.messageId;
+      ticket.email.references = `${ticket.email.references || ''} ${info.messageId}`.trim();
+      await ticket.save().catch(() => {});
+    }
+    return info;
+  }
+
+  if (integration.provider === 'microsoft') {
+    const msMail = require('./microsoft-mail.service');
+    return msMail.sendMicrosoftMessage(company, {
+      to,
+      subject,
+      html: formatted.html,
+      text: formatted.text,
+      headers,
+    });
+  }
+
   if (integration.provider !== 'imap') {
     throw new Error(`Sending via ${integration.provider} is not available yet`);
   }
@@ -204,18 +294,7 @@ async function sendReplyForTicket(companyId, ticket, content) {
   const stored = getStoredImapConfig(company);
   if (!stored) throw new Error('Email credentials are unavailable');
 
-  const baseTitle = ticket.ticket_title || 'your request';
-  // Always embed the ticket code so the customer's reply threads back correctly.
-  const subject = `Re: [${ticket.ticket_code}] ${baseTitle}`;
-
   const from = `${stored.displayName} <${stored.address}>`;
-  const headers = {};
-  if (ticket.email?.lastMessageId) {
-    headers['In-Reply-To'] = ticket.email.lastMessageId;
-    headers['References'] = (ticket.email.references || ticket.email.lastMessageId).trim();
-  }
-
-  const formatted = formatSupportEmail(content);
   let info;
   if (integration.outboundVia === 'resend') {
     const { sendChannelReplyViaResend } = require('./email.service');
@@ -252,6 +331,44 @@ async function sendReplyForTicket(companyId, ticket, content) {
 
 // ─── Polling ──────────────────────────────────────────────────────────────────
 async function pollCompany(company) {
+  const provider = company.channelIntegrations?.email?.provider;
+
+  if (provider === 'google') {
+    const gmailApi = require('./gmail-api.service');
+    const messages = await gmailApi.fetchNewGmailMessages(company);
+    let processed = 0;
+    for (const parsed of messages) {
+      try {
+        await processInboundEmail(company, parsed);
+        processed += 1;
+      } catch (err) {
+        console.error('[email ingest google]', err.message);
+      }
+    }
+    company.channelIntegrations.email.lastSyncAt = new Date();
+    company.channelIntegrations.email.lastError = null;
+    await company.save();
+    return { processed };
+  }
+
+  if (provider === 'microsoft') {
+    const msMail = require('./microsoft-mail.service');
+    const messages = await msMail.fetchNewMicrosoftMessages(company);
+    let processed = 0;
+    for (const parsed of messages) {
+      try {
+        await processInboundEmail(company, parsed);
+        processed += 1;
+      } catch (err) {
+        console.error('[email ingest microsoft]', err.message);
+      }
+    }
+    company.channelIntegrations.email.lastSyncAt = new Date();
+    company.channelIntegrations.email.lastError = null;
+    await company.save();
+    return { processed };
+  }
+
   const stored = getStoredImapConfig(company);
   if (!stored) {
     // Without a usable secret the mailbox can never sync, so stop reporting it
@@ -294,7 +411,7 @@ async function pollAllMailboxes() {
   const Company = require('../models/Company');
   const companies = await Company.find({
     'channelIntegrations.email.status': 'connected',
-    'channelIntegrations.email.provider': 'imap',
+    'channelIntegrations.email.provider': { $in: ['imap', 'google', 'microsoft'] },
   }).select('+channelIntegrations.email.secret');
 
   for (const company of companies) {
@@ -317,6 +434,8 @@ module.exports = {
   getEmailIntegration,
   sanitizeEmailIntegration,
   connectImap,
+  connectGoogleOAuth,
+  connectMicrosoftOAuth,
   disconnectEmail,
   sendReplyForTicket,
   formatSupportEmail,

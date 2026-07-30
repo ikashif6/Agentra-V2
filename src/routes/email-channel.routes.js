@@ -30,4 +30,24 @@ router.post(
 
 router.delete('/', resolveTenant, protect, authorize('owner', 'admin'), emailController.disconnect);
 
+router.get(
+  '/google/oauth/url',
+  resolveTenant,
+  protect,
+  authorize('owner', 'admin'),
+  emailController.getGoogleOAuthUrl,
+);
+
+router.get(
+  '/microsoft/oauth/url',
+  resolveTenant,
+  protect,
+  authorize('owner', 'admin'),
+  emailController.getMicrosoftOAuthUrl,
+);
+
+// Public OAuth callbacks (state JWT carries company context)
+router.get('/google/callback', emailController.googleOAuthCallback);
+router.get('/microsoft/callback', emailController.microsoftOAuthCallback);
+
 module.exports = router;

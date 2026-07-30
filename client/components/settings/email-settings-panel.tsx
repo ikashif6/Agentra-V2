@@ -145,10 +145,45 @@ export default function EmailSettingsPanel() {
     }
   }, [form.email]);
 
-  const comingSoon = (name: string) =>
-    toast.message(`${name} one-click sign-in is coming soon`, {
-      description: "For now, connect any mailbox with the “Other email” option below.",
-    });
+  const startOAuth = async (provider: "google" | "microsoft") => {
+    try {
+      const returnOrigin = window.location.origin;
+      const returnPath = "/settings?item=email";
+      const { data } =
+        provider === "google"
+          ? await emailChannelApi.googleOAuthUrl(returnOrigin, returnPath)
+          : await emailChannelApi.microsoftOAuthUrl(returnOrigin, returnPath);
+      const url = data.data?.url as string | undefined;
+      if (!url) throw new Error("Missing OAuth URL");
+      window.location.assign(url);
+    } catch (err: unknown) {
+      const { message } = getApiError(err, `Could not start ${provider} connect`);
+      toast.error(message);
+    }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("email");
+    if (!status) return;
+    if (status === "connected") {
+      toast.success(
+        params.get("provider") === "microsoft"
+          ? "Outlook connected"
+          : params.get("provider") === "google"
+            ? "Gmail connected"
+            : "Email connected",
+      );
+      void load();
+    } else if (status === "error") {
+      toast.error(params.get("message") || "Email connect failed");
+    }
+    params.delete("email");
+    params.delete("provider");
+    params.delete("message");
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+    window.history.replaceState({}, "", next);
+  }, [load]);
 
   const connectImap = async () => {
     if (!form.email.trim() || !form.password) {
@@ -318,8 +353,9 @@ export default function EmailSettingsPanel() {
         <div className="mt-6 space-y-3">
           <button
             type="button"
-            onClick={() => comingSoon("Google")}
-            className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+            onClick={() => void startOAuth("google")}
+            disabled={!providers.google}
+            className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <GoogleGlyph className="size-6 shrink-0" />
             <div className="min-w-0 flex-1">
@@ -335,8 +371,9 @@ export default function EmailSettingsPanel() {
 
           <button
             type="button"
-            onClick={() => comingSoon("Microsoft")}
-            className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
+            onClick={() => void startOAuth("microsoft")}
+            disabled={!providers.microsoft}
+            className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <MicrosoftGlyph className="size-6 shrink-0" />
             <div className="min-w-0 flex-1">

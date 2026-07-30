@@ -123,6 +123,23 @@ export const authApi = {
   me: () => api.get("/auth/me"),
   verifyEmail: (data: { token: string }) => api.post("/auth/verify-email", data),
   logout: (refreshToken: string) => api.post("/auth/logout", { refreshToken }),
+  googleLoginUrl: (workspace: string, returnOrigin?: string) =>
+    api.get("/auth/google/url", {
+      params: {
+        workspace,
+        ...(returnOrigin ? { returnOrigin } : {}),
+      },
+      headers: { "x-tenant": workspace },
+    }),
+  microsoftLoginUrl: (workspace: string, returnOrigin?: string) =>
+    api.get("/auth/microsoft/url", {
+      params: {
+        workspace,
+        ...(returnOrigin ? { returnOrigin } : {}),
+      },
+      headers: { "x-tenant": workspace },
+    }),
+  completeOAuthLogin: (code: string) => api.post("/auth/oauth/complete", { code }),
 };
 
 export const onboardingApi = {
@@ -349,6 +366,20 @@ export const emailChannelApi = {
     smtpSecure?: boolean;
   }) => api.post("/channels/email/connect", payload, { timeout: 90000 }),
   disconnect: () => api.delete("/channels/email"),
+  googleOAuthUrl: (returnOrigin?: string, returnPath?: string) =>
+    api.get("/channels/email/google/oauth/url", {
+      params: {
+        ...(returnOrigin ? { returnOrigin } : {}),
+        ...(returnPath ? { returnPath } : {}),
+      },
+    }),
+  microsoftOAuthUrl: (returnOrigin?: string, returnPath?: string) =>
+    api.get("/channels/email/microsoft/oauth/url", {
+      params: {
+        ...(returnOrigin ? { returnOrigin } : {}),
+        ...(returnPath ? { returnPath } : {}),
+      },
+    }),
 };
 
 export const storeApi = {

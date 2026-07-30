@@ -842,3 +842,270 @@ exports.checkSubdomain = async (req, res, next) => {
     next(err);
   }
 };
+
+// ─── Google / Microsoft staff login ───────────────────────────────────────────
+
+function resolveCompanyForOAuth(workspace) {
+  if (!workspace) return null;
+  const value = String(workspace).toLowerCase().trim();
+  const isObjectId = /^[0-9a-fA-F]{24}$/.test(value);
+  if (isObjectId) return Company.findById(value);
+  return Company.findOne({
+    $or: [{ subdomain: value }, { name: { $regex: new RegExp(`^${value}$`, 'i') } }],
+  });
+}
+
+exports.getGoogleLoginUrl = async (req, res, next) => {
+  try {
+    const oauth = require('../services/oauth-providers.service');
+    if (!oauth.isGoogleConfigured()) {
+      return response.badRequest(res, 'Google sign-in is not configured on this server');
+    }
+    const workspace = req.query.workspace || req.headers['x-tenant'];
+    const company = (req.tenant && req.tenant._id ? req.tenant : null) || (await resolveCompanyForOAuth(workspace));
+    if (!company) {
+      return response.badRequest(res, 'Workspace is required for Google sign-in');
+    }
+    const url = oauth.buildGoogleAuthUrl({
+      purpose: 'google_auth',
+      companyId: company._id,
+      subdomain: company.subdomain,
+      returnOrigin: req.query.returnOrigin || req.headers.origin,
+      returnPath: '/auth/login',
+    });
+    return response.success(res, { url });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getMicrosoftLoginUrl = async (req, res, next) => {
+  try {
+    const oauth = require('../services/oauth-providers.service');
+    if (!oauth.isMicrosoftConfigured()) {
+      return response.badRequest(res, 'Microsoft sign-in is not configured on this server');
+    }
+    const workspace = req.query.workspace || req.headers['x-tenant'];
+    const company = (req.tenant && req.tenant._id ? req.tenant : null) || (await resolveCompanyForOAuth(workspace));
+    if (!company) {
+      return response.badRequest(res, 'Workspace is required for Microsoft sign-in');
+    }
+    const url = oauth.buildMicrosoftAuthUrl({
+      purpose: 'microsoft_auth',
+      companyId: company._id,
+      subdomain: company.subdomain,
+      returnOrigin: req.query.returnOrigin || req.headers.origin,
+      returnPath: '/auth/login',
+    });
+    return response.success(res, { url });
+  } catch (err) {
+    next(err);
+  }
+};
+
+async function finishStaffSocialLogin({
+  provider,
+  profile,
+  companyId,
+  subdomain,
+  returnOrigin,
+  req,
+  res,
+}) {
+  const oauth = require('../services/oauth-providers.service');
+  const company = await Company.findById(companyId);
+  if (!company || !company.isActive) {
+    return res.redirect(
+      oauth.buildAppRedirect(subdomain, '/auth/login', { oauth: 'error', message: 'Workspace not found' }, returnOrigin),
+    );
+  }
+
+  const idField = provider === 'google' ? 'googleId' : 'microsoftId';
+  let user =
+    (await User.findOne({ company: company._id, [idField]: profile.id })) ||
+    (await User.findOne({ company: company._id, email: profile.email }));
+
+  if (!user || !user.isActive) {
+    return res.redirect(
+      oauth.buildAppRedirect(
+        subdomain,
+        '/auth/login',
+        {
+          oauth: 'error',
+          message: 'No Agentra account matches this email in this workspace. Ask an owner to invite you first.',
+        },
+        returnOrigin,
+      ),
+    );
+  }
+
+  if (['customer'].includes(user.role)) {
+    return res.redirect(
+      oauth.buildAppRedirect(
+        subdomain,
+        '/auth/login',
+        { oauth: 'error', message: 'This account cannot sign in to the agent workspace' },
+        returnOrigin,
+      ),
+    );
+  }
+
+  user[idField] = profile.id;
+  user.isEmailVerified = true;
+  if (!user.firstName && profile.firstName) user.firstName = profile.firstName;
+  if (!user.lastName && profile.lastName) user.lastName = profile.lastName;
+  await user.save();
+
+  const loaded = await User.findById(user._id).select('+refreshTokens');
+  const { accessToken, refreshToken } = await issueTokenPair(loaded, company, clientMeta(req));
+  logUserLogin({ company, user: loaded, req });
+
+  const code = tokenUtil.signOAuthState({
+    purpose: 'oauth_login_result',
+    accessToken,
+    refreshToken,
+    subdomain: company.subdomain,
+  });
+
+  return res.redirect(
+    oauth.buildAppRedirect(subdomain, '/auth/oauth/complete', { code, provider }, returnOrigin),
+  );
+}
+
+exports.googleLoginCallback = async (req, res) => {
+  const oauth = require('../services/oauth-providers.service');
+  try {
+    const { code, state, error, error_description: errorDescription } = req.query;
+    if (!state) return res.status(400).send('Missing OAuth state');
+    let payload;
+    try {
+      payload = tokenUtil.verifyOAuthState(String(state));
+    } catch {
+      return res.status(400).send('OAuth session expired');
+    }
+    if (payload.purpose !== 'google_auth') return res.status(400).send('Invalid OAuth state');
+
+    if (error || !code) {
+      return res.redirect(
+        oauth.buildAppRedirect(
+          payload.subdomain,
+          '/auth/login',
+          { oauth: 'error', message: errorDescription || error || 'Google login cancelled' },
+          payload.returnOrigin,
+        ),
+      );
+    }
+
+    const tokens = await oauth.exchangeGoogleCode(String(code), 'auth');
+    const profile = await oauth.fetchGoogleProfile(tokens.access_token);
+    if (!profile.email) {
+      return res.redirect(
+        oauth.buildAppRedirect(
+          payload.subdomain,
+          '/auth/login',
+          { oauth: 'error', message: 'Google did not return an email' },
+          payload.returnOrigin,
+        ),
+      );
+    }
+
+    return finishStaffSocialLogin({
+      provider: 'google',
+      profile,
+      companyId: payload.companyId,
+      subdomain: payload.subdomain,
+      returnOrigin: payload.returnOrigin,
+      req,
+      res,
+    });
+  } catch (err) {
+    console.error('[google login]', err);
+    return res.status(500).send(err.message || 'Google login failed');
+  }
+};
+
+exports.microsoftLoginCallback = async (req, res) => {
+  const oauth = require('../services/oauth-providers.service');
+  try {
+    const { code, state, error, error_description: errorDescription } = req.query;
+    if (!state) return res.status(400).send('Missing OAuth state');
+    let payload;
+    try {
+      payload = tokenUtil.verifyOAuthState(String(state));
+    } catch {
+      return res.status(400).send('OAuth session expired');
+    }
+    if (payload.purpose !== 'microsoft_auth') return res.status(400).send('Invalid OAuth state');
+
+    if (error || !code) {
+      return res.redirect(
+        oauth.buildAppRedirect(
+          payload.subdomain,
+          '/auth/login',
+          { oauth: 'error', message: errorDescription || error || 'Microsoft login cancelled' },
+          payload.returnOrigin,
+        ),
+      );
+    }
+
+    const tokens = await oauth.exchangeMicrosoftCode(String(code), 'auth');
+    const profile = await oauth.fetchMicrosoftProfile(tokens.access_token);
+    if (!profile.email) {
+      return res.redirect(
+        oauth.buildAppRedirect(
+          payload.subdomain,
+          '/auth/login',
+          { oauth: 'error', message: 'Microsoft did not return an email' },
+          payload.returnOrigin,
+        ),
+      );
+    }
+
+    return finishStaffSocialLogin({
+      provider: 'microsoft',
+      profile,
+      companyId: payload.companyId,
+      subdomain: payload.subdomain,
+      returnOrigin: payload.returnOrigin,
+      req,
+      res,
+    });
+  } catch (err) {
+    console.error('[microsoft login]', err);
+    return res.status(500).send(err.message || 'Microsoft login failed');
+  }
+};
+
+exports.completeOAuthLogin = async (req, res, next) => {
+  try {
+    const { code } = req.body;
+    if (!code) return response.badRequest(res, 'OAuth code is required');
+    let payload;
+    try {
+      payload = tokenUtil.verifyOAuthState(String(code));
+    } catch {
+      return response.unauthorized(res, 'Invalid or expired OAuth session');
+    }
+    if (payload.purpose !== 'oauth_login_result' || !payload.accessToken || !payload.refreshToken) {
+      return response.unauthorized(res, 'Invalid OAuth session');
+    }
+
+    const decoded = tokenUtil.verifyAccessToken(payload.accessToken);
+    const user = await User.findById(decoded.sub);
+    const company = await Company.findById(decoded.companyId);
+    if (!user || !company) return response.unauthorized(res, 'Account not found');
+
+    return response.success(
+      res,
+      {
+        accessToken: payload.accessToken,
+        refreshToken: payload.refreshToken,
+        user: user.toSafeObject(),
+        company: publicCompanyBranding(company),
+      },
+      'Signed in',
+    );
+  } catch (err) {
+    next(err);
+  }
+};

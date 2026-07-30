@@ -66,7 +66,32 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
       setSuccessMessage("Email verified! You can sign in now.");
       router.replace("/auth/login", { scroll: false });
     }
+    if (searchParams.get("oauth") === "error") {
+      setFormError({
+        message: searchParams.get("message") || "Social sign-in failed. Please try again.",
+      });
+      router.replace("/auth/login", { scroll: false });
+    }
   }, [searchParams, router]);
+
+  const startSocialLogin = async (provider: "google" | "microsoft") => {
+    setLoading(true);
+    setFormError(null);
+    try {
+      const returnOrigin = window.location.origin;
+      const { data } =
+        provider === "google"
+          ? await authApi.googleLoginUrl(workspace, returnOrigin)
+          : await authApi.microsoftLoginUrl(workspace, returnOrigin);
+      const url = data.data?.url as string | undefined;
+      if (!url) throw new Error("Missing OAuth URL");
+      window.location.assign(url);
+    } catch (err: unknown) {
+      const { message } = getApiError(err, `Unable to start ${provider} sign-in`);
+      setFormError({ message });
+      setLoading(false);
+    }
+  };
 
   const onSubmit = async (values: FormData) => {
     setLoading(true);
@@ -183,6 +208,36 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
           Sign in
         </Button>
       </form>
+
+      <div className="relative py-1">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Button
+          type="button"
+          variant="outline"
+          className={`h-10 w-full ${authRadiusClass}`}
+          disabled={loading}
+          onClick={() => void startSocialLogin("google")}
+        >
+          Google
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className={`h-10 w-full ${authRadiusClass}`}
+          disabled={loading}
+          onClick={() => void startSocialLogin("microsoft")}
+        >
+          Microsoft
+        </Button>
+      </div>
 
       <p className="text-center text-sm text-muted-foreground">
         <a href={mainLoginUrl} className="font-medium text-primary hover:underline">

@@ -1,0 +1,31 @@
+client_id = "76fade73defe2c1f126f0b588e439d11"
+name = "Agentra"
+application_url = "https://api.agentraa.com/api/v1/store/shopify/app"
+embedded = false
+
+[access_scopes]
+scopes = "read_orders,write_orders,read_customers,write_customers,read_products,read_fulfillments,write_fulfillments,write_script_tags"
+
+[auth]
+redirect_urls = [ "https://api.agentraa.com/api/v1/store/shopify/oauth/callback" ]
+
+[webhooks]
+api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+compliance_topics = [ "customers/data_request" ]
+uri = "https://api.agentraa.com/api/v1/webhooks/shopify/customers-data-request"
+
+[[webhooks.subscriptions]]
+compliance_topics = [ "customers/redact" ]
+uri = "https://api.agentraa.com/api/v1/webhooks/shopify/customers-redact"
+
+[[webhooks.subscriptions]]
+compliance_topics = [ "shop/redact" ]
+uri = "https://api.agentraa.com/api/v1/webhooks/shopify/shop-redact"
+
+[[webhooks.subscriptions]]
+topics = [ "app/uninstalled" ]
+uri = "https://api.agentraa.com/api/v1/webhooks/shopify/app-uninstalled"
+
+[build]

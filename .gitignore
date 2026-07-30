@@ -27,3 +27,9 @@ Chatbot AI Agent/apps/server/data/*.db
 # Separate repo: https://github.com/ikashif6/Agentra-Help-Center.git
 help-center/
 
+# Local WordPress deploy helper (contains no committed secrets)
+.tmp-deploy/
+
+# OAuth console secrets (fill locally; never commit)
+ops/oauth-secrets.local.env
+

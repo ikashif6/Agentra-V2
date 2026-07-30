@@ -68,6 +68,10 @@ const userSchema = new mongoose.Schema(
     },
     hasPassword: { type: Boolean, default: false },
 
+    // Social login provider IDs (unique per company via compound indexes below)
+    googleId: { type: String, trim: true, sparse: true },
+    microsoftId: { type: String, trim: true, sparse: true },
+
     // Passwordless: magic link token
     magicLinkToken: { type: String, select: false },
     magicLinkTokenExpires: { type: Date, select: false },
@@ -139,6 +143,8 @@ const userSchema = new mongoose.Schema(
 // ─── Compound unique index: email is unique per company ─────────────────────
 // Two different companies CAN have users with the same email (different tenants)
 userSchema.index({ email: 1, company: 1 }, { unique: true });
+userSchema.index({ company: 1, googleId: 1 }, { unique: true, sparse: true });
+userSchema.index({ company: 1, microsoftId: 1 }, { unique: true, sparse: true });
 userSchema.index({ company: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });

@@ -132,6 +132,26 @@ router.post(
 router.post('/forgot-password', authLimiter, resolveTenant, emailRules, validate, authController.forgotPassword);
 router.post('/reset-password', authLimiter, resetPasswordRules, validate, authController.resetPassword);
 
+router.get(
+  '/google/url',
+  authLimiter,
+  authController.getGoogleLoginUrl,
+);
+router.get('/google/callback', authController.googleLoginCallback);
+router.get(
+  '/microsoft/url',
+  authLimiter,
+  authController.getMicrosoftLoginUrl,
+);
+router.get('/microsoft/callback', authController.microsoftLoginCallback);
+router.post(
+  '/oauth/complete',
+  authLimiter,
+  body('code').notEmpty().withMessage('OAuth code is required'),
+  validate,
+  authController.completeOAuthLogin,
+);
+
 // Token refresh
 router.post('/refresh', body('refreshToken').notEmpty(), validate, authController.refreshTokens);
 

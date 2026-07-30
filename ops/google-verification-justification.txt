@@ -1,0 +1,17 @@
+Agentra Google OAuth verification — scope justification
+
+App: Agentra (https://agentraa.com)
+Company: Agentra Technologies (Private) Limited
+Support: hello@agentraa.com
+
+How we use each scope:
+
+openid / userinfo.email / userinfo.profile
+  Staff “Sign in with Google”. Identify the user and create/link their Agentra workspace account. No mailbox access.
+
+gmail.modify (or gmail.readonly + gmail.send)
+  Merchant “Connect with Google” in Settings → Email. Sync the support inbox the merchant chooses into helpdesk tickets and send agent replies from that same address. Data is used only to operate the merchant’s support workspace. Not used for ads, resale, or unrelated AI training products.
+
+User control:
+  Merchants connect and disconnect their mailbox in Agentra settings. Disconnect revokes stored tokens. Privacy policy: https://agentraa.com/privacy-policy/
+  Terms: https://agentraa.com/terms-conditions/
