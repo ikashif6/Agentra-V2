@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { SITE_LEGAL } from "@/lib/site";
+import { cn } from "@/lib/utils";
 
-export function AuthLegalFooter() {
+export function AuthLegalFooter({ className }: { className?: string }) {
   return (
-    <footer className="relative z-10 mt-auto flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 pt-4 text-xs text-muted-foreground">
+    <footer
+      className={cn(
+        "relative z-10 flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 pt-4 text-xs text-muted-foreground",
+        className,
+      )}
+    >
       <Link
         href={SITE_LEGAL.helpCenter}
         target="_blank"

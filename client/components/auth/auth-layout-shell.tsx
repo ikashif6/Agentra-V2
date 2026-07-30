@@ -14,6 +14,8 @@ const MINIMAL_PATHS = ["/auth/verify-email", "/auth/check-email"];
 export function AuthLayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isMinimal = MINIMAL_PATHS.some((p) => pathname?.startsWith(p));
+  // Signup carries its own terms disclaimer, so it skips the pinned legal footer
+  const isSignup = Boolean(pathname?.startsWith("/auth/signup"));
 
   if (isMinimal) {
     return <div className="min-h-svh bg-background">{children}</div>;
@@ -26,11 +28,11 @@ export function AuthLayoutShell({ children }: { children: React.ReactNode }) {
           <AuthLogo />
         </div>
 
-        <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-y-auto py-2">
-          <div className="w-full max-w-md space-y-5">{children}</div>
+        <div className="auth-scroll-area relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto pt-2 pb-3">
+          <div className="m-auto w-full max-w-md space-y-5">{children}</div>
         </div>
 
-        <AuthLegalFooter />
+        {isSignup ? null : <AuthLegalFooter className="mt-auto pb-5 lg:pb-6" />}
       </div>
 
       <AuthHeroPanel />

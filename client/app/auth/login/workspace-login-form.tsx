@@ -227,7 +227,7 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
           disabled={loading}
           onClick={() => void startSocialLogin("google")}
         >
-          <GoogleIcon className="mr-2 size-4" />
+          <GoogleIcon className="size-4" />
           Google
         </Button>
         <Button
@@ -237,7 +237,7 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
           disabled={loading}
           onClick={() => void startSocialLogin("microsoft")}
         >
-          <MicrosoftIcon className="mr-2 size-4" />
+          <MicrosoftIcon className="size-4" />
           Microsoft
         </Button>
       </div>

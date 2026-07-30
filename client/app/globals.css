@@ -144,6 +144,29 @@ button:disabled,
 ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
 
+/* Auth form column — scrollbar stays invisible until the area is hovered */
+.auth-scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.auth-scroll-area:hover {
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.auth-scroll-area::-webkit-scrollbar-thumb {
+  background: transparent;
+  transition: background 150ms ease;
+}
+
+.auth-scroll-area:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+}
+
+.auth-scroll-area:hover::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
 /* Login visual panel — atmospheric background */
 .login-visual-panel {
   --auth-brand: #d85a30;

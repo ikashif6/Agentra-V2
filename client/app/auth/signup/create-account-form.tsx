@@ -14,6 +14,7 @@ import { AuthFormAlert } from "@/components/auth/auth-form-alert";
 import { authInputClassName, authRadiusClass } from "@/components/auth/auth-panel-background";
 import { GoogleIcon, MicrosoftIcon } from "@/components/auth/social-auth-icons";
 import { authApi, onboardingApi } from "@/lib/api";
+import { SITE_LEGAL } from "@/lib/site";
 import { getApiError } from "@/lib/api-error";
 import {
   deriveSubdomainFromWebsite,
@@ -237,7 +238,7 @@ export function CreateAccountForm() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="mt-4 space-y-4">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">Create account</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
@@ -246,54 +247,56 @@ export function CreateAccountForm() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="companyName">Company name</Label>
-          <Input
-            id="companyName"
-            autoComplete="organization"
-            placeholder="BrightPath Retail"
-            className={authInputClassName}
-            {...register("companyName")}
-          />
-          {errors.companyName ? (
-            <p className="text-xs text-destructive">{errors.companyName.message}</p>
-          ) : null}
-        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="companyName">Company name</Label>
+            <Input
+              id="companyName"
+              autoComplete="organization"
+              placeholder="BrightPath Retail"
+              className={authInputClassName}
+              {...register("companyName")}
+            />
+            {errors.companyName ? (
+              <p className="text-xs text-destructive">{errors.companyName.message}</p>
+            ) : null}
+          </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="websiteUrl">Website URL</Label>
-          <Input
-            id="websiteUrl"
-            autoComplete="url"
-            placeholder="yourbrand.com"
-            className={authInputClassName}
-            {...register("websiteUrl")}
-          />
-          {derivedSubdomain && isValidSubdomainFormat(derivedSubdomain) ? (
-            <p className="text-xs text-muted-foreground">
-              Workspace:{" "}
-              <span className="font-medium text-foreground">
-                {getWorkspaceDisplayHost(derivedSubdomain)}
-              </span>
-            </p>
-          ) : null}
-          {subdomainStatus === "checking" ? (
-            <p className="text-xs text-muted-foreground">Checking workspace availability…</p>
-          ) : null}
-          {subdomainStatus === "available" ? (
-            <p className="text-xs text-emerald-600">Workspace URL is available</p>
-          ) : null}
-          {subdomainStatus === "taken" ? (
-            <p className="text-xs text-destructive">Workspace URL is already taken</p>
-          ) : null}
-          {subdomainStatus === "invalid" ? (
-            <p className="text-xs text-destructive">
-              Enter a website with a valid subdomain (e.g. brightpath.com)
-            </p>
-          ) : null}
-          {errors.websiteUrl ? (
-            <p className="text-xs text-destructive">{errors.websiteUrl.message}</p>
-          ) : null}
+          <div className="space-y-2">
+            <Label htmlFor="websiteUrl">Website URL</Label>
+            <Input
+              id="websiteUrl"
+              autoComplete="url"
+              placeholder="yourbrand.com"
+              className={authInputClassName}
+              {...register("websiteUrl")}
+            />
+            {derivedSubdomain && isValidSubdomainFormat(derivedSubdomain) ? (
+              <p className="text-xs text-muted-foreground">
+                Workspace:{" "}
+                <span className="font-medium text-foreground">
+                  {getWorkspaceDisplayHost(derivedSubdomain)}
+                </span>
+              </p>
+            ) : null}
+            {subdomainStatus === "checking" ? (
+              <p className="text-xs text-muted-foreground">Checking workspace availability…</p>
+            ) : null}
+            {subdomainStatus === "available" ? (
+              <p className="text-xs text-emerald-600">Workspace URL is available</p>
+            ) : null}
+            {subdomainStatus === "taken" ? (
+              <p className="text-xs text-destructive">Workspace URL is already taken</p>
+            ) : null}
+            {subdomainStatus === "invalid" ? (
+              <p className="text-xs text-destructive">
+                Enter a website with a valid subdomain (e.g. brightpath.com)
+              </p>
+            ) : null}
+            {errors.websiteUrl ? (
+              <p className="text-xs text-destructive">{errors.websiteUrl.message}</p>
+            ) : null}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -384,7 +387,7 @@ export function CreateAccountForm() {
         </Button>
       </form>
 
-      <div className="relative py-1">
+      <div className="relative">
         <div className="absolute inset-0 flex items-center">
           <span className="w-full border-t border-border" />
         </div>
@@ -401,7 +404,7 @@ export function CreateAccountForm() {
           disabled={loading}
           onClick={() => void startSocialSignup("google")}
         >
-          <GoogleIcon className="mr-2 size-4" />
+          <GoogleIcon className="size-4" />
           Google
         </Button>
         <Button
@@ -411,12 +414,31 @@ export function CreateAccountForm() {
           disabled={loading}
           onClick={() => void startSocialSignup("microsoft")}
         >
-          <MicrosoftIcon className="mr-2 size-4" />
+          <MicrosoftIcon className="size-4" />
           Microsoft
         </Button>
       </div>
-      <p className="-mt-2 text-center text-xs text-muted-foreground">
-        Enter your company name and website first. Your name and email come from your provider.
+
+      <p className="text-center text-xs text-muted-foreground">
+        By creating an account, you agree to our{" "}
+        <a
+          href={SITE_LEGAL.termsAndConditions}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+        >
+          Terms &amp; Conditions
+        </a>{" "}
+        and{" "}
+        <a
+          href={SITE_LEGAL.privacyPolicy}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+        >
+          Privacy Policy
+        </a>
+        .
       </p>
 
       <p className="text-sm text-muted-foreground">
