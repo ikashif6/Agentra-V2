@@ -18,16 +18,49 @@ const FRONTEND_URL = process.env.APP_FRONTEND_URL || 'https://app.agentraa.com';
 
 const BRAND = {
   orange: '#D85A30',
-  orangeDark: '#C73A08',
-  text: '#111827',
-  muted: '#6B7280',
-  faint: '#9CA3AF',
-  border: '#e5e7eb',
-  surface: '#F3F4F6',
+  orangeDark: '#C44F2A',
+  text: '#1A1D26',
+  muted: '#5C6578',
+  faint: '#8B93A7',
+  border: '#E5E7EB',
+  surface: '#F7F7F8',
+  canvas: '#EEF0F3',
+  callout: '#F7F3EE',
+  calloutBorder: '#E8E0D5',
+  link: '#D85A30',
+  white: '#FFFFFF',
+  linkedIn: '#0A66C2',
 };
+
+const LEGAL = {
+  helpCenter: 'https://help.agentraa.com/',
+  privacyPolicy: 'https://agentraa.com/privacy-policy/',
+  termsAndConditions: 'https://agentraa.com/terms-conditions/',
+  marketingSite: 'https://agentraa.com',
+  linkedIn: 'https://www.linkedin.com/company/agentraa',
+};
+
+/** Plus Jakarta Sans with Trebuchet fallback (Gmail-safe). */
+const FONT_HEADING =
+  "'Plus Jakarta Sans', 'Trebuchet MS', 'Lucida Grande', Helvetica, Arial, sans-serif";
+const FONT_BODY =
+  "'Plus Jakarta Sans', 'Trebuchet MS', 'Lucida Grande', Helvetica, Arial, sans-serif";
+const FONT = FONT_BODY;
+
+const FONT_IMPORT =
+  "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap";
 
 const fs = require('fs');
 const path = require('path');
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function buildWorkspaceFrontendUrl(subdomain) {
   if (process.env.EMAIL_WORKSPACE_URL_TEMPLATE) {
@@ -52,53 +85,405 @@ function buildVerifyEmailUrl(subdomain, token) {
   return `https://${subdomain}.${BASE_DOMAIN}/auth/verify-email?token=${token}`;
 }
 
-function getEmailLogoSrc() {
-  if (process.env.EMAIL_LOGO_URL) return process.env.EMAIL_LOGO_URL;
+const LOGO_CID = 'agentra-logo';
+const LOGO_WHITE_CID = 'agentra-logo-white';
 
-  const logoPath = path.join(__dirname, '../../client/public/agentraa-logo.svg');
+const EMAIL_ICON_NAMES = [
+  'shield',
+  'mail',
+  'key',
+  'link',
+  'lock',
+  'users',
+  'spark',
+  'ticket',
+  'help',
+  'channel',
+  'bot',
+  'check',
+];
+
+function readLogoBuffer(relativePublicPath) {
   try {
-    const svg = fs.readFileSync(logoPath, 'utf8').trim();
-    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+    return fs.readFileSync(path.join(__dirname, '../../client/public', relativePublicPath));
   } catch {
-    const base = FRONTEND_URL.replace(/\/$/, '');
-    return `${base}/agentraa-logo.svg`;
+    return null;
   }
 }
 
-function emailShell(bodyHtml) {
-  const logoSrc = getEmailLogoSrc();
-  return `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-      <div style="background: #ffffff; padding: 32px; border: 1px solid ${BRAND.border}; border-radius: 8px;">
-        <div style="text-align: center; margin-bottom: 28px;">
-          <img src="${logoSrc}" alt="Agentra" width="200" height="45" style="display: inline-block; max-width: 200px; height: auto; border: 0;" />
-        </div>
-        ${bodyHtml}
-      </div>
-      <p style="color: ${BRAND.faint}; font-size: 12px; text-align: center; margin-top: 16px;">
-        © ${new Date().getFullYear()} Agentra. All rights reserved.
-      </p>
-    </div>
-  `;
+function emailIconCid(name) {
+  return `email-icon-${name}`;
 }
 
-function emailButton(href, label, background = BRAND.orange) {
-  return `<a href="${href}" style="background: ${background}; color: white; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;">${label}</a>`;
+function getEmailIconSrc(name) {
+  return `cid:${emailIconCid(name)}`;
 }
 
-function emailLinkFallback(url) {
-  return `<p style="color: ${BRAND.faint}; font-size: 14px;">Or copy this link: <a href="${url}" style="color: ${BRAND.orange};">${url}</a></p>`;
+/** Preview: absolute URL or data URI for icons. */
+function getEmailIconPreviewSrc(name, absoluteBase) {
+  if (absoluteBase) {
+    return `${String(absoluteBase).replace(/\/$/, '')}/${name}.png`;
+  }
+  const buf = readLogoBuffer(`email/icons/${name}.png`);
+  if (buf) return `data:image/png;base64,${buf.toString('base64')}`;
+  return getEmailIconSrc(name);
 }
 
 /**
- * Core send helper — wraps Resend and logs in dev
+ * Logo sources for HTML:
+ * - EMAIL_LOGO_URL / EMAIL_LOGO_WHITE_URL if set (public HTTPS PNG — best for some clients)
+ * - otherwise cid: inline attachments (Gmail blocks data-URI / SVG images)
  */
-async function sendEmail({ to, subject, html, text }) {
+function getEmailLogoSrc({ white = false } = {}) {
+  if (white && process.env.EMAIL_LOGO_WHITE_URL) return process.env.EMAIL_LOGO_WHITE_URL;
+  if (!white && process.env.EMAIL_LOGO_URL) return process.env.EMAIL_LOGO_URL;
+  return white ? `cid:${LOGO_WHITE_CID}` : `cid:${LOGO_CID}`;
+}
+
+/** Preview / local UI: serveable file URL or data URI (not for Gmail sends). */
+function getEmailLogoPreviewSrc({ white = false, absoluteBase } = {}) {
+  if (absoluteBase) {
+    const file = white ? 'agentra-logo-white.png' : 'agentra-logo.png';
+    return `${String(absoluteBase).replace(/\/$/, '')}/${file}`;
+  }
+  const relative = white ? 'email/agentra-logo-white.png' : 'email/agentra-logo.png';
+  const buf = readLogoBuffer(relative);
+  if (buf) return `data:image/png;base64,${buf.toString('base64')}`;
+  return getEmailLogoSrc({ white });
+}
+
+function buildLogoAttachments(html = '') {
+  const attachments = [];
+  if (html.includes(`cid:${LOGO_CID}`)) {
+    const content = readLogoBuffer('email/agentra-logo.png');
+    if (content) {
+      attachments.push({
+        filename: 'agentra-logo.png',
+        content,
+        contentType: 'image/png',
+        contentId: LOGO_CID,
+      });
+    }
+  }
+  if (html.includes(`cid:${LOGO_WHITE_CID}`)) {
+    const content = readLogoBuffer('email/agentra-logo-white.png');
+    if (content) {
+      attachments.push({
+        filename: 'agentra-logo-white.png',
+        content,
+        contentType: 'image/png',
+        contentId: LOGO_WHITE_CID,
+      });
+    }
+  }
+  for (const name of EMAIL_ICON_NAMES) {
+    const cid = emailIconCid(name);
+    if (!html.includes(`cid:${cid}`)) continue;
+    const content = readLogoBuffer(`email/icons/${name}.png`);
+    if (!content) continue;
+    attachments.push({
+      filename: `${name}.png`,
+      content,
+      contentType: 'image/png',
+      contentId: cid,
+    });
+  }
+  return attachments;
+}
+
+function emailButton(href, label, background = BRAND.orange) {
+  return `
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:24px 0 16px;width:100%;">
+      <tr>
+        <td width="100%" style="width:100%;">
+          <!--[if mso]>
+          <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${href}" style="height:48px;v-text-anchor:middle;width:520px;" arcsize="12%" stroke="f" fillcolor="${background}">
+            <center style="color:${BRAND.white};font-family:Arial,sans-serif;font-size:15px;font-weight:700;">${escapeHtml(label)}</center>
+          </v:roundrect>
+          <![endif]-->
+          <!--[if !mso]><!-- -->
+          <a href="${href}"
+             style="display:block;width:100%;box-sizing:border-box;background-color:${background};color:${BRAND.white};padding:15px 22px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;line-height:1.25;text-align:center;font-family:${FONT_BODY};mso-hide:all;">
+            ${escapeHtml(label)}
+          </a>
+          <!--<![endif]-->
+        </td>
+      </tr>
+    </table>`;
+}
+
+function emailNotice(html) {
+  return `<p style="margin:0 0 28px;color:${BRAND.faint};font-size:13px;line-height:1.55;font-family:${FONT_BODY};">* ${html}</p>`;
+}
+
+function emailHeroIcon(name, alt = '') {
+  const src = getEmailIconSrc(name);
+  return `
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 18px;">
+      <tr>
+        <td>
+          <img src="${src}" alt="${escapeHtml(alt)}" width="40" height="40" style="display:block;width:40px;height:40px;border:0;" />
+        </td>
+      </tr>
+    </table>`;
+}
+
+function emailSteps(items = []) {
+  if (!items.length) return '';
+  const rows = items
+    .map(
+      (item, index) => `
+      <tr>
+        <td style="padding:0 0 ${index === items.length - 1 ? '0' : '10px'};">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="width:100%;background-color:${BRAND.surface};border-radius:10px;">
+            <tr>
+              <td style="padding:14px 16px;vertical-align:middle;width:36px;">
+                <div style="width:28px;height:28px;border-radius:8px;background-color:${BRAND.orange};color:${BRAND.white};font-size:13px;font-weight:700;line-height:28px;text-align:center;font-family:${FONT_BODY};">
+                  ${index + 1}
+                </div>
+              </td>
+              <td style="padding:14px 16px 14px 0;vertical-align:middle;color:${BRAND.text};font-size:15px;font-weight:500;line-height:1.45;font-family:${FONT_BODY};">
+                ${item}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>`,
+    )
+    .join('');
+  return `
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:8px 0 24px;width:100%;">
+      ${rows}
+    </table>`;
+}
+
+/** Netflix-style icon + title + description rows */
+function emailFeatureList(features = []) {
+  if (!features.length) return '';
+  const rows = features
+    .map(({ icon, title, body }) => {
+      const src = getEmailIconSrc(icon);
+      return `
+      <tr>
+        <td style="padding:0 0 20px;vertical-align:top;width:44px;">
+          <img src="${src}" alt="" width="32" height="32" style="display:block;width:32px;height:32px;border:0;" />
+        </td>
+        <td style="padding:0 0 20px 12px;vertical-align:top;font-family:${FONT_BODY};">
+          <p style="margin:0 0 4px;color:${BRAND.text};font-size:15px;font-weight:700;line-height:1.3;">${escapeHtml(title)}</p>
+          <p style="margin:0;color:${BRAND.muted};font-size:14px;line-height:1.5;">${body}</p>
+        </td>
+      </tr>`;
+    })
+    .join('');
+  return `
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:8px 0 8px;">
+      ${rows}
+    </table>`;
+}
+
+/** Zapier-style light disclaimer / tip box */
+function emailCallout(title, bodyHtml) {
+  const titleHtml = title
+    ? `<p style="margin:0 0 6px;color:${BRAND.text};font-size:14px;font-weight:600;font-family:${FONT_BODY};">${escapeHtml(title)}</p>`
+    : '';
+  return `
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:8px 0 0;">
+      <tr>
+        <td style="background:${BRAND.callout};border:1px solid ${BRAND.calloutBorder};border-radius:8px;padding:16px 18px;">
+          ${titleHtml}
+          <div style="color:${BRAND.muted};font-size:14px;line-height:1.55;font-family:${FONT_BODY};">
+            ${bodyHtml}
+          </div>
+        </td>
+      </tr>
+    </table>`;
+}
+
+function emailCodeBlock(code) {
+  return `
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:20px 0 16px;">
+      <tr>
+        <td style="background:${BRAND.surface};border:1px solid ${BRAND.border};border-radius:8px;padding:18px 22px;">
+          <span style="font-size:32px;font-weight:700;letter-spacing:8px;color:${BRAND.text};font-family:'Courier New',Courier,monospace;line-height:1;">
+            ${escapeHtml(code)}
+          </span>
+        </td>
+      </tr>
+    </table>`;
+}
+
+function emailHeading(title) {
+  return `<h1 style="margin:0 0 20px;color:${BRAND.text};font-size:32px;line-height:1.25;font-weight:700;font-family:${FONT_HEADING};">${title}</h1>`;
+}
+
+function emailParagraph(html, { muted = false, size = 16 } = {}) {
+  return `<p style="margin:0 0 18px;color:${muted ? BRAND.muted : BRAND.text};font-size:${size}px;line-height:1.65;font-family:${FONT_BODY};">${html}</p>`;
+}
+
+/** Netflix-style secondary section (security tip / help). */
+function emailSection(title, bodyHtml) {
+  return `
+    <div style="margin:32px 0 0;">
+      <p style="margin:0 0 10px;color:${BRAND.text};font-size:15px;font-weight:700;font-family:${FONT_BODY};">${escapeHtml(title)}</p>
+      <div style="color:${BRAND.text};font-size:15px;line-height:1.65;font-family:${FONT_BODY};">
+        ${bodyHtml}
+      </div>
+    </div>`;
+}
+
+function emailSignOff() {
+  return `<p style="margin:36px 0 0;color:${BRAND.text};font-size:15px;line-height:1.6;font-family:${FONT_BODY};">The <strong>Agentra</strong> team</p>`;
+}
+
+/** Classic LinkedIn “in” mark — square, brand blue (not circular). */
+function emailLinkedInIcon() {
+  return `
+    <a href="${LEGAL.linkedIn}" target="_blank" rel="noopener" title="Agentra on LinkedIn"
+       style="display:inline-block;width:28px;height:28px;background-color:#1A1D26;border-radius:2px;color:#FFFFFF;text-align:center;line-height:28px;font-weight:700;font-size:14px;text-decoration:none;font-family:Arial,Helvetica,sans-serif;">
+      in
+    </a>`;
+}
+
+/**
+ * Netflix-inspired layout: white canvas, bold hierarchy, light footer.
+ * No login button, no address — Help Center beside Terms; LinkedIn square icon only.
+ */
+function emailShell(input) {
+  const options =
+    typeof input === 'string'
+      ? { bodyHtml: input }
+      : input && typeof input === 'object'
+        ? input
+        : { bodyHtml: '' };
+
+  const {
+    title = 'Agentra',
+    preheader = '',
+    bodyHtml = '',
+    logoSrc: logoOverride,
+    footerNote = '',
+  } = options;
+
+  const logoSrc = logoOverride || getEmailLogoSrc();
+  const year = new Date().getFullYear();
+  const preheaderHtml = preheader
+    ? `<div style="display:none;font-size:1px;color:${BRAND.canvas};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeHtml(preheader)}</div>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="color-scheme" content="light only" />
+  <meta name="supported-color-schemes" content="light only" />
+  <title>${escapeHtml(title)}</title>
+  <!--[if !mso]><!-->
+  <link href="${FONT_IMPORT}" rel="stylesheet" type="text/css" />
+  <!--<![endif]-->
+  <style type="text/css">
+    :root { color-scheme: light only; supported-color-schemes: light only; }
+    @import url('${FONT_IMPORT}');
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+    body, .email-bg { background-color: ${BRAND.canvas} !important; }
+    .email-card, .email-card td { background-color: ${BRAND.white} !important; }
+    @media (prefers-color-scheme: dark) {
+      body, .email-bg { background-color: ${BRAND.canvas} !important; }
+      .email-card, .email-card td { background-color: ${BRAND.white} !important; color: ${BRAND.text} !important; }
+    }
+  </style>
+  <!--[if gte mso 9]>
+  <xml>
+    <o:OfficeDocumentSettings>
+      <o:AllowPNG/>
+      <o:PixelsPerInch>96</o:PixelsPerInch>
+    </o:OfficeDocumentSettings>
+  </xml>
+  <![endif]-->
+</head>
+<body class="email-bg" style="margin:0;padding:0;background-color:${BRAND.canvas};font-family:${FONT_BODY};">
+  ${preheaderHtml}
+  <table role="presentation" class="email-bg" cellspacing="0" cellpadding="0" border="0" width="100%" bgcolor="${BRAND.canvas}" style="background-color:${BRAND.canvas};">
+    <tr>
+      <td align="center" class="email-bg" bgcolor="${BRAND.canvas}" style="padding:32px 16px;background-color:${BRAND.canvas};">
+        <table role="presentation" class="email-card" cellspacing="0" cellpadding="0" border="0" width="100%" bgcolor="${BRAND.white}" style="max-width:600px;width:100%;background-color:${BRAND.white};">
+          <tr>
+            <td bgcolor="${BRAND.white}" style="padding:40px 40px 24px;background-color:${BRAND.white};">
+              <a href="${LEGAL.marketingSite}" style="text-decoration:none;display:inline-block;line-height:0;">
+                <img src="${logoSrc}" alt="Agentra" width="132" height="30" style="display:block;width:132px;max-width:132px;height:auto;border:0;outline:none;" />
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="${BRAND.white}" style="padding:8px 40px 40px;font-family:${FONT_BODY};color:${BRAND.text};background-color:${BRAND.white};">
+              ${bodyHtml}
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="${BRAND.white}" style="padding:8px 40px 0;background-color:${BRAND.white};">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr><td style="border-top:1px solid ${BRAND.border};font-size:0;line-height:0;height:1px;">&nbsp;</td></tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="${BRAND.white}" style="padding:28px 40px 14px;background-color:${BRAND.white};">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td valign="middle" bgcolor="${BRAND.white}" style="background-color:${BRAND.white};">
+                    <a href="${LEGAL.marketingSite}" style="text-decoration:none;display:inline-block;line-height:0;">
+                      <img src="${logoSrc}" alt="Agentra" width="100" height="23" style="display:block;width:100px;max-width:100px;height:auto;border:0;" />
+                    </a>
+                  </td>
+                  <td valign="middle" align="right" bgcolor="${BRAND.white}" style="background-color:${BRAND.white};">
+                    ${emailLinkedInIcon()}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="${BRAND.white}" style="padding:8px 40px 16px;font-family:${FONT_BODY};font-size:12px;line-height:1.8;color:${BRAND.faint};background-color:${BRAND.white};">
+              <a href="${LEGAL.termsAndConditions}" style="color:${BRAND.faint};text-decoration:underline;">Terms &amp; Conditions</a>
+              &nbsp;&nbsp;|&nbsp;&nbsp;
+              <a href="${LEGAL.privacyPolicy}" style="color:${BRAND.faint};text-decoration:underline;">Privacy Policy</a>
+              &nbsp;&nbsp;|&nbsp;&nbsp;
+              <a href="${LEGAL.helpCenter}" style="color:${BRAND.faint};text-decoration:underline;">Help Center</a>
+            </td>
+          </tr>
+          <tr>
+            <td bgcolor="${BRAND.white}" style="padding:4px 40px 40px;font-family:${FONT_BODY};font-size:12px;line-height:1.7;color:${BRAND.faint};background-color:${BRAND.white};">
+              ${
+                footerNote
+                  ? `<p style="margin:0 0 12px;">${footerNote}</p>`
+                  : `<p style="margin:0 0 12px;">You received this email because you have an Agentra account.</p>`
+              }
+              <p style="margin:0;">© ${year} Agentra Technologies (Private) Limited. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+/**
+ * Core send helper — wraps Resend and logs in dev.
+ * Attaches inline CID logos when the HTML references them (required for Gmail).
+ */
+async function sendEmail({ to, subject, html, text, attachments: extraAttachments = [] }) {
   if (process.env.NODE_ENV === 'development') {
     console.log(`\n📧 [EMAIL] To: ${to} | Subject: ${subject}`);
     if (text) console.log(text);
     console.log('---');
   }
+
+  const attachments = [...buildLogoAttachments(html), ...extraAttachments];
 
   const { data, error } = await getResend().emails.send({
     from: FROM(),
@@ -106,6 +491,7 @@ async function sendEmail({ to, subject, html, text }) {
     subject,
     html,
     text,
+    ...(attachments.length ? { attachments } : {}),
   });
 
   if (error) {
@@ -118,27 +504,45 @@ async function sendEmail({ to, subject, html, text }) {
 
 // ─── Email Templates ──────────────────────────────────────────────────────────
 
+function displayFirstName(user) {
+  const name = String(user?.firstName || '').trim();
+  return name || 'there';
+}
+
 /**
  * Send email verification link
  */
 async function sendEmailVerification({ user, token, subdomain }) {
   const verifyUrl = buildVerifyEmailUrl(subdomain, token);
   const workspaceHost = `${subdomain}.${BASE_DOMAIN}`;
+  const firstName = displayFirstName(user);
 
   await sendEmail({
     to: user.email,
     subject: 'Verify your Agentra email address',
-    text: `Hi ${user.firstName},\n\nPlease verify your email by visiting:\n${verifyUrl}\n\nThis link expires in 24 hours.\n\nIf you didn't create an account, you can ignore this email.`,
-    html: emailShell(`
-          <h2 style="color: ${BRAND.text}; margin-top: 0;">Verify your email address</h2>
-          <p style="color: ${BRAND.muted};">Hi ${user.firstName},</p>
-          <p style="color: ${BRAND.muted};">Thanks for signing up! Your workspace will be at <strong>${workspaceHost}</strong>. Please verify your email to get started.</p>
-          <div style="text-align: center; margin: 32px 0;">
-            ${emailButton(verifyUrl, 'Verify Email Address')}
-          </div>
-          ${emailLinkFallback(verifyUrl)}
-          <p style="color: ${BRAND.faint}; font-size: 14px;">This link expires in <strong>24 hours</strong>. If you didn't create an account, please ignore this email.</p>
-    `),
+    text: `Hi ${firstName},\n\nPlease verify your email by visiting:\n${verifyUrl}\n\nYour workspace will be at ${workspaceHost}.\n\nThis link expires in 24 hours.\n\nIf you didn't create an account, you can ignore this email.`,
+    html: emailShell({
+      title: 'Verify your email address',
+      preheader: 'One quick tap and your Agentra workspace is ready to go.',
+      bodyHtml: `
+        ${emailHeading('Let’s get you verified')}
+        ${emailParagraph(`Hi ${escapeHtml(firstName)},`)}
+        ${emailParagraph(
+          `Welcome to <strong>Agentra</strong>! Confirm this email so we can unlock your workspace at <strong>${escapeHtml(workspaceHost)}</strong> and get your helpdesk humming.`,
+        )}
+        ${emailButton(verifyUrl, 'Verify email address')}
+        ${emailNotice('This link expires after 24 hours and can only be used once.')}
+        ${emailSection(
+          'Keep your account secure:',
+          `Only verify if you meant to create this account. Didn’t sign up? You can safely ignore this email.`,
+        )}
+        ${emailSection(
+          'We’re here to help',
+          `Questions? Visit the <a href="${LEGAL.helpCenter}" style="color:${BRAND.link};text-decoration:underline;">Help Center</a>.`,
+        )}
+        ${emailSignOff()}
+      `,
+    }),
   });
 }
 
@@ -149,23 +553,34 @@ async function sendMagicLink({ user, token, subdomain }) {
   const companyUrl = subdomain ? `https://${subdomain}.${BASE_DOMAIN}` : FRONTEND_URL;
   const magicUrl = `${companyUrl}/auth/magic-link?token=${token}`;
   const expiresMinutes = process.env.MAGIC_LINK_EXPIRES_MINUTES || 15;
+  const firstName = displayFirstName(user);
 
   await sendEmail({
     to: user.email,
     subject: 'Your Agentra sign-in link',
-    text: `Hi ${user.firstName},\n\nClick this link to sign in to Agentra:\n${magicUrl}\n\nThis link expires in ${expiresMinutes} minutes and can only be used once.\n\nIf you didn't request this, please ignore this email.`,
-    html: emailShell(`
-          <h2 style="color: ${BRAND.text}; margin-top: 0;">Your sign-in link</h2>
-          <p style="color: ${BRAND.muted};">Hi ${user.firstName},</p>
-          <p style="color: ${BRAND.muted};">Click the button below to sign in to your Agentra account. This link is valid for <strong>${expiresMinutes} minutes</strong> and can only be used once.</p>
-          <div style="text-align: center; margin: 32px 0;">
-            ${emailButton(magicUrl, 'Sign In to Agentra')}
-          </div>
-          ${emailLinkFallback(magicUrl)}
-          <p style="color: ${BRAND.faint}; font-size: 14px; border-top: 1px solid ${BRAND.border}; padding-top: 16px; margin-top: 24px;">
-            If you didn't request this link, you can safely ignore this email. Your account is secure.
-          </p>
-    `),
+    text: `Hi ${firstName},\n\nClick this link to sign in to Agentra:\n${magicUrl}\n\nThis link expires in ${expiresMinutes} minutes and can only be used once.\n\nIf you didn't request this, please ignore this email.`,
+    html: emailShell({
+      title: 'Your sign-in link',
+      preheader: `Your one-tap Agentra sign-in link (expires in ${expiresMinutes} minutes).`,
+      bodyHtml: `
+        ${emailHeading('Your sign-in link is ready')}
+        ${emailParagraph(`Hi ${escapeHtml(firstName)},`)}
+        ${emailParagraph(
+          `Tap below to jump straight into <strong>Agentra</strong>. No password typing required this time.`,
+        )}
+        ${emailButton(magicUrl, 'Sign in to Agentra')}
+        ${emailNotice(`This link expires after ${expiresMinutes} minutes and can only be used once.`)}
+        ${emailSection(
+          'Keep your account secure:',
+          `If you didn’t ask for this link, ignore this email. Your account stays locked up tight.`,
+        )}
+        ${emailSection(
+          'We’re here to help',
+          `Need a hand? Visit the <a href="${LEGAL.helpCenter}" style="color:${BRAND.link};text-decoration:underline;">Help Center</a>.`,
+        )}
+        ${emailSignOff()}
+      `,
+    }),
   });
 }
 
@@ -174,26 +589,34 @@ async function sendMagicLink({ user, token, subdomain }) {
  */
 async function sendOtpCode({ user, otp, subdomain }) {
   const expiresMinutes = process.env.OTP_EXPIRES_MINUTES || 10;
+  const firstName = displayFirstName(user);
 
   await sendEmail({
     to: user.email,
     subject: `${otp} is your Agentra verification code`,
-    text: `Hi ${user.firstName},\n\nYour Agentra verification code is: ${otp}\n\nThis code expires in ${expiresMinutes} minutes.\n\nIf you didn't request this, please ignore this email.`,
-    html: emailShell(`
-          <h2 style="color: ${BRAND.text}; margin-top: 0;">Your verification code</h2>
-          <p style="color: ${BRAND.muted};">Hi ${user.firstName},</p>
-          <p style="color: ${BRAND.muted};">Use this code to verify your identity. It expires in <strong>${expiresMinutes} minutes</strong>.</p>
-          <div style="text-align: center; margin: 32px 0;">
-            <div style="background: ${BRAND.surface}; border: 2px dashed #D1D5DB; border-radius: 12px; padding: 24px; display: inline-block;">
-              <span style="font-size: 42px; font-weight: 700; letter-spacing: 12px; color: ${BRAND.text}; font-family: 'Courier New', monospace;">
-                ${otp}
-              </span>
-            </div>
-          </div>
-          <p style="color: ${BRAND.faint}; font-size: 14px; border-top: 1px solid ${BRAND.border}; padding-top: 16px; margin-top: 24px;">
-            If you didn't request this code, you can safely ignore this email. Your account is secure.
-          </p>
-    `),
+    text: `Hi ${firstName},\n\nYour Agentra verification code is: ${otp}\n\nThis code expires in ${expiresMinutes} minutes.\n\nIf you didn't request this, please ignore this email.`,
+    html: emailShell({
+      title: 'Your verification code',
+      preheader: `${otp} is your Agentra code. It expires in ${expiresMinutes} minutes.`,
+      bodyHtml: `
+        ${emailHeading('Your temporary access code')}
+        ${emailParagraph(`Hi ${escapeHtml(firstName)},`)}
+        ${emailParagraph(
+          `Use this code to finish signing in to <strong>Agentra</strong>. Enter it on the screen where you started and we’ll take it from there.`,
+        )}
+        ${emailCodeBlock(otp)}
+        ${emailNotice(`This code expires after ${expiresMinutes} minutes.`)}
+        ${emailSection(
+          'Keep your account secure:',
+          `Never share this code. Agentra will never ask for it by phone or chat.`,
+        )}
+        ${emailSection(
+          'We’re here to help',
+          `Didn’t request this? Visit the <a href="${LEGAL.helpCenter}" style="color:${BRAND.link};text-decoration:underline;">Help Center</a>.`,
+        )}
+        ${emailSignOff()}
+      `,
+    }),
   });
 }
 
@@ -203,23 +626,34 @@ async function sendOtpCode({ user, otp, subdomain }) {
 async function sendPasswordReset({ user, token, subdomain }) {
   const companyUrl = subdomain ? `https://${subdomain}.${BASE_DOMAIN}` : FRONTEND_URL;
   const resetUrl = `${companyUrl}/auth/reset-password?token=${token}`;
+  const firstName = displayFirstName(user);
 
   await sendEmail({
     to: user.email,
     subject: 'Reset your Agentra password',
-    text: `Hi ${user.firstName},\n\nReset your password by visiting:\n${resetUrl}\n\nThis link expires in 1 hour.\n\nIf you didn't request a password reset, please ignore this email.`,
-    html: emailShell(`
-          <h2 style="color: ${BRAND.text}; margin-top: 0;">Reset your password</h2>
-          <p style="color: ${BRAND.muted};">Hi ${user.firstName},</p>
-          <p style="color: ${BRAND.muted};">We received a request to reset your password. Click the button below to choose a new one.</p>
-          <div style="text-align: center; margin: 32px 0;">
-            ${emailButton(resetUrl, 'Reset Password', '#DC2626')}
-          </div>
-          ${emailLinkFallback(resetUrl)}
-          <p style="color: ${BRAND.faint}; font-size: 14px; border-top: 1px solid ${BRAND.border}; padding-top: 16px; margin-top: 24px;">
-            This link expires in <strong>1 hour</strong>. If you didn't request a password reset, you can safely ignore this email.
-          </p>
-    `),
+    text: `Hi ${firstName},\n\nReset your password by visiting:\n${resetUrl}\n\nThis link expires in 1 hour.\n\nIf you didn't request a password reset, please ignore this email.`,
+    html: emailShell({
+      title: 'Reset your password',
+      preheader: 'Choose a fresh password for your Agentra account.',
+      bodyHtml: `
+        ${emailHeading('Reset your password')}
+        ${emailParagraph(`Hi ${escapeHtml(firstName)},`)}
+        ${emailParagraph(
+          `Someone (hopefully you!) asked to reset the password for your <strong>Agentra</strong> account. Tap below to pick a new one and get back to supporting customers.`,
+        )}
+        ${emailButton(resetUrl, 'Reset your password')}
+        ${emailNotice('This link expires after 1 hour and can only be used once.')}
+        ${emailSection(
+          'Keep your account secure:',
+          `If you didn’t request this, you can ignore this email. Your current password still works.`,
+        )}
+        ${emailSection(
+          'We’re here to help',
+          `Something look off? Visit the <a href="${LEGAL.helpCenter}" style="color:${BRAND.link};text-decoration:underline;">Help Center</a>.`,
+        )}
+        ${emailSignOff()}
+      `,
+    }),
   });
 }
 
@@ -228,25 +662,37 @@ async function sendPasswordReset({ user, token, subdomain }) {
  */
 async function sendWelcomeEmail({ user, company }) {
   const dashboardUrl = `https://${company.subdomain}.${BASE_DOMAIN}/dashboard`;
+  const firstName = displayFirstName(user);
 
   await sendEmail({
     to: user.email,
     subject: `Welcome to Agentra: ${company.name} workspace is ready`,
-    text: `Hi ${user.firstName},\n\nWelcome to Agentra! Your workspace for ${company.name} is ready.\n\nAccess your dashboard: ${dashboardUrl}\n\nYour subdomain: ${company.subdomain}.${BASE_DOMAIN}\n\nGet started by inviting your team and creating your first ticket.`,
-    html: emailShell(`
-          <h2 style="color: ${BRAND.text}; margin-top: 0;">Welcome, ${user.firstName}!</h2>
-          <p style="color: ${BRAND.muted};">Your <strong>${company.name}</strong> workspace on Agentra is ready to go.</p>
-          <div style="background: ${BRAND.surface}; border-radius: 8px; padding: 16px; margin: 24px 0;">
-            <p style="margin: 0; color: ${BRAND.muted}; font-size: 14px;">Your workspace URL:</p>
-            <p style="margin: 4px 0 0; font-weight: 600; color: ${BRAND.orange};">
-              <a href="${dashboardUrl}" style="color: ${BRAND.orange};">${company.subdomain}.${BASE_DOMAIN}</a>
-            </p>
-          </div>
-          <div style="text-align: center; margin: 32px 0;">
-            ${emailButton(dashboardUrl, 'Go to Dashboard')}
-          </div>
-          <p style="color: ${BRAND.muted}; font-size: 14px;">Get started by inviting your team members and setting up your first ticket category.</p>
-    `),
+    text: `Hi ${firstName},\n\nWelcome to Agentra! Your workspace for ${company.name} is ready.\n\nAccess your dashboard: ${dashboardUrl}\n\nYour subdomain: ${company.subdomain}.${BASE_DOMAIN}\n\nGet started by inviting your team and creating your first ticket.`,
+    html: emailShell({
+      title: 'Welcome to Agentra',
+      preheader: `Your ${company.name} workspace is live. Let’s make support feel easy.`,
+      bodyHtml: `
+        ${emailHeading(`You’re in, ${escapeHtml(firstName)}`)}
+        ${emailParagraph(
+          `Your <strong>${escapeHtml(company.name)}</strong> workspace on <strong>Agentra</strong> is ready. Inbox, AI agent, and team tools, all in one place.`,
+        )}
+        ${emailButton(dashboardUrl, 'Open your dashboard')}
+        ${emailNotice(
+          `Workspace URL: <a href="${dashboardUrl}" style="color:${BRAND.link};text-decoration:underline;">${escapeHtml(company.subdomain)}.${escapeHtml(BASE_DOMAIN)}</a>`,
+        )}
+        ${emailParagraph('<strong>A few ways to get going:</strong>')}
+        ${emailSteps([
+          'Invite your teammates',
+          'Connect your support channels',
+          'Tune your AI agent and helpdesk',
+        ])}
+        ${emailSection(
+          'We’re here to help',
+          `Stuck on setup? The <a href="${LEGAL.helpCenter}" style="color:${BRAND.link};text-decoration:underline;">Help Center</a> has your back.`,
+        )}
+        ${emailSignOff()}
+      `,
+    }),
   });
 }
 
@@ -256,23 +702,35 @@ async function sendWelcomeEmail({ user, company }) {
 async function sendTeamInviteByOwner({ user, token, company, inviter }) {
   const BASE = process.env.APP_BASE_DOMAIN || 'agentraa.com';
   const acceptUrl = `https://${company.subdomain}.${BASE}/auth/accept-invite?token=${token}`;
+  const firstName = displayFirstName(user);
+  const inviterName = `${inviter.firstName || ''} ${inviter.lastName || ''}`.trim() || 'A teammate';
 
   await sendEmail({
     to: user.email,
-    subject: `${inviter.firstName} invited you to join ${company.name} on Agentra`,
-    text: `Hi ${user.firstName},\n\n${inviter.firstName} ${inviter.lastName} has invited you to join ${company.name} as a ${user.role}.\n\nAccept your invite: ${acceptUrl}\n\nThis link expires in 7 days.`,
-    html: emailShell(`
-          <h2 style="color: ${BRAND.text}; margin-top: 0;">You're invited</h2>
-          <p style="color: ${BRAND.muted};">Hi ${user.firstName},</p>
-          <p style="color: ${BRAND.muted};">
-            <strong>${inviter.firstName} ${inviter.lastName}</strong> has invited you to join
-            <strong>${company.name}</strong> on Agentra as a <strong>${user.role}</strong>.
-          </p>
-          <div style="text-align: center; margin: 32px 0;">
-            ${emailButton(acceptUrl, 'Accept Invitation', BRAND.orangeDark)}
-          </div>
-          <p style="color: ${BRAND.faint}; font-size: 14px;">This link expires in 7 days. If you weren't expecting this, you can safely ignore it.</p>
-    `),
+    subject: `${inviter.firstName || 'Someone'} invited you to join ${company.name} on Agentra`,
+    text: `Hi ${firstName},\n\n${inviterName} has invited you to join ${company.name} as a ${user.role}.\n\nAccept your invite: ${acceptUrl}\n\nThis link expires in 7 days.`,
+    html: emailShell({
+      title: "You're invited",
+      preheader: `${inviterName} invited you to ${company.name} on Agentra.`,
+      bodyHtml: `
+        ${emailHeading('You’ve been invited to Agentra')}
+        ${emailParagraph(`Hi ${escapeHtml(firstName)},`)}
+        ${emailParagraph(
+          `<strong>${escapeHtml(inviterName)}</strong> wants you on the <strong>${escapeHtml(company.name)}</strong> workspace as a <strong>${escapeHtml(user.role)}</strong>. Accept below and you’re part of the crew.`,
+        )}
+        ${emailButton(acceptUrl, 'Accept invitation')}
+        ${emailNotice('This invite link expires after 7 days.')}
+        ${emailSection(
+          'Keep your account secure:',
+          `Wasn’t expecting this? Ignore the email. Nothing changes until you accept.`,
+        )}
+        ${emailSection(
+          'We’re here to help',
+          `Questions about roles or access? Visit the <a href="${LEGAL.helpCenter}" style="color:${BRAND.link};text-decoration:underline;">Help Center</a>.`,
+        )}
+        ${emailSignOff()}
+      `,
+    }),
   });
 }
 
@@ -281,25 +739,30 @@ async function sendTeamInviteByOwner({ user, token, company, inviter }) {
  */
 async function sendTeamInvite({ invitee, inviter, team, company }) {
   const dashboardUrl = `https://${company.subdomain}.${BASE_DOMAIN}/teams/${team._id}`;
+  const firstName = displayFirstName(invitee);
+  const inviterName = `${inviter.firstName || ''} ${inviter.lastName || ''}`.trim() || 'A teammate';
 
   await sendEmail({
     to: invitee.email,
     subject: `You've been added to the ${team.name} team on Agentra`,
-    text: `Hi ${invitee.firstName},\n\n${inviter.firstName} ${inviter.lastName} has added you to the "${team.name}" team at ${company.name}.\n\nView the team: ${dashboardUrl}\n\nIf you think this was a mistake, please contact your workspace admin.`,
-    html: emailShell(`
-          <h2 style="color: ${BRAND.text}; margin-top: 0;">You've been added to a team</h2>
-          <p style="color: ${BRAND.muted};">Hi ${invitee.firstName},</p>
-          <p style="color: ${BRAND.muted};">
-            <strong>${inviter.firstName} ${inviter.lastName}</strong> has added you to the
-            <strong>${team.name}</strong> team at <strong>${company.name}</strong>.
-          </p>
-          <div style="text-align: center; margin: 32px 0;">
-            ${emailButton(dashboardUrl, 'View Team')}
-          </div>
-          <p style="color: ${BRAND.faint}; font-size: 14px; border-top: 1px solid ${BRAND.border}; padding-top: 16px; margin-top: 24px;">
-            If you think this was a mistake, please contact your workspace admin.
-          </p>
-    `),
+    text: `Hi ${firstName},\n\n${inviterName} has added you to the "${team.name}" team at ${company.name}.\n\nView the team: ${dashboardUrl}\n\nIf you think this was a mistake, please contact your workspace admin.`,
+    html: emailShell({
+      title: "You've been added to a team",
+      preheader: `You’re now on ${team.name} at ${company.name}.`,
+      bodyHtml: `
+        ${emailHeading('You’re on a new team')}
+        ${emailParagraph(`Hi ${escapeHtml(firstName)},`)}
+        ${emailParagraph(
+          `<strong>${escapeHtml(inviterName)}</strong> added you to <strong>${escapeHtml(team.name)}</strong> at <strong>${escapeHtml(company.name)}</strong>. Jump in and say hello.`,
+        )}
+        ${emailButton(dashboardUrl, 'View your team')}
+        ${emailSection(
+          'We’re here to help',
+          `Looks unexpected? Ping your workspace admin, or visit the <a href="${LEGAL.helpCenter}" style="color:${BRAND.link};text-decoration:underline;">Help Center</a>.`,
+        )}
+        ${emailSignOff()}
+      `,
+    }),
   });
 }
 
@@ -308,30 +771,30 @@ async function sendTeamInvite({ invitee, inviter, team, company }) {
  */
 async function sendTicketTrackOtp({ email, firstName, otp, ticket_code, subdomain }) {
   const expiresMinutes = process.env.TRACK_OTP_EXPIRES_MINUTES || 10;
+  const name = String(firstName || '').trim() || 'there';
 
   await sendEmail({
     to: email,
     subject: `${otp} is your Agentra ticket tracking code`,
-    text: `Hi ${firstName},\n\nYour one-time code to track ticket ${ticket_code} is:\n\n${otp}\n\nThis code expires in ${expiresMinutes} minutes.\n\nIf you didn't request this, please ignore this email.`,
-    html: emailShell(`
-          <h2 style="color: ${BRAND.text}; margin-top: 0;">Track your ticket</h2>
-          <p style="color: ${BRAND.muted};">Hi ${firstName},</p>
-          <p style="color: ${BRAND.muted};">
-            Use the code below to access ticket
-            <strong style="color: ${BRAND.text};">${ticket_code}</strong>.
-            It expires in <strong>${expiresMinutes} minutes</strong>.
-          </p>
-          <div style="text-align: center; margin: 32px 0;">
-            <div style="background: ${BRAND.surface}; border: 2px dashed #D1D5DB; border-radius: 12px; padding: 24px; display: inline-block;">
-              <span style="font-size: 42px; font-weight: 700; letter-spacing: 12px; color: ${BRAND.text}; font-family: 'Courier New', monospace;">
-                ${otp}
-              </span>
-            </div>
-          </div>
-          <p style="color: ${BRAND.faint}; font-size: 14px; border-top: 1px solid ${BRAND.border}; padding-top: 16px; margin-top: 24px;">
-            If you didn't request this code, you can safely ignore this email.
-          </p>
-    `),
+    text: `Hi ${name},\n\nYour one-time code to track ticket ${ticket_code} is:\n\n${otp}\n\nThis code expires in ${expiresMinutes} minutes.\n\nIf you didn't request this, please ignore this email.`,
+    html: emailShell({
+      title: 'Track your ticket',
+      preheader: `Your code for ticket ${ticket_code} is ready.`,
+      bodyHtml: `
+        ${emailHeading('Your ticket tracking code')}
+        ${emailParagraph(`Hi ${escapeHtml(name)},`)}
+        ${emailParagraph(
+          `Here’s your one-time code for ticket <strong>${escapeHtml(ticket_code)}</strong>. Enter it to check the latest updates.`,
+        )}
+        ${emailCodeBlock(otp)}
+        ${emailNotice(`This code expires after ${expiresMinutes} minutes.`)}
+        ${emailSection(
+          'Keep things secure:',
+          `Didn’t ask for this code? You can ignore this email.`,
+        )}
+        ${emailSignOff()}
+      `,
+    }),
   });
 }
 
@@ -378,7 +841,29 @@ async function sendChannelReplyViaResend({
 }
 
 module.exports = {
+  BRAND,
+  LEGAL,
+  FONT,
+  FONT_BODY,
+  FONT_HEADING,
+  FONT_IMPORT,
+  LOGO_CID,
+  LOGO_WHITE_CID,
   sendEmail,
+  emailShell,
+  emailButton,
+  emailNotice,
+  emailSteps,
+  emailCallout,
+  emailCodeBlock,
+  emailHeading,
+  emailParagraph,
+  emailSection,
+  emailSignOff,
+  escapeHtml,
+  getEmailLogoSrc,
+  getEmailLogoPreviewSrc,
+  buildLogoAttachments,
   sendEmailVerification,
   sendMagicLink,
   sendOtpCode,

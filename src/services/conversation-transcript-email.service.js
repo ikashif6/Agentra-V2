@@ -1,5 +1,14 @@
 const ChatSession = require('../models/ChatSession');
-const { sendEmail } = require('./email.service');
+const {
+  sendEmail,
+  emailShell,
+  emailHeading,
+  emailParagraph,
+  emailCallout,
+  escapeHtml,
+  BRAND,
+  FONT,
+} = require('./email.service');
 const { agentDisplayName } = require('./ticket-system-events.service');
 
 const RATING_META = [
@@ -9,15 +18,6 @@ const RATING_META = [
   { value: 4, emoji: '🙂', label: 'Good', color: '#16A34A' },
   { value: 5, emoji: '😍', label: 'Excellent', color: '#15803D' },
 ];
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 function stripHtml(value) {
   return String(value || '')
@@ -40,7 +40,7 @@ function stripHtml(value) {
 function linkify(text) {
   return escapeHtml(text).replace(
     /(https?:\/\/[^\s<]+)/g,
-    '<a href="$1" style="color:#2563EB;text-decoration:underline;" target="_blank" rel="noopener">$1</a>',
+    `<a href="$1" style="color:${BRAND.orange};text-decoration:underline;" target="_blank" rel="noopener">$1</a>`,
   );
 }
 
@@ -125,7 +125,7 @@ function messageBodyHtml(msg) {
     const count = msg.payload?.products?.length || 0;
     return escapeHtml(count ? `Shared ${count} product${count === 1 ? '' : 's'}` : 'Product suggestions');
   }
-  if (!plain) return '<em style="color:#9CA3AF;">(no text)</em>';
+  if (!plain) return `<em style="color:${BRAND.faint};">(no text)</em>`;
   return linkify(plain).replace(/\n/g, '<br/>');
 }
 
@@ -175,10 +175,10 @@ function transcriptEntriesFromTicket(ticket, brandName) {
 
 function buildRatingBlock({ widgetKey, sessionToken, alreadyRated }) {
   if (alreadyRated) {
-    return `
-      <div style="margin:24px 0;padding:16px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;text-align:center;">
-        <p style="margin:0;color:#6B7280;font-size:14px;">Thanks — your feedback for this conversation was already recorded.</p>
-      </div>`;
+    return emailCallout(
+      'Feedback received',
+      `<p style="margin:0;">Thanks — your feedback for this conversation was already recorded.</p>`,
+    );
   }
   if (!widgetKey || !sessionToken) return '';
 
@@ -187,17 +187,21 @@ function buildRatingBlock({ widgetKey, sessionToken, alreadyRated }) {
       <a href="${escapeHtml(feedbackUrl({ widgetKey, sessionToken, rating: option.value }))}"
          style="display:inline-block;margin:0 6px;text-decoration:none;text-align:center;min-width:56px;">
         <span style="display:block;font-size:32px;line-height:1;">${option.emoji}</span>
-        <span style="display:block;margin-top:6px;font-size:11px;font-weight:600;color:${option.color};">${escapeHtml(option.label)}</span>
+        <span style="display:block;margin-top:6px;font-size:11px;font-weight:600;color:${option.color};font-family:${FONT};">${escapeHtml(option.label)}</span>
       </a>`,
   ).join('');
 
   return `
-    <div style="margin:28px 0;padding:20px 16px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;text-align:center;">
-      <p style="margin:0 0 14px;color:#111827;font-size:15px;font-weight:600;">
-        To let us know how we did, please rate your support experience:
-      </p>
-      <div>${buttons}</div>
-    </div>`;
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:28px 0 0;">
+      <tr>
+        <td style="background:${BRAND.surface};border:1px solid ${BRAND.border};border-radius:12px;padding:20px 16px;text-align:center;">
+          <p style="margin:0 0 14px;color:${BRAND.text};font-size:15px;font-weight:600;font-family:${FONT};">
+            How was your support experience?
+          </p>
+          <div>${buttons}</div>
+        </td>
+      </tr>
+    </table>`;
 }
 
 function buildTranscriptHtml({
@@ -228,16 +232,16 @@ function buildTranscriptHtml({
         .map((a) => {
           const isImage = /^image\//i.test(a.contentType || '') || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(a.url);
           if (isImage) {
-            return `<div style="margin-top:8px;"><img src="${escapeHtml(a.url)}" alt="${escapeHtml(a.filename || 'Image')}" style="max-width:100%;height:auto;border-radius:8px;border:1px solid #E5E7EB;" /></div>`;
+            return `<div style="margin-top:8px;"><img src="${escapeHtml(a.url)}" alt="${escapeHtml(a.filename || 'Image')}" style="max-width:100%;height:auto;border-radius:8px;border:1px solid ${BRAND.border};" /></div>`;
           }
-          return `<div style="margin-top:6px;"><a href="${escapeHtml(a.url)}" style="color:#2563EB;font-size:13px;" target="_blank" rel="noopener">${escapeHtml(a.filename || 'Attachment')}</a></div>`;
+          return `<div style="margin-top:6px;"><a href="${escapeHtml(a.url)}" style="color:${BRAND.orange};font-size:13px;font-family:${FONT};" target="_blank" rel="noopener">${escapeHtml(a.filename || 'Attachment')}</a></div>`;
         })
         .join('');
       if (entry.isSystem) {
         return `
           <tr>
-            <td style="padding:10px 0;border-bottom:1px solid #F3F4F6;">
-              <p style="margin:0;text-align:center;color:#6B7280;font-size:12px;font-style:italic;">
+            <td style="padding:10px 0;border-bottom:1px solid ${BRAND.border};">
+              <p style="margin:0;text-align:center;color:${BRAND.muted};font-size:12px;font-style:italic;font-family:${FONT};">
                 ${escapeHtml(stripHtml(entry.html.replace(/<[^>]+>/g, ' '))) || escapeHtml(entry.speaker)}
               </p>
             </td>
@@ -245,12 +249,12 @@ function buildTranscriptHtml({
       }
       return `
         <tr>
-          <td style="padding:12px 0;border-bottom:1px solid #F3F4F6;vertical-align:top;">
-            <p style="margin:0 0 4px;color:#6B7280;font-size:12px;">
+          <td style="padding:12px 0;border-bottom:1px solid ${BRAND.border};vertical-align:top;">
+            <p style="margin:0 0 4px;color:${BRAND.muted};font-size:12px;font-family:${FONT};">
               <span style="font-variant-numeric:tabular-nums;">${escapeHtml(time)}</span>
-              &nbsp;<strong style="color:#111827;">${escapeHtml(entry.speaker)}</strong>
+              &nbsp;<strong style="color:${BRAND.text};">${escapeHtml(entry.speaker)}</strong>
             </p>
-            <div style="color:#111827;font-size:14px;line-height:1.55;">${entry.html}</div>
+            <div style="color:${BRAND.text};font-size:14px;line-height:1.55;font-family:${FONT};">${entry.html}</div>
             ${attachments}
           </td>
         </tr>`;
@@ -265,33 +269,38 @@ function buildTranscriptHtml({
       })
     : '';
 
-  return `
-  <div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;padding:24px 16px;color:#111827;background:#ffffff;">
-    ${
-      logo
-        ? `<div style="text-align:center;margin-bottom:20px;"><img src="${escapeHtml(logo)}" alt="${escapeHtml(brand)}" style="max-height:40px;max-width:180px;" /></div>`
-        : `<div style="text-align:center;margin-bottom:20px;font-size:20px;font-weight:700;color:#111827;">${escapeHtml(brand)}</div>`
-    }
-    <p style="font-size:16px;margin:0 0 12px;">${hello}</p>
-    <p style="font-size:14px;line-height:1.6;color:#374151;margin:0 0 8px;">
-      Thank you for contacting ${escapeHtml(brand)}. A copy of your support chat session is provided below.
-    </p>
+  const merchantBrand = logo
+    ? `<div style="margin:0 0 20px;"><img src="${escapeHtml(logo)}" alt="${escapeHtml(brand)}" style="max-height:36px;max-width:160px;display:block;" /></div>`
+    : '';
+
+  const bodyHtml = `
+    ${merchantBrand}
+    ${emailHeading('Your conversation transcript')}
+    ${emailParagraph(hello)}
+    ${emailParagraph(
+      `Thank you for contacting <strong style="color:${BRAND.text};">${escapeHtml(brand)}</strong>. A copy of your support chat is below.`,
+    )}
     ${ratingBlock}
-    <div style="margin:24px 0 12px;padding:12px 14px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;">
-      <p style="margin:0;font-size:13px;color:#374151;"><strong>Session ID:</strong> ${escapeHtml(sessionId)}</p>
-      <p style="margin:6px 0 0;font-size:13px;color:#374151;"><strong>Date:</strong> ${escapeHtml(sessionDate)}</p>
-    </div>
-    <p style="font-size:14px;font-weight:600;margin:0 0 8px;">Conversation</p>
+    ${emailCallout(
+      'Session details',
+      `<p style="margin:0 0 6px;"><strong>Session ID:</strong> ${escapeHtml(sessionId)}</p>
+       <p style="margin:0;"><strong>Date:</strong> ${escapeHtml(sessionDate)}</p>`,
+    )}
+    <p style="margin:28px 0 8px;color:${BRAND.text};font-size:15px;font-weight:700;font-family:${FONT};">Conversation</p>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-      ${lines || `<tr><td style="padding:12px 0;color:#6B7280;font-size:14px;">No messages were recorded for this conversation.</td></tr>`}
+      ${lines || `<tr><td style="padding:12px 0;color:${BRAND.muted};font-size:14px;font-family:${FONT};">No messages were recorded for this conversation.</td></tr>`}
     </table>
-    <p style="margin:28px 0 0;font-size:14px;line-height:1.6;color:#374151;">
-      Thank you again for your time. If you need more help, just reply to this email or start a new chat on our store.
-    </p>
-    <p style="margin:20px 0 0;font-size:12px;color:#9CA3AF;text-align:center;">
-      © ${new Date().getFullYear()} ${escapeHtml(brand)}
-    </p>
-  </div>`;
+    ${emailParagraph(
+      'Thank you again for your time. If you need more help, reply to this email or start a new chat on our store.',
+      { muted: true },
+    )}
+  `;
+
+  return emailShell({
+    title: `${brand} support chat`,
+    preheader: `A copy of your ${brand} support conversation (${sessionId}).`,
+    bodyHtml,
+  });
 }
 
 function buildTranscriptText({ brand, sessionId, sessionDate, entries, greet }) {
