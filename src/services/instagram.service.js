@@ -228,8 +228,9 @@ async function finalizeAccountConnection(company, account, userAccessToken) {
     throw new Error('[page-token] Facebook did not return a Page access token for this Instagram account.');
   }
 
-  // Subscribe is best-effort. In Live mode with only Standard Access, Meta often
-  // returns (#3) capability errors — that must not block saving the connection.
+  // Page subscribed_apps is what routes Messenger + IG DMs for Page-linked IG.
+  // POST /{ig-user-id}/subscribed_apps often returns (#3) without Advanced Access —
+  // treat it as optional and never block connect on it.
   let subscribeWarning = null;
   try {
     await subscribePageToApp(account.pageId, account.pageAccessToken);
@@ -240,7 +241,7 @@ async function finalizeAccountConnection(company, account, userAccessToken) {
   try {
     await subscribeInstagramAccountToApp(account.igUserId, account.pageAccessToken);
   } catch (err) {
-    subscribeWarning = subscribeWarning || err.message;
+    // Expected in Live + Standard Access; Page subscription is enough for ingest.
     console.warn('[instagram subscribe-ig]', err.message);
   }
 
