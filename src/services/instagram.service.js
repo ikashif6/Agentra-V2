@@ -18,6 +18,9 @@ const SCOPES = [
   'instagram_manage_messages',
   'pages_show_list',
   'pages_manage_metadata',
+  'pages_messaging',
+  'pages_read_engagement',
+  'business_management',
 ].join(',');
 
 function isInstagramConfigured() {
@@ -113,19 +116,45 @@ async function exchangeForLongLivedUserToken(shortLivedToken) {
 // Find Pages that have a linked Instagram professional account.
 async function fetchInstagramAccounts(userAccessToken) {
   const body = await graphGet('/me/accounts', userAccessToken, {
-    fields: 'id,name,access_token,instagram_business_account{id,username,profile_picture_url}',
+    fields:
+      'id,name,access_token,instagram_business_account{id,username,profile_picture_url},connected_instagram_account{id,username,profile_picture_url}',
   });
 
-  return (body?.data ?? [])
-    .filter((page) => page.instagram_business_account?.id)
-    .map((page) => ({
-      igUserId: page.instagram_business_account.id,
-      igUsername: page.instagram_business_account.username || '',
-      igPictureUrl: page.instagram_business_account.profile_picture_url || '',
+  const pages = body?.data ?? [];
+  const accounts = [];
+
+  for (const page of pages) {
+    let ig = page.instagram_business_account;
+    if (!ig?.id && page.connected_instagram_account?.id) {
+      ig = page.connected_instagram_account;
+    }
+
+    // Some New Page Experience assets only expose IG when queried on the Page token.
+    if (!ig?.id && page.id && page.access_token) {
+      try {
+        const detail = await graphGet(`/${page.id}`, page.access_token, {
+          fields:
+            'instagram_business_account{id,username,profile_picture_url},connected_instagram_account{id,username,profile_picture_url}',
+        });
+        ig = detail?.instagram_business_account || detail?.connected_instagram_account || null;
+      } catch {
+        // Keep scanning other pages.
+      }
+    }
+
+    if (!ig?.id) continue;
+
+    accounts.push({
+      igUserId: ig.id,
+      igUsername: ig.username || '',
+      igPictureUrl: ig.profile_picture_url || '',
       pageId: page.id,
       pageName: page.name || '',
       pageAccessToken: page.access_token,
-    }));
+    });
+  }
+
+  return accounts;
 }
 
 async function labeledStep(step, fn) {
@@ -216,7 +245,7 @@ async function handleOAuthCallback(code, company) {
       ...defaultInstagramIntegration(),
       status: 'error',
       lastError:
-        'No Instagram professional account is linked to your Facebook Pages. In Instagram, switch to a Professional account and connect it to a Facebook Page, then try again.',
+        'No Instagram professional account was found on your Facebook Pages for this app. Reconnect and use Edit settings — approve business_management plus Page access for the Vastora Page that has @vastora.pk linked. If this keeps failing, deploy the latest API and try again.',
       userAccessToken,
       pendingAccounts: [],
     };
