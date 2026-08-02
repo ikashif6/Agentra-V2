@@ -227,17 +227,28 @@ async function finalizeAccountConnection(company, account, userAccessToken) {
   if (!account.pageAccessToken) {
     throw new Error('[page-token] Facebook did not return a Page access token for this Instagram account.');
   }
-  // Page + IG account subscriptions — both are required for reliable DM webhooks.
-  await labeledStep('subscribe-page', () => subscribePageToApp(account.pageId, account.pageAccessToken));
-  await labeledStep('subscribe-ig', () =>
-    subscribeInstagramAccountToApp(account.igUserId, account.pageAccessToken),
-  );
+
+  // Subscribe is best-effort. In Live mode with only Standard Access, Meta often
+  // returns (#3) capability errors — that must not block saving the connection.
+  let subscribeWarning = null;
+  try {
+    await subscribePageToApp(account.pageId, account.pageAccessToken);
+  } catch (err) {
+    subscribeWarning = err.message;
+    console.warn('[instagram subscribe-page]', err.message);
+  }
+  try {
+    await subscribeInstagramAccountToApp(account.igUserId, account.pageAccessToken);
+  } catch (err) {
+    subscribeWarning = subscribeWarning || err.message;
+    console.warn('[instagram subscribe-ig]', err.message);
+  }
 
   ensureChannelIntegrations(company);
   company.channelIntegrations.instagram = {
     status: 'connected',
     connectedAt: new Date(),
-    lastError: null,
+    lastError: subscribeWarning,
     igUserId: account.igUserId,
     igUsername: account.igUsername,
     igPictureUrl: account.igPictureUrl,
