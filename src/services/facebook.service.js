@@ -6,6 +6,8 @@ const SCOPES = [
   'pages_show_list',
   'pages_messaging',
   'pages_manage_metadata',
+  // Needed so Business Suite Pages (e.g. Vastora) show up on /me/accounts.
+  'business_management',
 ].join(',');
 
 function isFacebookConfigured() {
