@@ -208,12 +208,30 @@ function defaultInstagramIntegration() {
   };
 }
 
+async function subscribeInstagramAccountToApp(igUserId, pageAccessToken) {
+  const url = new URL(`https://graph.facebook.com/${GRAPH_VERSION}/${igUserId}/subscribed_apps`);
+  url.searchParams.set('access_token', pageAccessToken);
+  url.searchParams.set('subscribed_fields', 'messages,messaging_postbacks,message_reactions,messaging_seen');
+
+  const res = await fetch(url, { method: 'POST' });
+  const body = await readJsonResponse(res);
+
+  if (!res.ok) {
+    throw new Error(body?.error?.message || 'Could not subscribe Instagram account to webhooks');
+  }
+
+  return body;
+}
+
 async function finalizeAccountConnection(company, account, userAccessToken) {
   if (!account.pageAccessToken) {
     throw new Error('[page-token] Facebook did not return a Page access token for this Instagram account.');
   }
-  // Subscribing the linked Page routes Instagram messaging webhooks to the app.
-  await labeledStep('subscribe', () => subscribePageToApp(account.pageId, account.pageAccessToken));
+  // Page + IG account subscriptions — both are required for reliable DM webhooks.
+  await labeledStep('subscribe-page', () => subscribePageToApp(account.pageId, account.pageAccessToken));
+  await labeledStep('subscribe-ig', () =>
+    subscribeInstagramAccountToApp(account.igUserId, account.pageAccessToken),
+  );
 
   ensureChannelIntegrations(company);
   company.channelIntegrations.instagram = {
