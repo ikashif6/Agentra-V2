@@ -142,6 +142,20 @@ export default function EmailSettingsPanel() {
     }
   }, [form.email]);
 
+  const startGoogleOAuth = async () => {
+    try {
+      const returnOrigin = window.location.origin;
+      const returnPath = "/settings?item=email";
+      const { data } = await emailChannelApi.googleOAuthUrl(returnOrigin, returnPath);
+      const url = data.data?.url as string | undefined;
+      if (!url) throw new Error("Missing OAuth URL");
+      window.location.assign(url);
+    } catch (err: unknown) {
+      const { message } = getApiError(err, "Could not start Google connect");
+      toast.error(message);
+    }
+  };
+
   const startMicrosoftOAuth = async () => {
     try {
       const returnOrigin = window.location.origin;
@@ -347,17 +361,14 @@ export default function EmailSettingsPanel() {
         <div className="mt-6 space-y-3">
           <button
             type="button"
-            onClick={() => toast.message("Gmail connect is coming soon.")}
-            className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60 opacity-60"
+            onClick={() => void startGoogleOAuth()}
+            className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
           >
             <GoogleGlyph className="size-6 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-foreground">Connect with Google</p>
               <p className="text-xs text-muted-foreground">Gmail &amp; Google Workspace · one click</p>
             </div>
-            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Coming soon
-            </span>
           </button>
 
           <button
