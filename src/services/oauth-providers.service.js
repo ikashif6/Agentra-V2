@@ -91,11 +91,14 @@ function microsoftTenant() {
 }
 
 const GOOGLE_AUTH_SCOPES = ['openid', 'email', 'profile'].join(' ');
+// Least privilege: read inbox for ticket ingest + send replies.
+// Avoid gmail.modify (labels/trash/archive) — not used by Agentra.
 const GOOGLE_EMAIL_SCOPES = [
   'openid',
   'email',
   'profile',
-  'https://www.googleapis.com/auth/gmail.modify',
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
 ].join(' ');
 
 const MS_AUTH_SCOPES = ['openid', 'profile', 'email', 'User.Read', 'offline_access'].join(' ');
