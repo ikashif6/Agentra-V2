@@ -265,26 +265,26 @@ exports.shopifyOAuthUrl = async (req, res, next) => {
       returnPath,
     });
 
-    if (usesCustomInstallFlow()) {
-      const domain = resolvedShopDomain;
-      req.company.storeIntegration = {
-        provider: 'shopify',
-        status: 'pending',
-        lastError: null,
-        encrypted: false,
-        webhooksRegistered: false,
-        shopify: {
-          shopDomain: domain,
-          pendingUserId: req.user._id,
-          pendingReturnOrigin:
-            typeof returnOrigin === 'string' && returnOrigin.trim() ? returnOrigin.trim() : null,
-          pendingReturnPath: returnPath,
-        },
-        syncSettings: req.company.storeIntegration?.syncSettings || defaultSyncSettings(),
-      };
-      req.company.markModified('storeIntegration');
-      await req.company.save();
-    }
+    // Always mark pending so Shopify App URL / reinstall can finish OAuth for this workspace.
+    // Settings → Connect is the only supported install path (no App Store listing).
+    const domain = resolvedShopDomain;
+    req.company.storeIntegration = {
+      provider: 'shopify',
+      status: 'pending',
+      lastError: null,
+      encrypted: false,
+      webhooksRegistered: false,
+      shopify: {
+        shopDomain: domain,
+        pendingUserId: req.user._id,
+        pendingReturnOrigin:
+          typeof returnOrigin === 'string' && returnOrigin.trim() ? returnOrigin.trim() : null,
+        pendingReturnPath: returnPath,
+      },
+      syncSettings: req.company.storeIntegration?.syncSettings || defaultSyncSettings(),
+    };
+    req.company.markModified('storeIntegration');
+    await req.company.save();
 
     return response.success(res, { url });
   } catch (err) {
@@ -296,25 +296,42 @@ exports.shopifyOAuthUrl = async (req, res, next) => {
 };
 
 /**
- * Shopify App URL entry (after custom distribution install).
- * Partner Dashboard App URL should point here (or to API root which forwards here).
+ * Shopify App URL entry (Partner "App URL").
+ * Agentra is Settings-only / not listed on the App Store. Merchants connect from
+ * Agentra › Settings › Store. This page finishes OAuth when a pending connect exists,
+ * otherwise shows a clear (non-error) guide instead of a fatal App Store crash.
  * GET /store/shopify/app?shop=...&hmac=...
  */
+function shopifyConnectGuideHtml({ title, bodyHtml }) {
+  const frontend =
+    (process.env.APP_FRONTEND_URL || 'https://agentraa.com').replace(/\/$/, '') ||
+    'https://agentraa.com';
+  return (
+    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1"/>' +
+    '<title>Agentra · Shopify</title></head>' +
+    '<body style="font-family:system-ui,-apple-system,sans-serif;padding:40px;max-width:560px;margin:0 auto;color:#111;line-height:1.5">' +
+    '<p style="font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:#666;margin:0 0 8px">Agentra</p>' +
+    `<h1 style="font-size:1.5rem;margin:0 0 12px">${title}</h1>` +
+    bodyHtml +
+    `<p style="margin:24px 0 0"><a href="${frontend}" style="color:#0b5fff">Go to Agentra</a></p>` +
+    '</body></html>'
+  );
+}
+
 exports.shopifyAppEntry = async (req, res, next) => {
   try {
     const shop = req.query.shop;
     const hmac = req.query.hmac;
 
     if (!shop || !hmac) {
-      return res
-        .status(400)
-        .type('html')
-        .send(
-          '<html><body style="font-family:system-ui;padding:40px;max-width:520px">' +
-            '<h2>Agentra</h2><p>Missing Shopify install parameters.</p>' +
-            '<p>Open Agentra › Settings › Store and click Connect Shopify.</p>' +
-            '</body></html>',
-        );
+      return res.status(200).type('html').send(
+        shopifyConnectGuideHtml({
+          title: 'Connect Shopify from Agentra',
+          bodyHtml:
+            '<p>Agentra is not installed from the Shopify App Store. Open your Agentra workspace → <strong>Settings → Store</strong> → Connect Shopify.</p>',
+        }),
+      );
     }
 
     if (!isValidShopDomain(shop)) {
@@ -335,18 +352,37 @@ exports.shopifyAppEntry = async (req, res, next) => {
     }).sort({ updatedAt: -1 });
 
     if (!company) {
-      return res
-        .status(400)
-        .type('html')
-        .send(
-          '<html><body style="font-family:system-ui;padding:40px;max-width:560px">' +
-            '<h2>Almost there</h2>' +
-            '<p>Shopify installed Agentra, but no pending workspace connection was found for <strong>' +
-            domain +
-            '</strong>.</p>' +
-            '<p>Go back to Agentra › <strong>Settings › Store</strong> › Connect Shopify (same store), then try again.</p>' +
-            '</body></html>',
+      const connected = await Company.findOne({
+        'storeIntegration.provider': 'shopify',
+        'storeIntegration.status': 'connected',
+        'storeIntegration.shopify.shopDomain': domain,
+      }).sort({ updatedAt: -1 });
+
+      if (connected) {
+        return res.redirect(
+          buildStoreSettingsRedirect(
+            connected.subdomain,
+            { store: 'connected', name: connected.storeIntegration?.shopify?.shopName || domain },
+            null,
+            '/settings?item=store',
+          ),
         );
+      }
+
+      return res.status(200).type('html').send(
+        shopifyConnectGuideHtml({
+          title: 'Finish connecting in Agentra',
+          bodyHtml:
+            `<p>Shopify opened Agentra for <strong>${domain}</strong>, but connection must be started from your Agentra workspace.</p>` +
+            '<ol style="padding-left:1.2rem">' +
+            '<li>Sign in to Agentra</li>' +
+            '<li>Go to <strong>Settings → Store</strong></li>' +
+            `<li>Enter <strong>${domain}</strong> and click <strong>Connect Shopify</strong></li>` +
+            '<li>Approve access when Shopify asks</li>' +
+            '</ol>' +
+            '<p style="color:#444;font-size:14px">Agentra is not listed on the Shopify App Store. Store connection is included with your Agentra workspace — there is no separate Shopify app charge.</p>',
+        }),
+      );
     }
 
     const pendingUserId =
@@ -358,7 +394,13 @@ exports.shopifyAppEntry = async (req, res, next) => {
       userId = owner?._id;
     }
     if (!userId) {
-      return res.status(400).send('Could not determine workspace owner for OAuth');
+      return res.status(200).type('html').send(
+        shopifyConnectGuideHtml({
+          title: 'Could not continue Shopify connect',
+          bodyHtml:
+            '<p>We found a pending connection but could not determine the workspace owner. Start again from Agentra › Settings › Store.</p>',
+        }),
+      );
     }
 
     const authorizeUrl = buildShopifyAuthorizeUrl({
@@ -367,6 +409,7 @@ exports.shopifyAppEntry = async (req, res, next) => {
       subdomain: company.subdomain,
       userId,
       returnOrigin: company.storeIntegration?.shopify?.pendingReturnOrigin || null,
+      returnPath: company.storeIntegration?.shopify?.pendingReturnPath || null,
     });
 
     return res.redirect(authorizeUrl);
@@ -412,7 +455,8 @@ exports.shopifyOAuthCallback = async (req, res, next) => {
       subdomain = payload.subdomain;
       returnOrigin = payload.returnOrigin;
       returnPath = payload.returnPath || null;
-    } else if (usesCustomInstallFlow()) {
+    } else {
+      // Settings connect always leaves a pending row; finish without state JWT if needed.
       company = await Company.findOne({
         'storeIntegration.provider': 'shopify',
         'storeIntegration.status': 'pending',
@@ -424,8 +468,6 @@ exports.shopifyOAuthCallback = async (req, res, next) => {
       subdomain = company.subdomain;
       returnOrigin = company.storeIntegration?.shopify?.pendingReturnOrigin || null;
       returnPath = company.storeIntegration?.shopify?.pendingReturnPath || null;
-    } else {
-      return res.status(400).send('Missing OAuth state');
     }
 
     try {

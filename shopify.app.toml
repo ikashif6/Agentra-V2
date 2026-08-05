@@ -1,3 +1,6 @@
+# Settings-only Shopify connection (not listed on the App Store).
+# Merchants connect from Agentra › Settings › Store via OAuth.
+# Do not submit for App Store listing / Shopify Billing is not required for this model.
 client_id = "76fade73defe2c1f126f0b588e439d11"
 name = "Agentra"
 application_url = "https://api.agentraa.com/api/v1/store/shopify/app"

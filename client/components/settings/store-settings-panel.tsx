@@ -39,11 +39,12 @@ const PROVIDER_COPY: Record<
 > = {
   shopify: {
     title: "Connect Shopify",
-    subtitle: "Authorize Agentra from your Shopify admin — no tokens to copy.",
+    subtitle:
+      "Authorize Agentra from your Shopify admin — connection is managed here, not via the Shopify App Store.",
     steps: [
       "Enter your *.myshopify.com domain or your public storefront URL.",
       "Click Connect Shopify and approve access in the Shopify window.",
-      "You're done — orders sync automatically into the inbox.",
+      "You're done — orders and store data sync into Agentra (no separate Shopify app fee).",
     ],
   },
   woocommerce: {
