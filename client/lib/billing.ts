@@ -79,6 +79,9 @@ export type PaddleCheckoutPayload = {
   customer?: { id?: string; email?: string };
   customerAuthEmail?: string;
   customerName?: string;
+  /** Server-created draft transaction — preferred for Paddle.Checkout.open */
+  transactionId?: string;
+  checkoutUrl?: string | null;
 };
 
 export function formatMoney(amount: number, currency = "USD") {

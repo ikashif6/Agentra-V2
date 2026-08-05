@@ -221,7 +221,11 @@ export default function BillingPanel() {
                 </button>
               </div>
               <div>
-                <Button type="button" onClick={goToCheckout} disabled={!billing.paddleConfigured}>
+                <Button
+                  type="button"
+                  onClick={goToCheckout}
+                  disabled={!billing.paddleConfigured}
+                >
                   Subscribe with Paddle
                 </Button>
                 {!billing.paddleConfigured ? (
@@ -312,7 +316,12 @@ export default function BillingPanel() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <p className="text-sm text-muted-foreground">No card on file.</p>
               {needsSubscribe ? (
-                <Button type="button" size="sm" onClick={goToCheckout} disabled={!billing.paddleConfigured}>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={goToCheckout}
+                  disabled={!billing.paddleConfigured}
+                >
                   Add payment method
                 </Button>
               ) : (

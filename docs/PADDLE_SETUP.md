@@ -21,6 +21,10 @@ Agentra uses **Paddle Billing** as Merchant of Record. Checkout runs via Paddle.
    - `PADDLE_PRICE_MONTHLY=pri_...`
    - `PADDLE_PRICE_YEARLY=pri_...`
 7. Set `PADDLE_ENV=sandbox`.
+8. **Checkout → Checkout settings → Default payment link** (required or checkout fails with a vague connection error):
+   - Prefer `https://demo.agentraa.com/billing/checkout`
+   - Also approve domains: `demo.agentraa.com`, `agentraa.com`
+   - Save, reload the page, and confirm the URL still shows.
 
 ## Live
 
@@ -29,5 +33,5 @@ Repeat product/prices in **Live**, then set `PADDLE_ENV=live` and swap all `PADD
 ## App behaviour
 
 - Signup starts a **14-day Pro trial** (no card).
-- Owner opens **Settings → Plan & billing** → Subscribe → Paddle Checkout.
+- Owner opens **Settings → Plan & billing** → Subscribe → `/billing/checkout` (branded full-page inline Paddle; server mints a transaction first).
 - Cancel / Keep plan call the Paddle Subscriptions API; webhooks remain source of truth for status.

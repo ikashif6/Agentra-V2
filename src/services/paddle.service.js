@@ -110,6 +110,42 @@ function getCheckoutPayload({ company, billingCycle, email, name }) {
   };
 }
 
+/**
+ * Create a draft/automatic transaction so Checkout can open with transactionId
+ * (more reliable than building the cart only in the browser).
+ */
+async function createCheckoutTransaction({ company, billingCycle, email, name }) {
+  const payload = getCheckoutPayload({ company, billingCycle, email, name });
+  const body = {
+    items: [{ price_id: payload.priceId, quantity: 1 }],
+    collection_mode: 'automatic',
+    currency_code: 'USD',
+    custom_data: payload.customData,
+  };
+  if (company.plan?.paddleCustomerId) {
+    body.customer_id = company.plan.paddleCustomerId;
+  } else if (email) {
+    body.customer = { email };
+  }
+
+  const result = await paddleFetch('/transactions', {
+    method: 'POST',
+    body,
+  });
+  const transactionId = result?.data?.id;
+  if (!transactionId) {
+    const err = new Error('Paddle did not return a transaction id');
+    err.statusCode = 502;
+    throw err;
+  }
+
+  return {
+    ...payload,
+    transactionId,
+    checkoutUrl: result?.data?.checkout?.url || null,
+  };
+}
+
 async function cancelPaddleSubscription(subscriptionId, { effectiveFrom = 'next_billing_period' } = {}) {
   if (!subscriptionId) {
     const err = new Error('No Paddle subscription to cancel');
@@ -185,6 +221,7 @@ module.exports = {
   isPaddleConfigured,
   getPaddleEnv,
   getCheckoutPayload,
+  createCheckoutTransaction,
   cancelPaddleSubscription,
   removeScheduledCancel,
   createCustomerPortalSession,

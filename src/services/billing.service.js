@@ -73,8 +73,8 @@ function getBillingOverview(company) {
   };
 }
 
-function getCheckoutSession(company, { billingCycle, email, name }) {
-  return paddle.getCheckoutPayload({ company, billingCycle, email, name });
+async function getCheckoutSession(company, { billingCycle, email, name }) {
+  return paddle.createCheckoutTransaction({ company, billingCycle, email, name });
 }
 
 async function getPortalUrl(company) {

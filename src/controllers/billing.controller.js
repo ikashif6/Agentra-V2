@@ -32,14 +32,14 @@ exports.getOverview = async (req, res, next) => {
 exports.createCheckout = async (req, res, next) => {
   try {
     const billingCycle = req.body?.billingCycle === 'yearly' ? 'yearly' : 'monthly';
-    const checkout = getCheckoutSession(req.company, {
+    const checkout = await getCheckoutSession(req.company, {
       billingCycle,
       email: req.user.email,
       name: req.user.name || req.company.name,
     });
     return response.success(res, { checkout });
   } catch (err) {
-    if (err.statusCode === 400 || err.statusCode === 503) {
+    if (err.statusCode === 400 || err.statusCode === 503 || err.statusCode === 502) {
       return response.badRequest(res, err.message);
     }
     next(err);
