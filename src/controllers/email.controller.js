@@ -5,7 +5,6 @@ const {
   getEmailIntegration,
   sanitizeEmailIntegration,
   connectImap,
-  connectGoogleOAuth,
   connectMicrosoftOAuth,
   disconnectEmail,
   guessPreset,
@@ -103,24 +102,12 @@ exports.disconnect = async (req, res, next) => {
   }
 };
 
-exports.getGoogleOAuthUrl = async (req, res, next) => {
-  try {
-    if (!oauthProviders.isGoogleConfigured()) {
-      return response.badRequest(res, 'Google email connect is not configured');
-    }
-    const url = oauthProviders.buildGoogleAuthUrl({
-      purpose: 'google_email',
-      companyId: req.company._id,
-      subdomain: req.company.subdomain,
-      userId: req.user._id,
-      returnOrigin: req.query.returnOrigin || req.headers.origin,
-      returnPath:
-        typeof req.query.returnPath === 'string' ? req.query.returnPath : '/settings?item=email',
-    });
-    return response.success(res, { url });
-  } catch (err) {
-    next(err);
-  }
+exports.getGoogleOAuthUrl = async (req, res) => {
+  // Gmail API OAuth removed (no restricted scopes / CASA). Use IMAP + app password instead.
+  return response.badRequest(
+    res,
+    'Gmail OAuth connect is no longer available. Connect Gmail with IMAP/SMTP and an App Password instead.',
+  );
 };
 
 exports.getMicrosoftOAuthUrl = async (req, res, next) => {
@@ -145,7 +132,7 @@ exports.getMicrosoftOAuthUrl = async (req, res, next) => {
 
 exports.googleOAuthCallback = async (req, res) => {
   try {
-    const { code, state, error, error_description: errorDescription } = req.query;
+    const { state } = req.query;
     if (!state) return res.status(400).send('Missing OAuth state');
     let payload;
     try {
@@ -155,41 +142,15 @@ exports.googleOAuthCallback = async (req, res) => {
     }
     if (payload.purpose !== 'google_email') return res.status(400).send('Invalid OAuth state');
 
-    const redirectErr = (message) =>
-      res.redirect(
-        oauthProviders.buildSettingsRedirect(
-          payload.subdomain,
-          { email: 'error', message },
-          payload.returnOrigin,
-          payload.returnPath,
-        ),
-      );
-
-    if (error) return redirectErr(errorDescription || error);
-    if (!code) return redirectErr('Google did not return an authorization code');
-
-    const company = await loadCompany(payload.companyId);
-    if (!company) return redirectErr('Workspace not found');
-
-    try {
-      const tokens = await oauthProviders.exchangeGoogleCode(String(code), 'email');
-      const profile = await oauthProviders.fetchGoogleProfile(tokens.access_token);
-      if (!profile.email) return redirectErr('Google did not return an email address');
-      if (!tokens.refresh_token) {
-        return redirectErr(
-          'Google did not return a refresh token. Remove Agentra from your Google account access and try again.',
-        );
-      }
-      await connectGoogleOAuth(company, { tokens, profile });
-    } catch (err) {
-      console.error('[email google oauth]', err);
-      return redirectErr(err.message || 'Could not connect Gmail');
-    }
-
+    // Legacy callback only — new Gmail connects must use IMAP/SMTP.
     return res.redirect(
       oauthProviders.buildSettingsRedirect(
         payload.subdomain,
-        { email: 'connected', provider: 'google' },
+        {
+          email: 'error',
+          message:
+            'Gmail OAuth connect is no longer available. Use IMAP/SMTP with an App Password instead.',
+        },
         payload.returnOrigin,
         payload.returnPath,
       ),

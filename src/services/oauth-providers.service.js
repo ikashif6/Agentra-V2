@@ -91,15 +91,9 @@ function microsoftTenant() {
 }
 
 const GOOGLE_AUTH_SCOPES = ['openid', 'email', 'profile'].join(' ');
-// Least privilege: read inbox for ticket ingest + send replies.
-// Avoid gmail.modify (labels/trash/archive) — not used by Agentra.
-const GOOGLE_EMAIL_SCOPES = [
-  'openid',
-  'email',
-  'profile',
-  'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/gmail.send',
-].join(' ');
+// Email connect no longer uses Gmail API OAuth (IMAP/SMTP instead). Kept only so
+// legacy google_email purpose builds never request restricted scopes again.
+const GOOGLE_EMAIL_SCOPES = GOOGLE_AUTH_SCOPES;
 
 const MS_AUTH_SCOPES = ['openid', 'profile', 'email', 'User.Read', 'offline_access'].join(' ');
 const MS_EMAIL_SCOPES = [

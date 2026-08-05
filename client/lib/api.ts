@@ -378,13 +378,6 @@ export const emailChannelApi = {
     smtpSecure?: boolean;
   }) => api.post("/channels/email/connect", payload, { timeout: 90000 }),
   disconnect: () => api.delete("/channels/email"),
-  googleOAuthUrl: (returnOrigin?: string, returnPath?: string) =>
-    api.get("/channels/email/google/oauth/url", {
-      params: {
-        ...(returnOrigin ? { returnOrigin } : {}),
-        ...(returnPath ? { returnPath } : {}),
-      },
-    }),
   microsoftOAuthUrl: (returnOrigin?: string, returnPath?: string) =>
     api.get("/channels/email/microsoft/oauth/url", {
       params: {

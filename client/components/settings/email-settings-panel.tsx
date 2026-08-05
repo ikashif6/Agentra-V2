@@ -44,29 +44,6 @@ const CAPABILITIES = [
   },
 ] as const;
 
-function GoogleGlyph({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"
-      />
-    </svg>
-  );
-}
-
 function MicrosoftGlyph({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 23 23" className={className} aria-hidden="true">
@@ -90,8 +67,8 @@ export default function EmailSettingsPanel() {
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState(false);
 
-  // IMAP/SMTP form
-  const [showImap, setShowImap] = useState(false);
+  // IMAP/SMTP form (primary connect path for Gmail and other providers)
+  const [showImap, setShowImap] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [form, setForm] = useState({
@@ -142,20 +119,6 @@ export default function EmailSettingsPanel() {
     }
   }, [form.email]);
 
-  const startGoogleOAuth = async () => {
-    try {
-      const returnOrigin = window.location.origin;
-      const returnPath = "/settings?item=email";
-      const { data } = await emailChannelApi.googleOAuthUrl(returnOrigin, returnPath);
-      const url = data.data?.url as string | undefined;
-      if (!url) throw new Error("Missing OAuth URL");
-      window.location.assign(url);
-    } catch (err: unknown) {
-      const { message } = getApiError(err, "Could not start Google connect");
-      toast.error(message);
-    }
-  };
-
   const startMicrosoftOAuth = async () => {
     try {
       const returnOrigin = window.location.origin;
@@ -176,11 +139,7 @@ export default function EmailSettingsPanel() {
     if (!status) return;
     if (status === "connected") {
       toast.success(
-        params.get("provider") === "microsoft"
-          ? "Outlook connected"
-          : params.get("provider") === "google"
-            ? "Gmail connected"
-            : "Email connected",
+        params.get("provider") === "microsoft" ? "Outlook connected" : "Email connected",
       );
       void load();
     } else if (status === "error") {
@@ -278,7 +237,11 @@ export default function EmailSettingsPanel() {
                   {email.address}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {email.provider === "imap" ? "IMAP / SMTP" : email.provider}
+                  {email.provider === "imap"
+                    ? "IMAP / SMTP"
+                    : email.provider === "google"
+                      ? "Google (legacy)"
+                      : email.provider}
                   {connectedAt ? ` · linked ${connectedAt}` : ""}
                 </p>
               </div>
@@ -357,20 +320,7 @@ export default function EmailSettingsPanel() {
           </p>
         </div>
 
-        {/* Three connect options */}
         <div className="mt-6 space-y-3">
-          <button
-            type="button"
-            onClick={() => void startGoogleOAuth()}
-            className="flex w-full items-center gap-4 rounded-xl border border-border/70 bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5"
-          >
-            <GoogleGlyph className="size-6 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">Connect with Google</p>
-              <p className="text-xs text-muted-foreground">Gmail &amp; Google Workspace · one click</p>
-            </div>
-          </button>
-
           <button
             type="button"
             onClick={() => void startMicrosoftOAuth()}
@@ -395,9 +345,9 @@ export default function EmailSettingsPanel() {
           >
             <Mail className="size-6 shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">Other email (IMAP / SMTP)</p>
+              <p className="text-sm font-medium text-foreground">Gmail &amp; other email (IMAP / SMTP)</p>
               <p className="text-xs text-muted-foreground">
-                Any provider or custom domain · works everywhere
+                Gmail, Google Workspace, custom domains · app password
               </p>
             </div>
             <ChevronDown
@@ -497,10 +447,17 @@ export default function EmailSettingsPanel() {
             ) : null}
 
             <div className="rounded-lg border border-border/60 bg-card px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-              <p className="font-medium text-foreground">Using Gmail or Outlook?</p>
-              Turn on 2-step verification and create an{" "}
-              <span className="font-medium text-foreground">app password</span> — paste that here
-              instead of your normal password.
+              <p className="font-medium text-foreground">Gmail / Google Workspace</p>
+              Turn on 2-Step Verification, then create an{" "}
+              <a
+                href="https://myaccount.google.com/apppasswords"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-foreground underline-offset-4 hover:underline"
+              >
+                App Password
+              </a>{" "}
+              and paste it here (not your normal Google password). Hosts are auto-filled for Gmail.
             </div>
 
             <Button type="button" onClick={() => void connectImap()} disabled={connecting}>
