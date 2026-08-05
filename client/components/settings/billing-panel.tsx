@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { initializePaddle, type Paddle } from "@paddle/paddle-js";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CreditCard, Download, Loader2, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { billingApi } from "@/lib/api";
@@ -14,7 +14,6 @@ import {
   planStatusLabel,
   type BillingCycle,
   type BillingOverview,
-  type PaddleCheckoutPayload,
 } from "@/lib/billing";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -28,15 +27,15 @@ import {
 import { cn } from "@/lib/utils";
 
 export default function BillingPanel() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [billing, setBilling] = useState<BillingOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [reactivating, setReactivating] = useState(false);
-  const [subscribing, setSubscribing] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
-  const [paddle, setPaddle] = useState<Paddle | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,6 +57,18 @@ export default function BillingPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (searchParams.get("paddle") !== "success") return;
+    toast.success("Payment received — your plan is updating");
+    void load();
+    const t = window.setTimeout(() => void load(), 2500);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("paddle");
+    const qs = url.searchParams.toString();
+    window.history.replaceState({}, "", qs ? `${url.pathname}?${qs}` : url.pathname);
+    return () => window.clearTimeout(t);
+  }, [load, searchParams]);
 
   const handleCancelPlan = async () => {
     setCanceling(true);
@@ -88,50 +99,8 @@ export default function BillingPanel() {
     }
   };
 
-  const ensurePaddle = useCallback(
-    async (checkout: PaddleCheckoutPayload) => {
-      if (paddle) return paddle;
-      const instance = await initializePaddle({
-        token: checkout.clientToken,
-        environment: checkout.env === "live" ? "production" : "sandbox",
-        eventCallback: (event) => {
-          if (event.name === "checkout.completed") {
-            toast.success("Payment received — activating your plan…");
-            void load();
-            window.setTimeout(() => void load(), 2500);
-          }
-        },
-      });
-      if (!instance) {
-        throw new Error("Could not load Paddle Checkout");
-      }
-      setPaddle(instance);
-      return instance;
-    },
-    [load, paddle],
-  );
-
-  const handleSubscribe = async () => {
-    setSubscribing(true);
-    try {
-      const { data } = await billingApi.checkout(cycle);
-      const checkout = data.data.checkout as PaddleCheckoutPayload;
-      const instance = await ensurePaddle(checkout);
-      instance.Checkout.open({
-        items: [{ priceId: checkout.priceId, quantity: 1 }],
-        customData: checkout.customData,
-        customer: checkout.customer?.id
-          ? { id: checkout.customer.id }
-          : checkout.customerAuthEmail
-            ? { email: checkout.customerAuthEmail }
-            : undefined,
-      });
-    } catch (err: unknown) {
-      const { message } = getApiError(err, "Could not start checkout");
-      toast.error(message);
-    } finally {
-      setSubscribing(false);
-    }
+  const goToCheckout = () => {
+    router.push(`/billing/checkout?cycle=${cycle}`);
   };
 
   const handlePortal = async () => {
@@ -252,8 +221,7 @@ export default function BillingPanel() {
                 </button>
               </div>
               <div>
-                <Button type="button" onClick={() => void handleSubscribe()} disabled={subscribing || !billing.paddleConfigured}>
-                  {subscribing ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                <Button type="button" onClick={goToCheckout} disabled={!billing.paddleConfigured}>
                   Subscribe with Paddle
                 </Button>
                 {!billing.paddleConfigured ? (
@@ -344,8 +312,7 @@ export default function BillingPanel() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <p className="text-sm text-muted-foreground">No card on file.</p>
               {needsSubscribe ? (
-                <Button type="button" size="sm" onClick={() => void handleSubscribe()} disabled={subscribing || !billing.paddleConfigured}>
-                  {subscribing ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                <Button type="button" size="sm" onClick={goToCheckout} disabled={!billing.paddleConfigured}>
                   Add payment method
                 </Button>
               ) : (
