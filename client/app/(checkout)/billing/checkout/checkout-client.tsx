@@ -105,48 +105,49 @@ export default function BillingCheckoutPage() {
       if (isCancelled?.()) return;
       const payload = data.data.checkout as PaddleCheckoutPayload;
 
-      let instance = paddleRef.current;
+      let instance: Paddle | null = paddleRef.current;
       if (!instance) {
-        instance = await initializePaddle({
-          token: payload.clientToken,
-          environment: payload.env === "live" ? "production" : "sandbox",
-          checkout: {
-            settings: {
-              displayMode: "inline",
-              frameTarget: FRAME_CLASS,
-              frameInitialHeight: 520,
-              frameStyle:
-                "width:100%; min-width:312px; background-color:transparent; border:none;",
-              theme: "light",
-              successUrl,
-              variant: "one-page",
+        instance =
+          (await initializePaddle({
+            token: payload.clientToken,
+            environment: payload.env === "live" ? "production" : "sandbox",
+            checkout: {
+              settings: {
+                displayMode: "inline",
+                frameTarget: FRAME_CLASS,
+                frameInitialHeight: 520,
+                frameStyle:
+                  "width:100%; min-width:312px; background-color:transparent; border:none;",
+                theme: "light",
+                successUrl,
+                variant: "one-page",
+              },
             },
-          },
-          eventCallback: (event) => {
-            if (event.name === "checkout.loaded") {
-              setBooting(false);
-            }
-            if (event.name === "checkout.completed") {
-              toast.success("Payment received — activating your plan…");
-              window.setTimeout(() => {
-                router.replace("/settings?item=billing&paddle=success");
-              }, 600);
-              return;
-            }
-            if (event.name === "checkout.error") {
-              const detail =
-                (event as { data?: { error?: { detail?: string; message?: string } } }).data
-                  ?.error?.detail ||
-                (event as { data?: { error?: { detail?: string; message?: string } } }).data
-                  ?.error?.message ||
-                "Checkout failed. Please try again.";
-              console.error("[paddle checkout.error]", event);
-              setError(detail);
-              toast.error(detail);
-              setBooting(false);
-            }
-          },
-        });
+            eventCallback: (event) => {
+              if (event.name === "checkout.loaded") {
+                setBooting(false);
+              }
+              if (event.name === "checkout.completed") {
+                toast.success("Payment received — activating your plan…");
+                window.setTimeout(() => {
+                  router.replace("/settings?item=billing&paddle=success");
+                }, 600);
+                return;
+              }
+              if (event.name === "checkout.error") {
+                const detail =
+                  (event as { data?: { error?: { detail?: string; message?: string } } }).data
+                    ?.error?.detail ||
+                  (event as { data?: { error?: { detail?: string; message?: string } } }).data
+                    ?.error?.message ||
+                  "Checkout failed. Please try again.";
+                console.error("[paddle checkout.error]", event);
+                setError(detail);
+                toast.error(detail);
+                setBooting(false);
+              }
+            },
+          })) ?? null;
       }
 
       if (isCancelled?.()) return;
