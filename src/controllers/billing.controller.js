@@ -1,6 +1,8 @@
 const response = require('../utils/apiResponse');
 const {
   getBillingOverview,
+  getCheckoutSession,
+  getPortalUrl,
   cancelSubscription,
   reactivateSubscription,
 } = require('../services/billing.service');
@@ -24,8 +26,43 @@ exports.getOverview = async (req, res, next) => {
 };
 
 /**
+ * POST /billing/checkout
+ * Body: { billingCycle?: 'monthly' | 'yearly' }
+ */
+exports.createCheckout = async (req, res, next) => {
+  try {
+    const billingCycle = req.body?.billingCycle === 'yearly' ? 'yearly' : 'monthly';
+    const checkout = getCheckoutSession(req.company, {
+      billingCycle,
+      email: req.user.email,
+      name: req.user.name || req.company.name,
+    });
+    return response.success(res, { checkout });
+  } catch (err) {
+    if (err.statusCode === 400 || err.statusCode === 503) {
+      return response.badRequest(res, err.message);
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /billing/portal — Paddle customer portal (update payment / manage).
+ */
+exports.createPortal = async (req, res, next) => {
+  try {
+    const portal = await getPortalUrl(req.company);
+    return response.success(res, portal);
+  } catch (err) {
+    if (err.statusCode === 400 || err.statusCode === 502) {
+      return response.badRequest(res, err.message);
+    }
+    next(err);
+  }
+};
+
+/**
  * POST /billing/cancel
- * Owner only — schedule cancellation at end of current billing period.
  */
 exports.cancelPlan = async (req, res, next) => {
   try {
@@ -46,7 +83,6 @@ exports.cancelPlan = async (req, res, next) => {
 
 /**
  * POST /billing/reactivate
- * Owner only — undo a scheduled cancellation.
  */
 exports.reactivatePlan = async (req, res, next) => {
   try {

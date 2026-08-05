@@ -147,7 +147,7 @@ export function PrivacyPolicyContent() {
         <LegalSubsection title="3.6 Billing and payment information">
           <p>
             Paid workspaces may provide billing details. Payment card data is processed by our
-            payment provider (such as Stripe). We may store subscription identifiers, plan status,
+            payment provider (Paddle, as Merchant of Record). We may store subscription identifiers, plan status,
             billing cycle, trial dates, invoice history, and limited payment method metadata (for
             example card brand and last four digits) — not full card numbers.
           </p>
@@ -234,7 +234,7 @@ export function PrivacyPolicyContent() {
               "Cloud hosting and application infrastructure (for example Railway)",
               "Database hosting (for example MongoDB Atlas)",
               "Transactional email delivery (Resend)",
-              "Payment processing (Stripe)",
+              "Payment processing (Paddle)",
               "Meta platforms for Facebook Messenger, Instagram, and WhatsApp Business integrations",
               "Shopify, WooCommerce, and other commerce platforms you connect",
               "Email mailbox providers accessed via IMAP/SMTP or OAuth when you connect email",

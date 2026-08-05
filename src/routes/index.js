@@ -78,5 +78,6 @@ router.use('/webhooks/facebook', facebookWebhookRoutes);
 router.use('/webhooks/tiktok', tiktokWebhookRoutes);
 router.use('/webhooks/store', storeWebhookRoutes);
 router.use('/webhooks/shopify', shopifyComplianceRoutes);
+router.use('/webhooks/paddle', require('./paddle-webhook.routes'));
 
 module.exports = router;

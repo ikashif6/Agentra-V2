@@ -5,8 +5,13 @@ export const AGENTRA_PRO_PLAN = {
   id: "pro" as const,
   label: "Pro",
   description: "Everything included: inbox, channels, integrations, and team collaboration.",
-  priceMonthly: 6000,
-  priceLabel: "$60",
+  /** cents */
+  priceMonthly: 10000,
+  priceLabel: "$100",
+  /** cents — $1,080/yr (= $90/mo) */
+  priceYearly: 108000,
+  yearlyPerMonthLabel: "$90",
+  yearlyTotalLabel: "$1,080",
   billingCycle: "monthly" as BillingCycle,
   highlights: [
     "Unlimited team members",
@@ -43,6 +48,7 @@ export type BillingOverview = {
     status: string;
     billingCycle: BillingCycle;
     priceMonthly: number;
+    priceYearly?: number;
     unlimited: boolean;
     trialEndsAt?: string | null;
     currentPeriodStart?: string | null;
@@ -50,6 +56,7 @@ export type BillingOverview = {
     cancelAtPeriodEnd?: boolean;
     canceledAt?: string | null;
     accessEndsAt?: string | null;
+    hasPaddleSubscription?: boolean;
   };
   usage: {
     totalUsers: number;
@@ -59,6 +66,19 @@ export type BillingOverview = {
   };
   paymentMethod: PaymentMethodInfo | null;
   invoices: BillingInvoice[];
+  paddleConfigured?: boolean;
+  paddleEnv?: "sandbox" | "live";
+};
+
+export type PaddleCheckoutPayload = {
+  env: "sandbox" | "live";
+  clientToken: string;
+  priceId: string;
+  billingCycle: BillingCycle;
+  customData: { companyId: string; subdomain: string };
+  customer?: { id?: string; email?: string };
+  customerAuthEmail?: string;
+  customerName?: string;
 };
 
 export function formatMoney(amount: number, currency = "USD") {

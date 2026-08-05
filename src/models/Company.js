@@ -32,6 +32,8 @@ const planSchema = new mongoose.Schema(
     currentPeriodEnd: { type: Date },
     stripeCustomerId: { type: String },
     stripeSubscriptionId: { type: String },
+    paddleCustomerId: { type: String },
+    paddleSubscriptionId: { type: String },
     status: {
       type: String,
       enum: ['active', 'trialing', 'past_due', 'canceled', 'unpaid'],

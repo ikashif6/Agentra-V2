@@ -258,6 +258,9 @@ export const customersApi = {
 
 export const billingApi = {
   getOverview: () => api.get("/billing"),
+  checkout: (billingCycle: "monthly" | "yearly") =>
+    api.post("/billing/checkout", { billingCycle }),
+  portal: () => api.post("/billing/portal"),
   cancelPlan: () => api.post("/billing/cancel"),
   reactivatePlan: () => api.post("/billing/reactivate"),
 };

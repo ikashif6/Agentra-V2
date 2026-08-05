@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { initializePaddle, type Paddle } from "@paddle/paddle-js";
 import { CreditCard, Download, Loader2, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { billingApi } from "@/lib/api";
@@ -11,7 +12,9 @@ import {
   formatMoney,
   invoiceStatusLabel,
   planStatusLabel,
+  type BillingCycle,
   type BillingOverview,
+  type PaddleCheckoutPayload,
 } from "@/lib/billing";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -30,12 +33,20 @@ export default function BillingPanel() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [reactivating, setReactivating] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [cycle, setCycle] = useState<BillingCycle>("monthly");
+  const [paddle, setPaddle] = useState<Paddle | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await billingApi.getOverview();
-      setBilling(data.data.billing);
+      const next = data.data.billing as BillingOverview;
+      setBilling(next);
+      if (next.plan?.billingCycle === "yearly" || next.plan?.billingCycle === "monthly") {
+        setCycle(next.plan.billingCycle);
+      }
     } catch (err: unknown) {
       const { message } = getApiError(err, "Failed to load billing");
       toast.error(message);
@@ -45,7 +56,7 @@ export default function BillingPanel() {
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   const handleCancelPlan = async () => {
@@ -77,6 +88,81 @@ export default function BillingPanel() {
     }
   };
 
+  const ensurePaddle = useCallback(
+    async (checkout: PaddleCheckoutPayload) => {
+      if (paddle) return paddle;
+      const instance = await initializePaddle({
+        token: checkout.clientToken,
+        environment: checkout.env === "live" ? "production" : "sandbox",
+        eventCallback: (event) => {
+          if (event.name === "checkout.completed") {
+            toast.success("Payment received — activating your plan…");
+            void load();
+            window.setTimeout(() => void load(), 2500);
+          }
+        },
+      });
+      if (!instance) {
+        throw new Error("Could not load Paddle Checkout");
+      }
+      setPaddle(instance);
+      return instance;
+    },
+    [load, paddle],
+  );
+
+  const handleSubscribe = async () => {
+    setSubscribing(true);
+    try {
+      const { data } = await billingApi.checkout(cycle);
+      const checkout = data.data.checkout as PaddleCheckoutPayload;
+      const instance = await ensurePaddle(checkout);
+      instance.Checkout.open({
+        items: [{ priceId: checkout.priceId, quantity: 1 }],
+        customData: checkout.customData,
+        customer: checkout.customer?.id
+          ? { id: checkout.customer.id }
+          : checkout.customerAuthEmail
+            ? { email: checkout.customerAuthEmail }
+            : undefined,
+      });
+    } catch (err: unknown) {
+      const { message } = getApiError(err, "Could not start checkout");
+      toast.error(message);
+    } finally {
+      setSubscribing(false);
+    }
+  };
+
+  const handlePortal = async () => {
+    setPortalLoading(true);
+    try {
+      const { data } = await billingApi.portal();
+      const url = data.data.url as string;
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err: unknown) {
+      const { message } = getApiError(err, "Could not open billing portal");
+      toast.error(message);
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  const priceHeadline = useMemo(() => {
+    if (cycle === "yearly") {
+      return {
+        main: AGENTRA_PRO_PLAN.yearlyPerMonthLabel,
+        suffix: "/ month",
+        note: `Billed annually at ${AGENTRA_PRO_PLAN.yearlyTotalLabel}/year (10% off)`,
+      };
+    }
+    return {
+      main: AGENTRA_PRO_PLAN.priceLabel,
+      suffix: "/ month",
+      note: "Billed monthly",
+    };
+  }, [cycle]);
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -91,13 +177,21 @@ export default function BillingPanel() {
   const accessEndsLabel = formatBillingDate(billing.plan.accessEndsAt);
   const isCanceled = billing.plan.status === "canceled";
   const isCancelScheduled = Boolean(billing.plan.cancelAtPeriodEnd);
+  const needsSubscribe =
+    billing.plan.status === "trialing" ||
+    billing.plan.status === "canceled" ||
+    billing.plan.status === "unpaid";
+  const isPastDue = billing.plan.status === "past_due";
+  const canManagePayment = Boolean(billing.plan.hasPaddleSubscription || billing.paymentMethod);
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-foreground">Plan & billing</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your workspace runs on Agentra Pro, one plan with everything included.
+          Your workspace runs on Agentra Pro, one plan with everything included. Payments are
+          processed securely by Paddle.
+          {billing.paddleEnv === "sandbox" ? " (Sandbox mode)" : null}
         </p>
       </div>
 
@@ -106,9 +200,13 @@ export default function BillingPanel() {
           <div>
             <p className="text-sm font-medium text-foreground">{AGENTRA_PRO_PLAN.label}</p>
             <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-              {AGENTRA_PRO_PLAN.priceLabel}
-              <span className="text-base font-normal text-muted-foreground"> / month</span>
+              {priceHeadline.main}
+              <span className="text-base font-normal text-muted-foreground">
+                {" "}
+                {priceHeadline.suffix}
+              </span>
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">{priceHeadline.note}</p>
           </div>
           <span className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
             {status}
@@ -124,6 +222,55 @@ export default function BillingPanel() {
               </li>
             ))}
           </ul>
+
+          {needsSubscribe ? (
+            <div className="mt-5 space-y-3">
+              <div className="inline-flex rounded-lg border border-border/70 p-1">
+                <button
+                  type="button"
+                  onClick={() => setCycle("monthly")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                    cycle === "monthly"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Monthly · {AGENTRA_PRO_PLAN.priceLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCycle("yearly")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                    cycle === "yearly"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Yearly · {AGENTRA_PRO_PLAN.yearlyPerMonthLabel}/mo
+                </button>
+              </div>
+              <div>
+                <Button type="button" onClick={() => void handleSubscribe()} disabled={subscribing || !billing.paddleConfigured}>
+                  {subscribing ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  Subscribe with Paddle
+                </Button>
+                {!billing.paddleConfigured ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Paddle is not configured on this server yet.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : isPastDue ? (
+            <div className="mt-5">
+              <Button type="button" onClick={() => void handlePortal()} disabled={portalLoading || !billing.paddleConfigured}>
+                {portalLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                Update payment
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <div className="grid border-t border-border/60 sm:grid-cols-3">
@@ -142,11 +289,11 @@ export default function BillingPanel() {
           ))}
         </div>
 
-        {billing.plan.trialEndsAt && !isCancelScheduled ? (
+        {billing.plan.trialEndsAt && billing.plan.status === "trialing" && !isCancelScheduled ? (
           <p className="border-t border-border/60 px-5 py-3 text-sm text-muted-foreground">
             Trial ends{" "}
             {new Date(billing.plan.trialEndsAt).toLocaleDateString(undefined, { dateStyle: "medium" })}.
-            Add a payment method to continue on Pro after that date.
+            Subscribe with Paddle to continue on Pro after that date.
           </p>
         ) : isCancelScheduled && accessEndsLabel ? (
           <p className="border-t border-border/60 px-5 py-3 text-sm text-muted-foreground">
@@ -175,27 +322,43 @@ export default function BillingPanel() {
                   <p className="text-sm font-medium text-foreground">
                     {billing.paymentMethod.brand ?? "Card"} ending in {billing.paymentMethod.last4}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Expires {billing.paymentMethod.expMonth}/{billing.paymentMethod.expYear}
-                  </p>
+                  {billing.paymentMethod.expMonth && billing.paymentMethod.expYear ? (
+                    <p className="text-xs text-muted-foreground">
+                      Expires {billing.paymentMethod.expMonth}/{billing.paymentMethod.expYear}
+                    </p>
+                  ) : null}
                 </div>
               </div>
-              <a
-                href="mailto:support@agentraa.com?subject=Update%20payment%20method"
-                className={buttonVariants({ variant: "outline", size: "sm" })}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handlePortal()}
+                disabled={portalLoading || !canManagePayment}
               >
+                {portalLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 Update
-              </a>
+              </Button>
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-4">
               <p className="text-sm text-muted-foreground">No card on file.</p>
-              <a
-                href="mailto:support@agentraa.com?subject=Add%20payment%20method"
-                className={buttonVariants({ size: "sm" })}
-              >
-                Add payment method
-              </a>
+              {needsSubscribe ? (
+                <Button type="button" size="sm" onClick={() => void handleSubscribe()} disabled={subscribing || !billing.paddleConfigured}>
+                  {subscribing ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  Add payment method
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void handlePortal()}
+                  disabled={portalLoading || !billing.plan.hasPaddleSubscription}
+                >
+                  {portalLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  Manage in Paddle
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -259,7 +422,7 @@ export default function BillingPanel() {
         )}
       </section>
 
-      {!isCanceled ? (
+      {!isCanceled && billing.plan.status !== "trialing" ? (
         <section className="overflow-hidden rounded-xl border border-border/80 bg-card">
           <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
             <div className="max-w-xl">
@@ -276,7 +439,7 @@ export default function BillingPanel() {
             </div>
 
             {isCancelScheduled ? (
-              <Button size="sm" onClick={handleReactivatePlan} disabled={reactivating}>
+              <Button size="sm" onClick={() => void handleReactivatePlan()} disabled={reactivating}>
                 {reactivating ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 Keep plan
               </Button>
@@ -317,7 +480,7 @@ export default function BillingPanel() {
             <Button
               type="button"
               variant="destructive"
-              onClick={handleCancelPlan}
+              onClick={() => void handleCancelPlan()}
               disabled={canceling}
             >
               {canceling ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}

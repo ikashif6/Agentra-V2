@@ -70,6 +70,12 @@ export function getCriticalAlerts(
   const billingCta = canManageBilling
     ? { ctaLabel: "Go to billing", ctaHref: "/settings?item=billing" }
     : { ctaLabel: "Contact workspace owner" };
+  const subscribeCta = canManageBilling
+    ? { ctaLabel: "Subscribe", ctaHref: "/settings?item=billing" }
+    : { ctaLabel: "Contact workspace owner" };
+  const updatePaymentCta = canManageBilling
+    ? { ctaLabel: "Update payment", ctaHref: "/settings?item=billing" }
+    : { ctaLabel: "Contact workspace owner" };
 
   if (status === "canceled" || status === "unpaid") {
     alerts.push({
@@ -77,7 +83,7 @@ export function getCriticalAlerts(
       message: deletionLabel
         ? `Your Agentra subscription has expired. You can re-subscribe until ${deletionLabel}. After that date your account and all its data will be deleted.`
         : "Your Agentra subscription has expired. Re-subscribe to keep access to this workspace.",
-      ...billingCta,
+      ...subscribeCta,
     });
   } else if (status === "past_due") {
     alerts.push({
@@ -85,7 +91,7 @@ export function getCriticalAlerts(
       message: accessLabel
         ? `Your Agentra payment is past due. Update billing before ${accessLabel} to avoid losing access.`
         : "Your Agentra payment is past due. Update billing to avoid losing access.",
-      ...billingCta,
+      ...updatePaymentCta,
     });
   } else if (plan.cancelAtPeriodEnd && accessLabel) {
     alerts.push({
@@ -104,7 +110,7 @@ export function getCriticalAlerts(
           days === 0
             ? "Your Agentra trial ends today. Subscribe to keep this workspace active."
             : `Your Agentra trial ends in ${days} day${days === 1 ? "" : "s"}. Subscribe to keep this workspace active.`,
-        ...billingCta,
+        ...subscribeCta,
       });
     }
   }
