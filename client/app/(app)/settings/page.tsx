@@ -8,7 +8,7 @@ export default function SettingsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+        <div className="flex h-full items-center justify-center">
           <Loader2 className="size-6 animate-spin text-primary" />
         </div>
       }

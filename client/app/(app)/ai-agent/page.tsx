@@ -20,7 +20,7 @@ export default function AiAgentPage() {
 
   if (!canViewAiAgent) {
     return (
-      <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <Loader2 className="size-6 animate-spin text-primary" />
       </div>
     );
@@ -29,7 +29,7 @@ export default function AiAgentPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+        <div className="flex h-full items-center justify-center">
           <Loader2 className="size-6 animate-spin text-primary" />
         </div>
       }

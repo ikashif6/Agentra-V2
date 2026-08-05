@@ -34,7 +34,7 @@ export default function CriticalAlertBanner() {
     <div
       role="alert"
       className={cn(
-        "relative z-50 flex w-full items-start gap-3 border-b border-border/80 bg-background px-4 py-2.5",
+        "relative z-50 flex w-full shrink-0 items-start gap-3 border-b border-border/80 bg-background px-4 py-2.5",
         "sm:items-center sm:px-5",
       )}
     >

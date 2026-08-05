@@ -121,7 +121,7 @@ export default function SettingsContent() {
   }, [activeItem, canConfig, canPeople, isOwner, role]);
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] min-h-0 flex-col bg-background">
+    <div className="flex h-full min-h-0 flex-col bg-background">
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {sidebarOpen ? (
           <SettingsSidebar

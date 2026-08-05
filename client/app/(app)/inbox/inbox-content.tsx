@@ -861,7 +861,7 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] min-h-0 flex-col bg-card">
+    <div className="flex h-full min-h-0 flex-col bg-card">
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {sidebarOpen ? (
           <aside className="flex w-[220px] shrink-0 flex-col border-r border-border/70 bg-muted/15">

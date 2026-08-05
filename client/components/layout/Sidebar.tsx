@@ -480,7 +480,7 @@ export default function Sidebar({ embedded = false }: SidebarProps) {
     <aside
       className={cn(
         "flex h-full min-h-0 flex-col border-r border-border/80 bg-card transition-[width] duration-200",
-        embedded ? "flex w-full" : "hidden md:flex h-screen sticky top-0 shrink-0",
+        embedded ? "flex w-full" : "hidden md:flex h-full shrink-0",
         !embedded && (isCollapsed ? "w-[68px]" : "w-[220px]"),
       )}
     >
