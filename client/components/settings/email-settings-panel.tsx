@@ -69,7 +69,6 @@ export default function EmailSettingsPanel() {
 
   // IMAP/SMTP form (primary connect path for Gmail and other providers)
   const [showImap, setShowImap] = useState(true);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [form, setForm] = useState({
     email: "",
@@ -397,16 +396,7 @@ export default function EmailSettingsPanel() {
               />
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((v) => !v)}
-              className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              {showAdvanced ? "Hide server settings" : "Server settings (auto-detected)"}
-            </button>
-
-            {showAdvanced ? (
-              <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="em-imap-host">IMAP host</Label>
                   <Input
@@ -444,7 +434,6 @@ export default function EmailSettingsPanel() {
                   />
                 </div>
               </div>
-            ) : null}
 
             <div className="rounded-lg border border-border/60 bg-card px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
               <p className="font-medium text-foreground">Gmail / Google Workspace</p>
@@ -457,7 +446,8 @@ export default function EmailSettingsPanel() {
               >
                 App Password
               </a>{" "}
-              and paste it here (not your normal Google password). Hosts are auto-filled for Gmail.
+              and paste it here (not your normal Google password). Use IMAP/SMTP hosts below for
+              Gmail (usually imap.gmail.com / smtp.gmail.com).
             </div>
 
             <Button type="button" onClick={() => void connectImap()} disabled={connecting}>

@@ -8,7 +8,7 @@ import { CircleHelp, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun,
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { Role } from "@/lib/types";
+import { Role, User } from "@/lib/types";
 import { PRIMARY_NAV, isNavActive, type AppNavItem } from "@/lib/app-navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { WorkspaceChromeActions } from "@/components/layout/workspace-chrome-actions";
@@ -17,6 +17,7 @@ import { api, ticketApi } from "@/lib/api";
 import { WorkspaceLogoImg } from "@/components/app/workspace-logo-img";
 import {
   applyWorkspaceBranding,
+  cacheWorkspaceBranding,
   effectiveWorkspaceBranding,
   resolveWorkspaceLogoSrc,
   resolveWorkspaceTheme,
@@ -148,13 +149,13 @@ function ProfileAvatar({
 }
 
 function SidebarAccountMenu() {
-  const { user, company, logout, refreshUser } = useAuth();
+  const { user, company, logout, patchUser } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [online, setOnline] = useState(user?.isOnline ?? true);
   const [savingStatus, setSavingStatus] = useState(false);
-  const [savingTheme, setSavingTheme] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const themeLockRef = useRef(false);
   const [mounted, setMounted] = useState(false);
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
   const anchorRef = useRef<HTMLButtonElement>(null);
@@ -197,8 +198,9 @@ function SidebarAccountMenu() {
     setOnline(checked);
     setSavingStatus(true);
     try {
-      await api.patch("/auth/me", { isOnline: checked });
-      await refreshUser();
+      const { data } = await api.patch("/auth/me", { isOnline: checked });
+      const updated = data.data?.user as User | undefined;
+      if (updated) patchUser(updated);
     } catch {
       setOnline(!checked);
       toast.error("Failed to update availability");
@@ -208,30 +210,71 @@ function SidebarAccountMenu() {
   }
 
   async function handleThemeChange(next: "light" | "dark") {
-    if (next === theme || savingTheme) return;
+    if (next === theme || themeLockRef.current) return;
 
     const previous = theme;
+    themeLockRef.current = true;
     setTheme(next);
-    setSavingTheme(true);
 
-    const branding = effectiveWorkspaceBranding(user, company);
-    applyWorkspaceBranding({
-      primaryColor: branding?.primaryColor,
-      theme: next,
-    });
+    const optimisticUser = {
+      ...(user ?? ({} as User)),
+      preferences: {
+        ...(user?.preferences ?? {}),
+        theme: next,
+      },
+    } as User;
+
+    const branding = effectiveWorkspaceBranding(optimisticUser, company);
+    if (branding) {
+      applyWorkspaceBranding(branding);
+      cacheWorkspaceBranding(branding);
+    }
+
+    patchUser((prev) =>
+      prev
+        ? {
+            ...prev,
+            preferences: {
+              ...(prev.preferences ?? {}),
+              theme: next,
+            },
+          }
+        : prev,
+    );
 
     try {
-      await api.patch("/auth/me", { preferences: { theme: next } });
-      await refreshUser();
+      const { data } = await api.patch("/auth/me", { preferences: { theme: next } });
+      const updated = data.data?.user as User | undefined;
+      if (updated) patchUser(updated);
     } catch {
       setTheme(previous);
-      applyWorkspaceBranding({
-        primaryColor: branding?.primaryColor,
-        theme: previous,
-      });
+      patchUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              preferences: {
+                ...(prev.preferences ?? {}),
+                theme: previous,
+              },
+            }
+          : prev,
+      );
+      const reverted = effectiveWorkspaceBranding(
+        {
+          preferences: {
+            ...(user?.preferences ?? {}),
+            theme: previous,
+          },
+        },
+        company,
+      );
+      if (reverted) {
+        applyWorkspaceBranding(reverted);
+        cacheWorkspaceBranding(reverted);
+      }
       toast.error("Failed to update appearance");
     } finally {
-      setSavingTheme(false);
+      themeLockRef.current = false;
     }
   }
 
@@ -342,7 +385,6 @@ function SidebarAccountMenu() {
               type="button"
               aria-label="Light mode"
               aria-pressed={theme === "light"}
-              disabled={savingTheme}
               onClick={() => void handleThemeChange("light")}
               className={cn(
                 "flex size-6 items-center justify-center rounded-md transition-colors",
@@ -357,7 +399,6 @@ function SidebarAccountMenu() {
               type="button"
               aria-label="Dark mode"
               aria-pressed={theme === "dark"}
-              disabled={savingTheme}
               onClick={() => void handleThemeChange("dark")}
               className={cn(
                 "flex size-6 items-center justify-center rounded-md transition-colors",

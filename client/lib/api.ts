@@ -175,7 +175,6 @@ export const authApi = {
 export const onboardingApi = {
   getPlans: () => api.get("/onboarding/plans"),
   onboard: (data: Record<string, unknown>) => api.post("/onboarding", data),
-  completeSetup: (data: Record<string, unknown>) => api.post("/onboarding/setup", data),
   checkSubdomain: (subdomain: string) =>
     api.get(`/auth/check-subdomain/${subdomain}`),
 };

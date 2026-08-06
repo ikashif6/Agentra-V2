@@ -122,7 +122,7 @@ const userSchema = new mongoose.Schema(
     lastSeenAt: { type: Date },
 
     // Onboarding
-    onboardingCompleted: { type: Boolean, default: false },
+    onboardingCompleted: { type: Boolean, default: true },
 
     // Preferences
     preferences: {

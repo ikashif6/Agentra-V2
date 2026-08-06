@@ -7,7 +7,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserLocalTime } from "@/hooks/use-user-local-time";
 import { findSettingsItem, resolveSettingsItem } from "@/lib/settings-navigation";
 import { resolveWorkspaceDocumentTitle } from "@/lib/workspace-branding";
-import { cn } from "@/lib/utils";
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Home",
@@ -37,9 +36,6 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     )?.[1] ?? "Home";
   const displayTitle = title === "Tickets" && user?.role === "customer" ? "My Tickets" : title;
   const tagline = company?.branding?.tagline?.trim() || null;
-  const isFullBleed = ["/inbox", "/ai-agent", "/ai-agents", "/live-chat", "/settings"].some(
-    (route) => pathname === route || pathname?.startsWith(`${route}/`),
-  );
 
   useEffect(() => {
     const settingsItem = pathname.startsWith("/settings")
@@ -70,13 +66,7 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   ]);
 
   return (
-    <header
-      className={cn(
-        "flex min-h-[4.75rem] shrink-0 items-center justify-between bg-background px-5 py-5 md:px-6",
-        // Full-bleed surfaces (inbox / AI Agent / settings) draw their own toolbar divider.
-        !isFullBleed && "border-b border-border/50",
-      )}
-    >
+    <header className="flex min-h-[4.75rem] shrink-0 items-center justify-between border-b border-border/50 bg-background px-5 py-5 md:px-6">
       <div className="flex items-center gap-3">
         <button
           type="button"

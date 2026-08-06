@@ -319,6 +319,7 @@ export function applyWorkspaceBranding(branding: Partial<WorkspaceBranding>) {
   }
 
   // Drop light-mode accent washes so .dark charcoal tokens can apply cleanly.
+  // When returning to light, brand washes are written above via generateBrandCssVars.
   if (resolved === "dark") {
     [
       "--accent",

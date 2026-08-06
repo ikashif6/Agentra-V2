@@ -100,6 +100,7 @@ exports.onboard = async (req, res, next) => {
       company: company._id,
       role: 'owner',
       isEmailVerified: false,
+      onboardingCompleted: true,
       emailVerificationToken: verifyHashed,
       emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });

@@ -7,6 +7,7 @@ import { setTokens, clearTokens, setSubdomain, setUser, getUser, isAuthenticated
 import {
   applyWorkspaceBranding,
   cacheWorkspaceBranding,
+  effectiveWorkspaceBranding,
   normalizeWorkspaceBranding,
   type WorkspaceBranding,
 } from "@/lib/workspace-branding";
@@ -18,6 +19,8 @@ interface AuthContextType {
   login: (accessToken: string, refreshToken: string, user: User, company: Company) => void;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /** Update local user state without a full refresh / branding sync. */
+  patchUser: (next: User | ((prev: User | null) => User | null)) => void;
   applyCompanyBranding: (branding: WorkspaceBranding) => void;
   syncWorkspaceBranding: () => Promise<void>;
 }
@@ -28,14 +31,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
+  const userRef = React.useRef<User | null>(null);
+  userRef.current = user;
+
+  const patchUser = useCallback((next: User | ((prev: User | null) => User | null)) => {
+    setUserState((prev) => {
+      const resolved = typeof next === "function" ? next(prev) : next;
+      if (resolved) setUser(resolved);
+      return resolved;
+    });
+  }, []);
 
   const applyCompanyBranding = useCallback((branding: WorkspaceBranding) => {
     const normalized = normalizeWorkspaceBranding(branding);
-    applyWorkspaceBranding(normalized);
-    cacheWorkspaceBranding(normalized);
     setCompany((prev) => {
       if (!prev) return prev;
-      return {
+      const nextCompany: Company = {
         ...prev,
         logo: normalized.logo ?? undefined,
         branding: {
@@ -50,6 +61,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           logoHeight: normalized.logoHeight,
         },
       };
+
+      // Always honor the signed-in user's appearance preference over workspace default.
+      const effective = effectiveWorkspaceBranding(userRef.current, nextCompany) ?? normalized;
+      applyWorkspaceBranding(effective);
+      cacheWorkspaceBranding(effective);
+      return nextCompany;
     });
   }, []);
 
@@ -141,6 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         refreshUser,
+        patchUser,
         applyCompanyBranding,
         syncWorkspaceBranding,
       }}
