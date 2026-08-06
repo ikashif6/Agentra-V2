@@ -28,11 +28,13 @@ export function AuthLayoutShell({ children }: { children: React.ReactNode }) {
           <AuthLogo />
         </div>
 
-        <div className="auth-scroll-area relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto pt-2 pb-3">
-          <div className="m-auto w-full max-w-md space-y-5">{children}</div>
+        <div className="relative z-10 flex flex-1 flex-col items-center justify-center pt-8 pb-8 lg:pt-10 lg:pb-10">
+          <div className="w-full max-w-md space-y-5">{children}</div>
         </div>
 
-        {isSignup ? null : <AuthLegalFooter className="mt-auto pb-5 lg:pb-6" />}
+        {isSignup ? null : (
+          <AuthLegalFooter className="mt-auto pt-6 pb-8 lg:pt-8 lg:pb-10" />
+        )}
       </div>
 
       <AuthHeroPanel />

@@ -144,30 +144,7 @@ button:disabled,
 ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
 
-/* Auth form column — scrollbar stays invisible until the area is hovered */
-.auth-scroll-area {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-
-.auth-scroll-area:hover {
-  scrollbar-color: hsl(var(--border)) transparent;
-}
-
-.auth-scroll-area::-webkit-scrollbar-thumb {
-  background: transparent;
-  transition: background 150ms ease;
-}
-
-.auth-scroll-area:hover::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
-}
-
-.auth-scroll-area:hover::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground));
-}
-
-/* Login visual panel — atmospheric background */
+/* Login visual panel â€” atmospheric background */
 .login-visual-panel {
   --auth-brand: #d85a30;
   --auth-brand-mid: #b84a28;
@@ -176,7 +153,277 @@ button:disabled,
   --auth-panel-deep: #0a0302;
 }
 
-/* Auth hero with static mock — keep wash/grid/logo, freeze motion */
+/* Floating morphic auth hero (login / signup) */
+.auth-morph-shell {
+  --auth-brand: #d85a30;
+  --auth-brand-mid: #b84a28;
+  --auth-brand-light: #f0997b;
+  box-sizing: border-box;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.auth-morph-float {
+  border-radius: 28px;
+  overflow: hidden;
+  background: #ef9070;
+  box-shadow:
+    0 24px 60px rgba(40, 12, 4, 0.12),
+    0 2px 8px rgba(40, 12, 4, 0.05);
+  animation: auth-morph-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Lovable-style pulse frame: oversized + dual blur (blur classes on markup) */
+.auth-morph-pulse-frame {
+  top: -46%;
+  left: 50%;
+  width: 210%;
+  aspect-ratio: 1 / 1;
+  transform: translateX(-50%);
+}
+
+.auth-morph-prompt {
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  box-shadow: none;
+  animation: auth-morph-prompt-float 5.5s ease-in-out infinite;
+}
+
+/* Glass chat overlay — Agentra support demo */
+.auth-glass-chat {
+  --auth-surface: rgba(255, 255, 255, 0.78);
+  --auth-surface-border: rgba(255, 255, 255, 0.62);
+  --auth-surface-shadow: 0 4px 14px rgba(40, 18, 8, 0.07);
+  --auth-ink: #1d1814;
+  --auth-muted: rgba(29, 24, 20, 0.55);
+  display: flex;
+  width: min(100%, 420px);
+  height: min(100%, 540px);
+  margin-inline: auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  pointer-events: none;
+}
+
+.auth-glass-feed {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  max-height: 400px;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 11px;
+  overflow: hidden;
+  padding-top: 48px;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 4%,
+    rgba(0, 0, 0, 0.12) 12%,
+    rgba(0, 0, 0, 0.4) 22%,
+    rgba(0, 0, 0, 0.78) 32%,
+    #000 42%,
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 4%,
+    rgba(0, 0, 0, 0.12) 12%,
+    rgba(0, 0, 0, 0.4) 22%,
+    rgba(0, 0, 0, 0.78) 32%,
+    #000 42%,
+    #000 100%
+  );
+}
+
+.auth-glass-msg {
+  display: flex;
+  width: 100%;
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+  transition:
+    opacity 0.32s ease,
+    transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.auth-glass-msg.is-in {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.auth-glass-msg.is-user {
+  justify-content: flex-start;
+}
+
+.auth-glass-msg.is-ai,
+.auth-glass-msg.is-typing,
+.auth-glass-msg.is-status {
+  justify-content: flex-end;
+}
+
+.auth-glass-user {
+  display: inline-flex;
+  max-width: 92%;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 15px 9px 9px;
+  border-radius: 9999px;
+  background: var(--auth-surface);
+  border: 1px solid var(--auth-surface-border);
+  box-shadow: var(--auth-surface-shadow);
+  color: var(--auth-ink);
+}
+
+.auth-glass-user p {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+}
+
+.auth-glass-avatar {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: #2a211c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.auth-glass-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+
+.auth-glass-ai {
+  max-width: 94%;
+  padding: 13px 16px;
+  border-radius: 20px;
+  border-bottom-right-radius: 6px;
+  background: var(--auth-surface);
+  border: 1px solid var(--auth-surface-border);
+  box-shadow: var(--auth-surface-shadow);
+  color: var(--auth-ink);
+}
+
+.auth-glass-ai p {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: -0.015em;
+}
+
+.auth-glass-surface {
+  background: var(--auth-surface);
+  border: 1px solid var(--auth-surface-border);
+  box-shadow: var(--auth-surface-shadow);
+  color: var(--auth-ink);
+}
+
+.auth-glass-muted {
+  color: var(--auth-muted);
+}
+
+.auth-glass-ask {
+  display: flex;
+  flex-shrink: 0;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 18px;
+  border-radius: 9999px;
+  background: var(--auth-surface);
+  border: 1px solid var(--auth-surface-border);
+  box-shadow: var(--auth-surface-shadow);
+  color: var(--auth-ink);
+}
+
+.auth-glass-ask p {
+  margin: 0;
+  min-width: 0;
+  flex: 1;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  color: var(--auth-muted);
+}
+
+.auth-glass-ask-send {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #171512;
+  color: #faf8f6;
+}
+
+@keyframes auth-morph-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes auth-morph-prompt-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -6px, 0); }
+}
+
+@keyframes auth-morph-blob-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(4%, 3%, 0) scale(1.08); }
+}
+
+@keyframes auth-morph-blob-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-5%, 4%, 0) scale(1.06); }
+}
+
+@keyframes auth-morph-blob-c {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(3%, -4%, 0) scale(1.1); }
+}
+
+@keyframes auth-morph-blob-d {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.9; }
+  50% { transform: translate3d(-3%, -2%, 0) scale(1.12); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-morph-float,
+  .auth-morph-prompt,
+  .auth-morph-blob {
+    animation: none !important;
+  }
+
+  .auth-glass-msg {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Auth hero with static mock â€” keep wash/grid/logo, freeze motion */
 .login-visual-panel--static .login-visual-mesh,
 .login-visual-panel--static .login-visual-blob {
   animation: none !important;
@@ -337,7 +584,7 @@ button:disabled,
   }
 }
 
-/* Onboarding / setup — same flat white as Home */
+/* Onboarding / setup â€” same flat white as Home */
 .onboarding-shell {
   background: #fff !important;
   background-image: none !important;
@@ -347,7 +594,7 @@ button:disabled,
   display: none !important;
 }
 
-/* App shell — flat canvas (no brand gradient wash) */
+/* App shell â€” flat canvas (no brand gradient wash) */
 .app-shell {
   background: hsl(var(--background));
 }
@@ -364,12 +611,12 @@ button:disabled,
   display: none;
 }
 
-/* Flat canvas pages — no grid or brand gradient wash */
+/* Flat canvas pages â€” no grid or brand gradient wash */
 .app-shell-flat {
   background: hsl(var(--background));
 }
 
-/* Toasts — plain icons for every type (no tinted circles / richColors wash) */
+/* Toasts â€” plain icons for every type (no tinted circles / richColors wash) */
 [data-sonner-toast] [data-icon],
 [data-sonner-toast] [data-icon].toast-icon {
   background: transparent !important;

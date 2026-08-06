@@ -210,35 +210,35 @@ export function WorkspaceLoginForm({ workspace }: WorkspaceLoginFormProps) {
         </Button>
       </form>
 
-      <div className="relative py-1">
+      <div className="relative">
         <div className="absolute inset-0 flex items-center">
           <span className="w-full border-t border-border" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+          <span className="bg-background px-2 text-muted-foreground">Or</span>
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-3">
         <Button
           type="button"
           variant="outline"
-          className={`h-10 w-full ${authRadiusClass}`}
+          className={cn("h-10 w-full justify-center gap-2 px-3 font-medium", authRadiusClass)}
           disabled={loading}
           onClick={() => void startSocialLogin("google")}
         >
           <GoogleIcon className="size-4" />
-          Google
+          Log in with Google
         </Button>
         <Button
           type="button"
           variant="outline"
-          className={`h-10 w-full ${authRadiusClass}`}
+          className={cn("h-10 w-full justify-center gap-2 px-3 font-medium", authRadiusClass)}
           disabled={loading}
           onClick={() => void startSocialLogin("microsoft")}
         >
           <MicrosoftIcon className="size-4" />
-          Microsoft
+          Log in with Microsoft
         </Button>
       </div>
 
