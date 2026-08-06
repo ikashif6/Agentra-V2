@@ -1,7 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AuthLogo } from "@/components/auth/auth-logo";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -28,10 +27,6 @@ export default function NotFound() {
           />
         </div>
       </div>
-
-      <header className="relative z-10 px-6 pt-6 sm:px-10">
-        <AuthLogo href="/dashboard" imgClassName="h-7 w-auto brightness-0 invert sm:h-8" />
-      </header>
 
       <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16 pt-8 text-center sm:px-8">
         <div className="w-full max-w-[360px]">
