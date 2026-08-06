@@ -186,6 +186,33 @@ async function createCustomerPortalSession(customerId) {
   });
 }
 
+async function getTransactionInvoicePdfUrl(transactionId, { disposition = 'inline' } = {}) {
+  if (!transactionId) {
+    const err = new Error('Transaction id is required');
+    err.statusCode = 400;
+    throw err;
+  }
+  const qs = disposition === 'attachment' ? 'disposition=attachment' : 'disposition=inline';
+  const result = await paddleFetch(`/transactions/${encodeURIComponent(transactionId)}/invoice?${qs}`);
+  const url = result?.data?.url;
+  if (!url) {
+    const err = new Error('Paddle did not return an invoice PDF url');
+    err.statusCode = 502;
+    throw err;
+  }
+  return url;
+}
+
+async function listCustomerTransactions(customerId, { perPage = 30 } = {}) {
+  if (!customerId) return { data: [] };
+  const qs = new URLSearchParams({
+    customer_id: customerId,
+    status: 'completed',
+    per_page: String(perPage),
+  });
+  return paddleFetch(`/transactions?${qs.toString()}`);
+}
+
 function verifyWebhookSignature(rawBody, signatureHeader) {
   const secret = process.env.PADDLE_WEBHOOK_SECRET?.trim();
   if (!secret || !signatureHeader || !rawBody) return false;
@@ -225,6 +252,8 @@ module.exports = {
   cancelPaddleSubscription,
   removeScheduledCancel,
   createCustomerPortalSession,
+  getTransactionInvoicePdfUrl,
+  listCustomerTransactions,
   verifyWebhookSignature,
   getPriceIdForCycle,
 };

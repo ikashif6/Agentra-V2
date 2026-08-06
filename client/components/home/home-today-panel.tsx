@@ -37,7 +37,7 @@ function buildAdminReminders(stats: HomeTodayStats): Reminder[] {
         stats.unassigned === 1
           ? "1 conversation is waiting without an owner"
           : `${stats.unassigned} conversations are waiting without an owner`,
-      detail: "Assign them so customers aren’t left hanging.",
+      detail: "Assign them so customers hear back in good time.",
       href: "/inbox?view=all",
       action: "Assign now",
     });
@@ -50,7 +50,7 @@ function buildAdminReminders(stats: HomeTodayStats): Reminder[] {
         stats.open === 1
           ? "Check in on your open queue"
           : `Check in on ${stats.open} open conversations`,
-      detail: "Skim for anything that needs a nudge today.",
+      detail: "Review the queue for anything that needs attention today.",
       href: "/inbox?view=all",
       action: "Review inbox",
     });
@@ -59,11 +59,11 @@ function buildAdminReminders(stats: HomeTodayStats): Reminder[] {
   if (stats.assigned > 0) {
     reminders.push({
       id: "with-agents",
-      title: "Glance at work already with agents",
+      title: "Review work already with your agents",
       detail:
         stats.assigned === 1
-          ? "1 ticket is being handled — make sure it’s on track."
-          : `${stats.assigned} tickets are with the team — make sure nothing’s stuck.`,
+          ? "1 ticket is being handled. A quick check helps keep it on track."
+          : `${stats.assigned} tickets are with the team. A quick check helps catch anything waiting.`,
       href: "/inbox?view=all",
       action: "Take a look",
     });
@@ -93,7 +93,7 @@ function buildAgentReminders(stats: HomeTodayStats): Reminder[] {
         stats.assigned === 1
           ? "You have 1 conversation assigned to you"
           : `You have ${stats.assigned} conversations assigned to you`,
-      detail: "Jump in and keep customers moving.",
+      detail: "Open your queue and keep conversations moving forward.",
       href: "/inbox?view=assigned",
       action: "Open assigned",
     });
@@ -129,20 +129,20 @@ export function HomeTodayPanel({ variant, stats, monochrome = false }: HomeToday
       className={cn(
         APP_CARD,
         "overflow-hidden",
-        monochrome && "border-neutral-200 shadow-[0_1px_2px_rgba(0,0,0,0.05)]",
+        monochrome && "border-border/70 dark:border-white/[0.06]",
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
+          <h2 className="text-[15px] font-semibold tracking-[-0.015em] text-foreground">
             {isAdmin ? "Reminders for today" : "Your reminders"}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-[13px] tracking-[-0.01em] text-muted-foreground">
             {stats.loading
               ? "Loading…"
               : pendingCount > 0
-                ? `${pendingCount} thing${pendingCount === 1 ? "" : "s"} worth checking`
-                : "Nothing urgent — nice work."}
+                ? `${pendingCount} item${pendingCount === 1 ? "" : "s"} worth a quick look`
+                : "Nothing urgent right now. Nice work."}
           </p>
         </div>
       </div>

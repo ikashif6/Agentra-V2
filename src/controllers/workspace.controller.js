@@ -4,6 +4,7 @@ const {
   updateWorkspaceBranding,
 } = require('../services/workspace-branding.service');
 const { getSetupChecklist } = require('../services/setup-checklist.service');
+const { deleteWorkspace } = require('../services/workspace-delete.service');
 
 exports.getBranding = async (req, res, next) => {
   try {
@@ -41,6 +42,44 @@ exports.updateBranding = async (req, res, next) => {
   } catch (err) {
     if (err.statusCode === 400) {
       return response.badRequest(res, err.message);
+    }
+    next(err);
+  }
+};
+
+/**
+ * DELETE /workspace
+ * Permanently delete this workspace. Owner or admin only.
+ * Body: { confirmSubdomain: string } must match company.subdomain
+ */
+exports.deleteWorkspace = async (req, res, next) => {
+  try {
+    const confirmSubdomain = String(req.body?.confirmSubdomain || '')
+      .trim()
+      .toLowerCase();
+    const expected = String(req.company.subdomain || '').toLowerCase();
+
+    if (!confirmSubdomain || confirmSubdomain !== expected) {
+      return response.badRequest(
+        res,
+        'Type your workspace subdomain exactly to confirm deletion.',
+      );
+    }
+
+    if (!['owner', 'admin'].includes(req.user.role)) {
+      return response.forbidden(res, 'Only workspace owners and admins can delete this workspace.');
+    }
+
+    const deleted = await deleteWorkspace(req.company._id);
+
+    return response.success(
+      res,
+      { subdomain: deleted.subdomain },
+      'Workspace deleted permanently',
+    );
+  } catch (err) {
+    if (err.statusCode === 404) {
+      return response.notFound(res, err.message);
     }
     next(err);
   }

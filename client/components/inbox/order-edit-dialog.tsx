@@ -111,7 +111,7 @@ export function OrderEditDialog({
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium">Shipping address</p>
               {shipped ? (
-                <span className="text-[11px] text-muted-foreground">Locked — order shipped</span>
+                <span className="text-[11px] text-muted-foreground">Locked (order shipped)</span>
               ) : null}
             </div>
             <Input

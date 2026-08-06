@@ -5,7 +5,7 @@ import { AGENTRA_PRO_PLAN } from "@/lib/billing";
 import { LEGAL, PORTAL_ORIGIN } from "@/lib/legal";
 
 export const metadata: Metadata = {
-  title: `${LEGAL.productName} — AI agent and helpdesk for ecommerce`,
+  title: `${LEGAL.productName}: AI agent and helpdesk for ecommerce`,
   description: `${LEGAL.productName} is a multi-channel customer support workspace with inbox, AI agent, store integrations, and team collaboration. ${AGENTRA_PRO_PLAN.priceLabel}/month or ${AGENTRA_PRO_PLAN.yearlyTotalLabel}/year.`,
   alternates: {
     canonical: PORTAL_ORIGIN,
@@ -59,7 +59,7 @@ export default function RootPage() {
         </h1>
         <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-neutral-600">
           {LEGAL.productName} is a customer support workspace for ecommerce teams. Run a shared
-          inbox, connect your store, and use AI to handle routine questions — then hand off to
+          inbox, connect your store, and use AI to handle routine questions, then hand off to
           humans when needed. Billing and checkout are handled securely through Paddle.
         </p>
 
@@ -93,8 +93,8 @@ export default function RootPage() {
         <section id="pricing" className="mt-14 scroll-mt-8 border-t border-neutral-200 pt-14">
           <h2 className="text-lg font-semibold tracking-tight text-neutral-950">Pricing</h2>
           <p className="mt-2 text-[15px] text-neutral-600">
-            One Pro plan. 14-day free trial — no card required to start. Subscribe when you&apos;re
-            ready.
+            One Pro plan. Enjoy a 14-day free trial with no card required to start. Subscribe when
+            you&apos;re ready.
           </p>
 
           <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 px-6 py-6 sm:px-8">

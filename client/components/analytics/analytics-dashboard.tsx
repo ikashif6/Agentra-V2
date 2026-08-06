@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ChartLine,
   ChevronRight,
   CheckCircle2,
   Clock,
@@ -13,7 +14,6 @@ import {
   Users,
   UsersRound,
 } from "lucide-react";
-import { AnalyticsIcon } from "@/components/icons/analytics-icon";
 import ManagerAiPanel from "@/components/analytics/manager-ai-panel";
 import KnowledgeAiPanel from "@/components/analytics/knowledge-ai-panel";
 import AgentLiveChatPerformancePanel from "@/components/analytics/agent-live-chat-performance-panel";
@@ -313,7 +313,7 @@ export default function AnalyticsDashboard() {
         <section className={cn(APP_CARD, "overflow-hidden lg:col-span-2")}>
           <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
             <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-muted/30">
-              <AnalyticsIcon className="size-4 text-foreground" />
+              <ChartLine className="size-4 text-foreground" strokeWidth={1.75} />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-foreground">Conversation pipeline</h3>

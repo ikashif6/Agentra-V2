@@ -96,10 +96,10 @@ export default function TrackTicketPage() {
             <form onSubmit={form1.handleSubmit(onStep1)} className="space-y-4">
               <div className="space-y-1">
                 <Label>Workspace</Label>
-                <div className="flex items-center rounded-lg border border-gray-200 focus-within:border-[#D85A30] focus-within:ring-1 focus-within:ring-[#D85A30] overflow-hidden transition-all">
+                <div className="flex h-10 items-stretch overflow-hidden rounded-lg border border-gray-200 transition-all focus-within:border-[#D85A30] focus-within:ring-1 focus-within:ring-[#D85A30]">
                   <Input {...form1.register("subdomain")} placeholder="yourcompany"
-                    className="border-0 focus-visible:ring-0 rounded-none flex-1" />
-                  <span className="px-3 text-sm text-gray-400 bg-gray-50 border-l border-gray-200 py-2 shrink-0">
+                    className="h-full min-h-0 flex-1 rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0" />
+                  <span className="flex shrink-0 items-center border-l border-gray-200 bg-gray-50 px-3 text-sm text-gray-400">
                     .agentraa.com
                   </span>
                 </div>

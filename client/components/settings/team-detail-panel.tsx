@@ -132,7 +132,7 @@ export default function TeamDetailPanel({ teamId, onBack }: TeamDetailPanelProps
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
         <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
           <h3 className="text-sm font-semibold text-foreground">
             Members
@@ -185,7 +185,7 @@ export default function TeamDetailPanel({ teamId, onBack }: TeamDetailPanelProps
                         type="button"
                         onClick={() => handleRemove(member.user._id)}
                         disabled={removing === member.user._id}
-                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-500"
+                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                       >
                         {removing === member.user._id ? (
                           <Loader2 className="size-3.5 animate-spin" />

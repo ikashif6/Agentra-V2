@@ -358,7 +358,7 @@ export default function AiAgentSettingsPanel() {
         </div>
         <h2 className="text-xl font-bold text-foreground">AI Agent</h2>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Shared knowledge across channels. Tune tone, length, and permissions per channel — email can
+          Shared knowledge across channels. Tune tone, length, and permissions per channel so email can
           stay long and formal while social stays short.
         </p>
       </header>

@@ -197,7 +197,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
     <div className="max-w-4xl mx-auto space-y-5">
       {/* Back */}
       <button onClick={() => router.push("/tickets")}
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-gray-800 transition-colors">
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ChevronLeft className="h-4 w-4" /> Back to tickets
       </button>
 
@@ -244,10 +244,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
               </div>
             </div>
 
-            <p className="text-sm text-gray-600 leading-relaxed">{ticket.ticket_description}</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">{ticket.ticket_description}</p>
 
             {/* Meta row */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pt-2 border-t border-gray-100">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pt-2 border-t border-border">
               <span>Created {formatDate(ticket.createdAt)}</span>
               <span>Last activity {formatDate(ticket.lastActivity)}</span>
               <span>By {ticket.createdBy?.firstName} {ticket.createdBy?.lastName}</span>
@@ -268,7 +268,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
               <div className="flex flex-wrap gap-2">
                 {ticket.attachments.map((a, i) => (
                   <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-muted/30 border border-gray-200 rounded-lg hover:bg-gray-100">
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-muted/30 border border-border rounded-lg hover:bg-muted">
                     <Paperclip className="h-3 w-3 text-muted-foreground" /> {a.filename}
                   </a>
                 ))}
@@ -370,7 +370,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
               </div>
             </div>
           ) : (
-            <div className="bg-muted/30 rounded-xl border border-gray-200 p-6 text-center">
+            <div className="bg-muted/30 rounded-xl border border-border p-6 text-center">
               <p className="text-sm text-muted-foreground">
                 This ticket is <strong>{STATUS_LABELS[ticket.status]}</strong>.
                 {isStaff && " You can reopen it from the button above."}
@@ -385,7 +385,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
 
             {/* Assign agent */}
             <div className="bg-card rounded-xl border border-border/60 shadow-sm p-4 space-y-3">
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Assigned Agent</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Assigned Agent</p>
               {ticket.assigned_agent ? (
                 <div className="flex items-center gap-2.5">
                   <Avatar className="h-8 w-8">
@@ -412,7 +412,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
 
             {/* Department */}
             <div className="bg-card rounded-xl border border-border/60 shadow-sm p-4 space-y-2">
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Department</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Department</p>
               <Select
                 value={currentDeptId}
                 onValueChange={(v: string | null) => { if (v) handleAssignDept(v); }}
@@ -430,7 +430,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
 
             {/* Team */}
             <div className="bg-card rounded-xl border border-border/60 shadow-sm p-4 space-y-2">
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Team</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Team</p>
               <Select
                 value={currentTeamId}
                 onValueChange={(v: string | null) => { if (v) handleAssignTeam(v); }}
@@ -449,13 +449,13 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
             {/* People */}
             <div className="bg-card rounded-xl border border-border/60 shadow-sm p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">People</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">People</p>
                 <div className="flex items-center gap-1.5">
                   {/* Role selector for next add */}
                   <select
                     value={personRole}
                     onChange={(e) => setPersonRole(e.target.value as typeof personRole)}
-                    className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#D85A30]"
+                    className="text-xs border border-border rounded-lg px-1.5 py-1 text-muted-foreground focus:outline-none focus:ring-1 focus:ring-[#D85A30]"
                   >
                     <option value="agent">agent</option>
                     <option value="customer">customer</option>
@@ -491,7 +491,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ code: s
                       <button
                         onClick={() => handleRemovePerson(p.user._id)}
                         disabled={removingPerson === p.user._id}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 text-muted-foreground/50 hover:text-red-400 transition-all"
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 text-muted-foreground/50 hover:text-red-400 transition-all"
                       >
                         {removingPerson === p.user._id
                           ? <Loader2 className="h-3 w-3 animate-spin" />

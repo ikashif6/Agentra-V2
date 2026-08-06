@@ -96,7 +96,7 @@ export default function LiveChatWidgetPreview({ settings }: { settings: LiveChat
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground">Live preview</p>
           <p className="text-xs text-muted-foreground">
-            Exact storefront widget — updates as you edit settings
+            Exact storefront widget. Updates as you edit settings
           </p>
         </div>
       </div>

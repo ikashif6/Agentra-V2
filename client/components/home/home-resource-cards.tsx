@@ -48,7 +48,7 @@ const RESOURCES: ResourceCard[] = [
   },
   {
     title: "Your notifications",
-    description: "Tune sounds and alerts so you never miss a conversation assigned to you.",
+    description: "Tune sounds and alerts so you stay on top of conversations assigned to you.",
     href: "/settings?item=notifications",
     cta: "Open settings",
     image: "/home/grow-assigned.png",

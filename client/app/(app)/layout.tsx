@@ -1,16 +1,14 @@
 "use client";
 
-import { Suspense } from "react";
-import { usePathname } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
 import CriticalAlertBanner from "@/components/layout/critical-alert-banner";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 const FULL_BLEED_ROUTES = ["/inbox", "/ai-agent", "/ai-agents", "/live-chat", "/settings"];
 const FLAT_CANVAS_ROUTES = ["/dashboard", "/analytics"];
@@ -59,17 +57,29 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           </SheetContent>
         </Sheet>
 
-        <div className="relative z-[1] flex min-w-0 flex-1 flex-col overflow-hidden">
-          <Header onMenuClick={() => setMobileOpen(true)} />
-          <main
-            className={cn(
-              isFullBleed ? "flex-1 overflow-hidden" : "flex-1 overflow-y-auto p-4 md:p-6",
-              isFlatCanvas && "bg-background",
-            )}
-          >
-            {children}
-          </main>
-        </div>
+        {isFullBleed ? (
+          <div className="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-2.5 pl-1.5 md:p-3 md:pl-2">
+            <div className="app-shell-stage flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl">
+              <Header onMenuClick={() => setMobileOpen(true)} />
+              <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
+            </div>
+          </div>
+        ) : (
+          /*
+           * Scroll lives on this outer column (not the white stage), so:
+           * - scrollbar sits to the right of the canvas gutter
+           * - header + panel scroll away together
+           * Avoid display:flex here — flex height clamping traps overflow inside the stage.
+           */
+          <div className="relative z-[1] min-h-0 min-w-0 flex-1 overflow-y-auto">
+            <div className="flex min-h-full flex-col p-2.5 pl-1.5 md:p-3 md:pl-2">
+              <div className="app-shell-stage flex flex-1 flex-col overflow-hidden rounded-2xl">
+                <Header onMenuClick={() => setMobileOpen(true)} />
+                <main className="p-5 md:p-6">{children}</main>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

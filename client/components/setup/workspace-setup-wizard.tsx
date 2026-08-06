@@ -122,10 +122,10 @@ export function WorkspaceSetupWizard({
       ? `Next: ${nextStep.label}`
       : "Finish";
 
-  const skipLabel = nextTask || nextStep ? "Skip for now" : "Skip & finish";
+  const skipLabel = nextTask || nextStep ? "Skip for now" : "Skip and finish";
 
   return (
-    <div className="relative min-h-svh overflow-x-hidden bg-white">
+    <div className="relative min-h-svh overflow-x-hidden bg-background">
       <header className="relative z-20 flex items-center justify-between gap-3 px-5 py-5 sm:px-8">
         <AuthLogo href="/dashboard" />
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
@@ -140,7 +140,7 @@ export function WorkspaceSetupWizard({
             href={SITE_LEGAL.getHelp}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            className="inline-flex items-center rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
           >
             Get help
           </a>
@@ -160,7 +160,7 @@ export function WorkspaceSetupWizard({
 
         <div
           className={cn(
-            "border border-border/80 bg-white shadow-lg",
+            "border border-border/80 bg-card shadow-lg dark:border-white/[0.06] dark:shadow-[0_16px_48px_-20px_rgba(0,0,0,0.65)]",
             authRadiusClass,
           )}
         >
@@ -292,7 +292,7 @@ function SetupPanelHost({
     case "facebook":
       return <FacebookSettingsPanel returnTo={returnTo} />;
     case "customize":
-      return <CustomizeWorkspacePanel onUpdated={() => void onRefreshStatus?.()} />;
+      return <CustomizeWorkspacePanel showDangerZone={false} onUpdated={() => void onRefreshStatus?.()} />;
     case "invite-user":
       return (
         <NewUserPanel

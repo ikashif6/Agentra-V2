@@ -39,7 +39,7 @@ export const WORKSPACE_SETUP_STEPS: Omit<SetupStep, "done">[] = [
     id: "workspace",
     label: "Workspace",
     title: "Customize your workspace",
-    description: "Set your brand look — name, logos, colors, and how Agentra appears in the browser.",
+    description: "Set your brand look: name, logos, colors, and how Agentra appears in the browser.",
     duration: "3 mins",
     href: "/setup?step=workspace",
     action: "Customize",

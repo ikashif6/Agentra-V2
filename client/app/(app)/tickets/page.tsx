@@ -190,7 +190,7 @@ export default function TicketsPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -271,13 +271,13 @@ export default function TicketsPage() {
               <Label>Title</Label>
               <Input {...register("ticket_title")} placeholder="Describe the issue briefly"
                 className="focus-visible:ring-primary/30" />
-              {errors.ticket_title && <p className="text-xs text-red-500">{errors.ticket_title.message}</p>}
+              {errors.ticket_title && <p className="text-xs text-destructive">{errors.ticket_title.message}</p>}
             </div>
             <div className="space-y-1">
               <Label>Description</Label>
               <Textarea {...register("ticket_description")} placeholder="Provide as much detail as possible…"
                 className="min-h-[100px] focus-visible:ring-primary/30" />
-              {errors.ticket_description && <p className="text-xs text-red-500">{errors.ticket_description.message}</p>}
+              {errors.ticket_description && <p className="text-xs text-destructive">{errors.ticket_description.message}</p>}
             </div>
 
             <div className="grid grid-cols-3 gap-3">

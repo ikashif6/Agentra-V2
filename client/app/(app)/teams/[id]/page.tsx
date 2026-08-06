@@ -79,7 +79,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <button onClick={() => router.push("/teams")}
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-gray-800 transition-colors">
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ChevronLeft className="h-4 w-4" /> Back to teams
       </button>
 
@@ -90,7 +90,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
             <h2 className="text-xl font-bold text-foreground">{team.name}</h2>
             {team.description && <p className="text-sm text-muted-foreground mt-1">{team.description}</p>}
             {typeof team.department === "object" && team.department && (
-              <p className="text-xs text-muted-foreground mt-1">Dept: <span className="text-gray-600">{team.department.name}</span></p>
+              <p className="text-xs text-muted-foreground mt-1">Dept: <span className="text-muted-foreground">{team.department.name}</span></p>
             )}
           </div>
           {canManage && (
@@ -118,8 +118,8 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {/* Members */}
-      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground/80">
             Members
             <Badge variant="secondary" className="ml-2">{team.members.length}</Badge>
@@ -156,7 +156,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                     <Badge variant="secondary" className="text-xs capitalize">{m.user.role}</Badge>
                     {canManage && !isTeamLead && (
                       <button onClick={() => handleRemove(m.user._id)} disabled={removing === m.user._id}
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground/50 hover:text-red-400 transition-colors">
+                        className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground/50 hover:text-red-400 transition-colors">
                         {removing === m.user._id
                           ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           : <UserMinus className="h-3.5 w-3.5" />}

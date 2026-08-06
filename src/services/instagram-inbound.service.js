@@ -34,7 +34,7 @@ function mapAttachments(attachments) {
     }));
 }
 
-async function findOrCreateCustomer(company, pageToken, igsid) {
+async function findOrCreateCustomer(company, pageToken, igsid, profileHint = {}) {
   const email = `ig-${igsid}@instagram.agentra.local`;
 
   let customer = await User.findOne({ email, company: company._id });
@@ -44,10 +44,15 @@ async function findOrCreateCustomer(company, pageToken, igsid) {
   let lastName = 'User';
   let avatar;
 
+  if (profileHint.username) {
+    firstName = String(profileHint.username).replace(/^@/, '');
+    lastName = '@instagram';
+  }
+
   if (pageToken) {
     try {
       const profile = await getInstagramUserProfile(pageToken, igsid);
-      const name = (profile?.name || profile?.username || '').trim();
+      const name = (profile?.name || profile?.username || profileHint.username || '').trim();
       if (name) {
         const parts = name.split(/\s+/);
         firstName = parts[0];
@@ -74,7 +79,7 @@ async function findOrCreateCustomer(company, pageToken, igsid) {
   return customer;
 }
 
-async function findOrCreateTicket(company, customer, igUserId, igsid, firstBody, attachments) {
+async function findOrCreateTicket(company, customer, igUserId, igsid, firstBody, attachments, externalId) {
   const existing = await Ticket.findOne({
     company: company._id,
     source: 'instagram',
@@ -109,6 +114,7 @@ async function findOrCreateTicket(company, customer, igUserId, igsid, firstBody,
         senderEmail: customer.email,
         body: firstBody,
         attachments,
+        externalId: externalId || undefined,
         sentAt: now,
       },
     ],
@@ -119,23 +125,38 @@ async function findOrCreateTicket(company, customer, igUserId, igsid, firstBody,
   return { ticket, isNew: true };
 }
 
-async function handleMessagingEvent(company, pageToken, igUserId, event) {
-  const message = event.message;
-  if (!message || message.is_echo) return;
+async function messageAlreadyIngested(companyId, externalId) {
+  if (!externalId) return false;
+  const hit = await Ticket.exists({
+    company: companyId,
+    source: 'instagram',
+    'messages.externalId': externalId,
+  });
+  return Boolean(hit);
+}
 
-  const igsid = event.sender?.id;
-  if (!igsid) return;
-  // Ignore events the business account sends to itself.
-  if (igsid === igUserId) return;
+/**
+ * Shared ingest for webhook events and Graph conversation polling.
+ */
+async function ingestInboundInstagramMessage(company, pageToken, {
+  igUserId,
+  igsid,
+  text,
+  attachments = [],
+  externalId,
+  sentAt,
+  username,
+}) {
+  if (!igsid || igsid === igUserId) return null;
 
-  const text = (message.text || '').trim();
-  const attachments = mapAttachments(message.attachments);
-  if (!text && attachments.length === 0) return;
+  if (externalId && (await messageAlreadyIngested(company._id, externalId))) {
+    return null;
+  }
 
-  const body = text || (attachments.length ? '(sent an attachment)' : '');
-  if (!body) return;
+  const body = (text || '').trim() || (attachments.length ? '(sent an attachment)' : '');
+  if (!body) return null;
 
-  const customer = await findOrCreateCustomer(company, pageToken, igsid);
+  const customer = await findOrCreateCustomer(company, pageToken, igsid, { username });
   const { ticket, isNew } = await findOrCreateTicket(
     company,
     customer,
@@ -143,15 +164,20 @@ async function handleMessagingEvent(company, pageToken, igUserId, event) {
     igsid,
     body,
     attachments,
+    externalId,
   );
 
   if (!isNew) {
+    if (externalId && ticket.messages.some((m) => m.externalId === externalId)) {
+      return ticket;
+    }
     ticket.messages.push({
       sender: customer._id,
       senderEmail: customer.email,
       body,
       attachments,
-      sentAt: new Date(),
+      externalId: externalId || undefined,
+      sentAt: sentAt ? new Date(sentAt) : new Date(),
     });
     if (['resolved', 'closed', 'self_closed'].includes(ticket.status)) {
       ticket.status = 'open';
@@ -163,6 +189,27 @@ async function handleMessagingEvent(company, pageToken, igUserId, event) {
 
   const { scheduleTicketAiReply } = require('./ai-agent-ticket.service');
   scheduleTicketAiReply(company._id, ticket._id, body);
+  return ticket;
+}
+
+async function handleMessagingEvent(company, pageToken, igUserId, event) {
+  const message = event.message;
+  if (!message || message.is_echo) return;
+
+  const igsid = event.sender?.id;
+  if (!igsid) return;
+
+  const text = (message.text || '').trim();
+  const attachments = mapAttachments(message.attachments);
+  if (!text && attachments.length === 0) return;
+
+  await ingestInboundInstagramMessage(company, pageToken, {
+    igUserId,
+    igsid: String(igsid),
+    text,
+    attachments,
+    externalId: message.mid ? String(message.mid) : undefined,
+  });
 }
 
 /**
@@ -200,4 +247,4 @@ async function processInstagramWebhook(body) {
   }
 }
 
-module.exports = { processInstagramWebhook };
+module.exports = { processInstagramWebhook, ingestInboundInstagramMessage };

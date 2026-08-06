@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentra Cookie Consent — Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* --- Page chrome (preview only) --- */
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Instrument Sans", system-ui, sans-serif;
+    color: #1d1b19;
+    background: #faf8f6;
+  }
+
+  .wrap { max-width: 720px; margin: 0 auto; padding: 56px 24px 160px; }
+  .eyebrow { color: #d85a30; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 6px; }
+  h1 { font-size: 30px; letter-spacing: -.03em; margin: 0 0 10px; }
+  .lede { color: #7d7770; font-size: 15px; margin: 0 0 28px; }
+
+  .panel { background: #fff; border: 1px solid #ebe7e2; border-radius: 16px; padding: 20px 22px; margin-bottom: 16px; }
+  .panel h2 { font-size: 15px; margin: 0 0 10px; }
+  .panel p { font-size: 14px; color: #7d7770; margin: 0 0 12px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  .controls button {
+    font: inherit; font-size: 13.5px; font-weight: 500;
+    padding: 9px 14px; border-radius: 999px; cursor: pointer;
+    border: 1px solid #ebe7e2; background: #fff; color: #1d1b19;
+  }
+  .controls button:hover { background: #fbe7df; border-color: #f0c9ba; }
+
+  #state {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px; background: #171512; color: #f5f2ef;
+    border-radius: 12px; padding: 14px 16px; white-space: pre; overflow: auto; margin: 0;
+  }
+
+  /* --- Hostile theme CSS: mimics Elementor/Vamtam so we can prove isolation --- */
+  button, h2, h3, p, ul, li, a {
+    font-family: "Comic Sans MS", cursive !important;
+  }
+  button {
+    background: #000 !important;
+    color: #fff !important;
+    border-radius: 60px !important;
+    padding: 22px 34px !important;
+    font-size: 22px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+  }
+  h2 { font-size: 52px !important; line-height: 1.05 !important; }
+  h3 { font-size: 34px !important; }
+  li { font-size: 24px !important; }
+  /* Re-exempt the preview chrome itself so the page stays readable. */
+  .wrap button, .wrap h1, .wrap h2, .wrap p, .wrap li, .wrap a {
+    font-family: "Instrument Sans", system-ui, sans-serif !important;
+  }
+  .controls button {
+    background: #fff !important; color: #1d1b19 !important; border-radius: 999px !important;
+    padding: 9px 14px !important; font-size: 13.5px !important; font-weight: 500 !important;
+    text-transform: none !important;
+  }
+  .panel h2 { font-size: 15px !important; line-height: 1.4 !important; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <p class="eyebrow">Local preview</p>
+  <h1>Agentra Cookie Consent</h1>
+  <p class="lede">
+    This page loads the plugin exactly as WordPress does. It also injects deliberately hostile
+    theme CSS (giant Comic Sans headings, black pill buttons) to confirm the widget is fully
+    isolated from the live theme.
+  </p>
+
+  <div class="panel">
+    <h2>Try it</h2>
+    <p>The banner opens automatically on first load. After a choice is saved, use the pill at bottom-left.</p>
+    <div class="controls">
+      <button type="button" onclick="AgentraConsent.openSettings()">Open preferences</button>
+      <button type="button" class="agentra-cc-open-settings">Footer link (shortcode)</button>
+      <button type="button" onclick="resetConsent()">Reset &amp; reload</button>
+      <button type="button" onclick="AgentraConsent.acceptAll()">Accept all</button>
+      <button type="button" onclick="AgentraConsent.rejectOptional()">Reject optional</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Current consent state</h2>
+    <p>Updates live via the <code>agentra:consent-updated</code> event.</p>
+    <pre id="state">waiting…</pre>
+  </div>
+</div>
+
+<div id="agentra-cc-root"></div>
+
+<script>
+  // Mirrors what the plugin passes via wp_localize_script().
+  window.agentraCookieConsent = {
+    cookieName: 'agentra_cookie_consent',
+    consentDays: 180,
+    version: '1.2.0',
+    cssUrl: '../agentra-cookie-consent/assets/css/banner.css',
+    logoUrl: '../agentra-cookie-consent/assets/img/agentra-logo.svg',
+    policyUrl: 'https://agentraa.com/cookie-policy/',
+    privacyUrl: 'https://agentraa.com/privacy-policy/',
+    enableFunctional: true,
+    enableAnalytics: true,
+    enableMarketing: true,
+    reasons: [
+      'Keeping you signed in and secure',
+      'Remembering your preferences',
+      'Running live chat and support conversations',
+      'Measuring performance and fixing errors',
+      'Understanding which pages people visit',
+      'Measuring marketing campaigns'
+    ],
+    i18n: {
+      wordmark: 'Agentra',
+      title: 'We use cookies',
+      text: 'We use essential cookies to keep Agentra running securely, plus optional cookies to understand how the site is used and improve your experience. You can change your choice at any time.',
+      reasonsTitle: 'What we use cookies for',
+      acceptAll: 'Sounds good',
+      rejectOptional: 'Only essentials',
+      chooseLabel: 'Let me choose',
+      savePreferences: 'Save my choices',
+      close: 'Close',
+      necessaryTitle: 'Strictly necessary',
+      necessaryDesc: 'Security, sign-in sessions, forms, live chat and your cookie choices.',
+      functionalTitle: 'Functional',
+      functionalDesc: 'Remember optional interface, language and display preferences.',
+      analyticsTitle: 'Analytics',
+      analyticsDesc: 'Help us understand usage, diagnose errors and improve performance.',
+      marketingTitle: 'Marketing',
+      marketingDesc: 'Measure campaigns, referrals and conversions when marketing tools are enabled.',
+      alwaysOn: 'Always on',
+      learnMore: 'Cookie Policy',
+      privacyLink: 'Privacy Policy',
+      reopenLabel: 'Cookie settings'
+    }
+  };
+
+  function resetConsent() {
+    document.cookie = 'agentra_cookie_consent=; Path=/; Max-Age=0';
+    location.reload();
+  }
+
+  window.addEventListener('agentra:consent-updated', function (e) {
+    document.getElementById('state').textContent = JSON.stringify(e.detail, null, 2);
+  });
+</script>
+<script src="../agentra-cookie-consent/assets/js/banner.js"></script>
+</body>
+</html>

@@ -12,7 +12,7 @@ export function ForgotPasswordWorkspaceRequired() {
       <div>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">Reset your password</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Open your workspace URL first, then use forgot password from the sign-in page.
+          Please open your workspace sign-in page first, then choose forgot password from there.
         </p>
       </div>
 

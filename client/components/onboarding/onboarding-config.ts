@@ -60,17 +60,17 @@ export const AI_OPTIONS = [
   {
     id: "very",
     label: "Turn it on",
-    description: "I want AI assisting my team from day one",
+    description: "I'd like AI to assist my team from day one",
   },
   {
     id: "somewhat",
     label: "Explore first",
-    description: "I'm curious but want to try it gradually",
+    description: "I'm curious and would like to try it gradually",
   },
   {
     id: "not",
     label: "Skip for now",
-    description: "We'll handle replies ourselves for the time being",
+    description: "We'll handle replies ourselves for now",
   },
 ] as const;
 
@@ -85,22 +85,22 @@ export const STEP_COPY: Record<
   },
   channels: {
     heroTitle: "Almost there",
-    heroSubtitle: "Tell us how customers reach your team.",
-    prompt: "Select every way customers contact you.",
+    heroSubtitle: "Tell us how customers usually reach your team.",
+    prompt: "Which channels do customers use to get in touch?",
   },
   volume: {
     heroTitle: "Your ticket volume",
     heroSubtitle: "We'll use this to suggest sensible defaults.",
-    prompt: "Roughly how many tickets does your team see each month?",
+    prompt: "Roughly how many tickets does your team handle each month?",
   },
   platform: {
     heroTitle: "Your commerce stack",
     heroSubtitle: "We'll tailor setup to match how you sell.",
-    prompt: "What powers your online store?",
+    prompt: "Which platform powers your online store?",
   },
   ai: {
     heroTitle: "AI in your inbox",
-    heroSubtitle: "Agentra can draft replies, route tickets, and pull key details from long threads.",
-    prompt: "Would you like AI help in your workspace?",
+    heroSubtitle: "Agentra can draft replies, route tickets, and surface key details from long threads.",
+    prompt: "Would you like AI assistance in your workspace?",
   },
 };

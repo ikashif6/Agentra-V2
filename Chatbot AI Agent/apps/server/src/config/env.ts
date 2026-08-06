@@ -71,7 +71,7 @@ export const env = {
   refundMaxAmount: Number(req("REFUND_MAX_AMOUNT", "100")) || 100,
   resendApiKey: req("RESEND_API_KEY"),
   resendFromEmail: first("RESEND_FROM_EMAIL", "EMAIL_FROM") || "noreply@agentraa.com",
-  resendFromName: req("RESEND_FROM_NAME", "Agentraa"),
+  resendFromName: req("RESEND_FROM_NAME", "Agentra"),
   smtpHost: req("SMTP_HOST"),
   smtpPort: Number(req("SMTP_PORT", "587")) || 587,
   smtpUser: req("SMTP_USER"),

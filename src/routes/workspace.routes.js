@@ -40,4 +40,12 @@ router.patch(
   workspaceController.updateBranding,
 );
 
+router.delete(
+  '/',
+  authorize('owner', 'admin'),
+  [body('confirmSubdomain').trim().notEmpty().withMessage('confirmSubdomain is required')],
+  validate,
+  workspaceController.deleteWorkspace,
+);
+
 module.exports = router;

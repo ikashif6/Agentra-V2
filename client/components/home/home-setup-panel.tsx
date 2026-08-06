@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, Circle, Mail, MessageSquare, Store, Users } from "lucide-react";
-import { AiAgentIcon } from "@/components/icons/ai-agent-icon";
+import { Check, Circle, Mail, MessageSquare, Sparkles, Store, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { authRadiusClass } from "@/components/auth/auth-panel-background";
 import { APP_CARD } from "@/lib/app-surfaces";
@@ -66,7 +65,7 @@ const STEP_ICONS: Record<string, React.ReactNode> = {
   email: <Mail className="size-4" />,
   store: <Store className="size-4" />,
   team: <Users className="size-4" />,
-  automate: <AiAgentIcon className="size-4" />,
+  automate: <Sparkles className="size-4" strokeWidth={1.75} />,
   chat: <MessageSquare className="size-4" />,
 };
 

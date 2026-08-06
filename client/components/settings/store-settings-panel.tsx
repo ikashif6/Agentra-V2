@@ -40,11 +40,11 @@ const PROVIDER_COPY: Record<
   shopify: {
     title: "Connect Shopify",
     subtitle:
-      "Authorize Agentra from your Shopify admin — connection is managed here, not via the Shopify App Store.",
+      "Authorize Agentra from your Shopify admin. Connection is managed here, not through the Shopify App Store.",
     steps: [
       "Enter your *.myshopify.com domain or your public storefront URL.",
       "Click Connect Shopify and approve access in the Shopify window.",
-      "You're done — orders and store data sync into Agentra (no separate Shopify app fee).",
+      "You're all set. Orders and store data sync into Agentra, with no separate Shopify app fee.",
     ],
   },
   woocommerce: {
@@ -509,31 +509,31 @@ function ProviderConnectForm({
                   <code className="rounded bg-card px-1 py-0.5 font-mono text-foreground">
                     GET /agentra/orders?email=
                   </code>{" "}
-                  — list orders for inbox lookup
+                  : list orders for inbox lookup
                 </li>
                 <li>
                   <code className="rounded bg-card px-1 py-0.5 font-mono text-foreground">
                     GET /agentra/orders/:id
                   </code>{" "}
-                  — live order detail refresh
+                  : live order detail refresh
                 </li>
                 <li>
                   <code className="rounded bg-card px-1 py-0.5 font-mono text-foreground">
                     PATCH /agentra/orders/:id
                   </code>{" "}
-                  — edit note or addresses
+                  : edit note or addresses
                 </li>
                 <li>
                   <code className="rounded bg-card px-1 py-0.5 font-mono text-foreground">
                     GET /agentra/capabilities
                   </code>{" "}
-                  — optional; returns supported actions and features
+                  : optional; returns supported actions and features
                 </li>
                 <li>
                   <code className="rounded bg-card px-1 py-0.5 font-mono text-foreground">
                     POST /agentra/orders/:id/actions
                   </code>{" "}
-                  — cancel, fulfill, refund, hold, mark_paid, send_invoice, duplicate, archive, and more
+                  : cancel, fulfill, refund, hold, mark_paid, send_invoice, duplicate, archive, and more
                 </li>
               </ul>
               <p className="pt-1">
@@ -891,12 +891,26 @@ function SyncToggle({
 }) {
   return (
     <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/60 p-3 hover:bg-muted/20">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 size-4 rounded border-border text-primary focus:ring-primary/30"
-      />
+      <span className="relative mt-0.5 size-4 shrink-0">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="peer sr-only"
+        />
+        <span
+          aria-hidden
+          className={cn(
+            "flex size-4 items-center justify-center rounded-[4px] border transition-colors",
+            "peer-focus-visible:ring-2 peer-focus-visible:ring-ring/50",
+            checked
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-background text-transparent",
+          )}
+        >
+          <Check className="size-3" strokeWidth={2.5} />
+        </span>
+      </span>
       <span>
         <span className="block text-sm font-medium text-foreground">{label}</span>
         <span className="block text-xs text-muted-foreground">{description}</span>

@@ -80,6 +80,12 @@ const userSchema = new mongoose.Schema(
     otpCode: { type: String, select: false },
     otpCodeExpires: { type: Date, select: false },
     otpAttempts: { type: Number, default: 0, select: false },
+    /** login | 2fa_login | 2fa_enable | 2fa_disable */
+    otpPurpose: { type: String, select: false },
+
+    // Email OTP two-factor authentication (post-password / post-OAuth)
+    twoFactorEnabled: { type: Boolean, default: false },
+    twoFactorEnabledAt: { type: Date },
 
     // Refresh token family (for rotation)
     refreshTokens: [
@@ -217,6 +223,7 @@ userSchema.methods.toSafeObject = function () {
   delete obj.otpCode;
   delete obj.otpCodeExpires;
   delete obj.otpAttempts;
+  delete obj.otpPurpose;
   delete obj.refreshTokens;
   delete obj.emailVerificationToken;
   delete obj.emailVerificationExpires;

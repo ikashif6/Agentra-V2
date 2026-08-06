@@ -49,9 +49,77 @@ async function issueTokenPair(user, company, meta = {}) {
  */
 function clientMeta(req) {
   return {
-    ip: req.ip || req.connection?.remoteAddress,
+    ip: req.ip || req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.connection?.remoteAddress,
     userAgent: req.headers['user-agent'],
   };
+}
+
+function maskEmail(email) {
+  const [local, domain] = String(email || '').split('@');
+  if (!local || !domain) return email;
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}${'*'.repeat(Math.max(local.length - visible.length, 2))}@${domain}`;
+}
+
+/**
+ * Store a hashed email OTP for a purpose and send the matching email.
+ */
+async function issueEmailOtp(user, company, purpose) {
+  const otp = tokenUtil.generateOtp(6);
+  const hashedOtp = tokenUtil.hashToken(otp);
+
+  await User.findByIdAndUpdate(user._id, {
+    otpCode: hashedOtp,
+    otpCodeExpires: new Date(Date.now() + OTP_TTL_MS),
+    otpAttempts: 0,
+    otpPurpose: purpose,
+  });
+
+  if (purpose === '2fa_login' || purpose === '2fa_enable' || purpose === '2fa_disable') {
+    await emailService.sendTwoFactorOtp({
+      user,
+      otp,
+      subdomain: company.subdomain,
+      purpose,
+    });
+  } else {
+    await emailService.sendOtpCode({ user, otp, subdomain: company.subdomain });
+  }
+
+  return { maskedEmail: maskEmail(user.email) };
+}
+
+async function consumeEmailOtp(user, otp, expectedPurpose) {
+  if (!user.otpCode || !user.otpCodeExpires || user.otpCodeExpires < new Date()) {
+    const err = new Error('OTP has expired. Please request a new one.');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  if (expectedPurpose && user.otpPurpose && user.otpPurpose !== expectedPurpose) {
+    const err = new Error('Invalid OTP. Please request a new one.');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  if (user.otpAttempts >= OTP_MAX_ATTEMPTS) {
+    const err = new Error('Too many incorrect attempts. Please request a new OTP.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const hashedInput = tokenUtil.hashToken(otp);
+  if (hashedInput !== user.otpCode) {
+    await User.findByIdAndUpdate(user._id, { $inc: { otpAttempts: 1 } });
+    const remaining = OTP_MAX_ATTEMPTS - (user.otpAttempts + 1);
+    const err = new Error(`Invalid OTP. ${remaining} attempt(s) remaining.`);
+    err.statusCode = 401;
+    throw err;
+  }
+
+  await User.findByIdAndUpdate(user._id, {
+    $unset: { otpCode: 1, otpCodeExpires: 1, otpAttempts: 1, otpPurpose: 1 },
+  });
 }
 
 // ─── Company Registration ─────────────────────────────────────────────────────
@@ -205,6 +273,24 @@ exports.login = async (req, res, next) => {
 
     // Reset attempts on success
     await user.resetLoginAttempts();
+
+    if (user.twoFactorEnabled) {
+      try {
+        const { maskedEmail } = await issueEmailOtp(user, company, '2fa_login');
+        return response.success(
+          res,
+          {
+            requiresTwoFactor: true,
+            email: user.email,
+            maskedEmail,
+          },
+          'Two-factor authentication required',
+        );
+      } catch (emailErr) {
+        console.error('Failed to send 2FA OTP:', emailErr.message);
+        return response.error(res, 'Failed to send verification code. Please try again.');
+      }
+    }
 
     const { accessToken, refreshToken } = await issueTokenPair(user, company, clientMeta(req));
 
@@ -397,6 +483,7 @@ exports.requestOtp = async (req, res, next) => {
       otpCode: hashedOtp,
       otpCodeExpires: new Date(Date.now() + OTP_TTL_MS),
       otpAttempts: 0,
+      otpPurpose: 'login',
     });
 
     try {
@@ -452,7 +539,7 @@ exports.verifyOtp = async (req, res, next) => {
 
     // Clear OTP — one-time use
     await User.findByIdAndUpdate(user._id, {
-      $unset: { otpCode: 1, otpCodeExpires: 1, otpAttempts: 1 },
+      $unset: { otpCode: 1, otpCodeExpires: 1, otpAttempts: 1, otpPurpose: 1 },
       isEmailVerified: true,
     });
 
@@ -466,6 +553,205 @@ exports.verifyOtp = async (req, res, next) => {
       user: user.toSafeObject(),
       company: publicCompanyBranding(company),
     }, 'OTP verified successfully');
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Email OTP two-factor authentication ─────────────────────────────────────
+
+/**
+ * POST /auth/2fa/verify
+ * Complete login after password when 2FA is enabled.
+ */
+exports.verifyTwoFactorLogin = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+    const company = req.tenant;
+
+    if (!company) {
+      return response.badRequest(res, 'No workspace context.');
+    }
+
+    const user = await User.findOne({
+      email: email.toLowerCase(),
+      company: company._id,
+    }).select('+otpCode +otpCodeExpires +otpAttempts +otpPurpose +refreshTokens');
+
+    if (!user || !user.isActive || !user.twoFactorEnabled) {
+      return response.unauthorized(res, 'Invalid verification code');
+    }
+
+    try {
+      await consumeEmailOtp(user, otp, '2fa_login');
+    } catch (err) {
+      if (err.statusCode === 403) return response.forbidden(res, err.message);
+      return response.unauthorized(res, err.message);
+    }
+
+    const fresh = await User.findById(user._id).select('+refreshTokens');
+    const { accessToken, refreshToken } = await issueTokenPair(fresh, company, clientMeta(req));
+    logUserLogin({ company, user: fresh, req });
+
+    return response.success(res, {
+      accessToken,
+      refreshToken,
+      user: fresh.toSafeObject(),
+      company: publicCompanyBranding(company),
+    }, 'Two-factor verification successful');
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /auth/2fa/resend
+ * Resend 2FA login challenge (no auth).
+ */
+exports.resendTwoFactorLogin = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const company = req.tenant;
+
+    if (!company) {
+      return response.badRequest(res, 'No workspace context.');
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase(), company: company._id });
+    if (!user || !user.isActive || !user.twoFactorEnabled) {
+      return response.success(res, {}, 'If two-factor authentication is pending, a new code has been sent.');
+    }
+
+    try {
+      const { maskedEmail } = await issueEmailOtp(user, company, '2fa_login');
+      return response.success(res, { maskedEmail }, 'A new verification code has been sent.');
+    } catch (emailErr) {
+      console.error('Failed to resend 2FA OTP:', emailErr.message);
+      return response.error(res, 'Failed to send verification code. Please try again.');
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /auth/2fa/enable
+ * Start enabling 2FA (authenticated) — sends confirmation OTP.
+ */
+exports.enableTwoFactor = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return response.unauthorized(res, 'User not found');
+
+    if (user.twoFactorEnabled) {
+      return response.badRequest(res, 'Two-factor authentication is already enabled.');
+    }
+
+    try {
+      const { maskedEmail } = await issueEmailOtp(user, req.company, '2fa_enable');
+      return response.success(
+        res,
+        { maskedEmail },
+        'We sent a verification code to your email. Enter it to turn on 2FA.',
+      );
+    } catch (emailErr) {
+      console.error('Failed to send 2FA enable OTP:', emailErr.message);
+      return response.error(res, 'Failed to send verification code. Please try again.');
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /auth/2fa/enable/confirm
+ * Confirm OTP and enable 2FA.
+ */
+exports.confirmEnableTwoFactor = async (req, res, next) => {
+  try {
+    const { otp } = req.body;
+    const user = await User.findById(req.user._id).select(
+      '+otpCode +otpCodeExpires +otpAttempts +otpPurpose',
+    );
+    if (!user) return response.unauthorized(res, 'User not found');
+
+    try {
+      await consumeEmailOtp(user, otp, '2fa_enable');
+    } catch (err) {
+      if (err.statusCode === 403) return response.forbidden(res, err.message);
+      return response.unauthorized(res, err.message);
+    }
+
+    user.twoFactorEnabled = true;
+    user.twoFactorEnabledAt = new Date();
+    await user.save();
+
+    return response.success(
+      res,
+      { user: user.toSafeObject() },
+      'Two-factor authentication is now enabled',
+    );
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /auth/2fa/disable
+ * Start disabling 2FA — sends confirmation OTP.
+ */
+exports.disableTwoFactor = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return response.unauthorized(res, 'User not found');
+
+    if (!user.twoFactorEnabled) {
+      return response.badRequest(res, 'Two-factor authentication is not enabled.');
+    }
+
+    try {
+      const { maskedEmail } = await issueEmailOtp(user, req.company, '2fa_disable');
+      return response.success(
+        res,
+        { maskedEmail },
+        'We sent a verification code to your email. Enter it to turn off 2FA.',
+      );
+    } catch (emailErr) {
+      console.error('Failed to send 2FA disable OTP:', emailErr.message);
+      return response.error(res, 'Failed to send verification code. Please try again.');
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /auth/2fa/disable/confirm
+ */
+exports.confirmDisableTwoFactor = async (req, res, next) => {
+  try {
+    const { otp } = req.body;
+    const user = await User.findById(req.user._id).select(
+      '+otpCode +otpCodeExpires +otpAttempts +otpPurpose',
+    );
+    if (!user) return response.unauthorized(res, 'User not found');
+
+    try {
+      await consumeEmailOtp(user, otp, '2fa_disable');
+    } catch (err) {
+      if (err.statusCode === 403) return response.forbidden(res, err.message);
+      return response.unauthorized(res, err.message);
+    }
+
+    user.twoFactorEnabled = false;
+    user.twoFactorEnabledAt = undefined;
+    await user.save();
+
+    return response.success(
+      res,
+      { user: user.toSafeObject() },
+      'Two-factor authentication has been turned off',
+    );
   } catch (err) {
     next(err);
   }

@@ -29,7 +29,7 @@ const ORDER_STEPS = ["Placed", "Packed", "Shipped", "Delivered"] as const;
 
 /** Shopper ↔ Agentra — cards mirror the live chatbot widget. */
 const SCRIPT: StepKind[] = [
-  { type: "user", text: "Hey — has order 10492 shipped yet?", delay: 1500 },
+  { type: "user", text: "Hey, has order 10492 shipped yet?", delay: 1500 },
   { type: "typing", delay: 1000 },
   {
     type: "ai",

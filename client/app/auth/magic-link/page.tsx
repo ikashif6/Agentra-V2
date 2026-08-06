@@ -53,7 +53,7 @@ export default function MagicLinkPage() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Check your inbox</h2>
           <p className="mt-2 text-sm text-gray-500">
-            We sent a magic link to your email. Click it to sign in. It expires in 15 minutes.
+            We sent a sign-in link to your email. Open it within 15 minutes to continue.
           </p>
         </div>
         <Button variant="outline" className="w-full" onClick={() => setSent(false)}>
@@ -68,17 +68,17 @@ export default function MagicLinkPage() {
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Sign in with Magic Link</h2>
         <p className="mt-1 text-sm text-gray-500">
-          We&apos;ll email you a secure link. No password needed.
+          We&apos;ll email you a secure link so you can sign in without a password.
         </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-1">
           <Label htmlFor="subdomain">Workspace subdomain</Label>
-          <div className="flex items-center rounded-lg border border-gray-200 focus-within:border-[#D85A30] focus-within:ring-1 focus-within:ring-[#D85A30] overflow-hidden transition-all">
+          <div className="flex h-10 items-stretch overflow-hidden rounded-lg border border-gray-200 transition-all focus-within:border-[#D85A30] focus-within:ring-1 focus-within:ring-[#D85A30]">
             <Input id="subdomain" {...register("subdomain")} placeholder="yourcompany"
-              className="border-0 focus-visible:ring-0 rounded-none flex-1" />
-            <span className="px-3 text-sm text-gray-400 bg-gray-50 border-l border-gray-200 py-2 shrink-0">
+              className="h-full min-h-0 flex-1 rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0" />
+            <span className="flex shrink-0 items-center border-l border-gray-200 bg-gray-50 px-3 text-sm text-gray-400">
               .agentraa.com
             </span>
           </div>

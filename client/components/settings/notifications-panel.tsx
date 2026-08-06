@@ -165,7 +165,7 @@ export default function NotificationsPanel() {
       {NOTIFICATION_SECTIONS.map((section) => (
         <section
           key={section.id}
-          className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+          className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
         >
           <div className="border-b border-border/60 px-5 py-4">
             <p className="text-sm font-medium text-foreground">{section.title}</p>

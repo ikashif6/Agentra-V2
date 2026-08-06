@@ -22,7 +22,7 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Check your email</h1>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            We sent a verification link{email ? ` to ${email}` : ""}. Click the link to activate
+            We sent a verification link{email ? ` to ${email}` : ""}. Open it to activate
             your workspace
             {workspace ? ` at ${workspace}` : ""} and continue setup.
           </p>
@@ -34,7 +34,7 @@ export default async function CheckEmailPage({ searchParams }: CheckEmailPagePro
             authRadiusClass,
           )}
         >
-          After verifying, you&apos;ll see a short workspace setup flow, then you&apos;re in.
+          After verifying, you&apos;ll step through a short workspace setup, then you&apos;ll be ready to go.
         </div>
 
         <p className="text-sm text-muted-foreground">

@@ -82,7 +82,7 @@ export function ForgotPasswordForm({ workspace }: ForgotPasswordFormProps) {
         </div>
 
         <AuthFormAlert
-          message="Didn't get it? Check spam, or make sure you entered the email you use to sign in."
+          message="Haven't received it? Check your spam folder, or confirm you used the email for this account."
           variant="info"
         />
 

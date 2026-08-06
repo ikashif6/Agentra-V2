@@ -99,9 +99,9 @@ export default function UserPicker({
   };
 
   const ROLE_COLOR: Record<string, string> = {
-    admin: "bg-purple-50 text-purple-700 border-purple-100",
-    agent: "bg-[#FDEBE4] text-[#D85A30] border-[#F5D4C8]",
-    customer: "bg-gray-50 text-gray-600 border-gray-100",
+    admin: "bg-purple-50 text-purple-700 border-purple-100 dark:bg-purple-500/15 dark:text-purple-300 dark:border-purple-500/25",
+    agent: "bg-brand-muted text-brand-muted-foreground border-primary/15",
+    customer: "bg-muted/40 text-muted-foreground border-border",
   };
 
   return (
@@ -114,7 +114,7 @@ export default function UserPicker({
         {/* Search */}
         <div className="px-5 pt-3 pb-2">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               autoFocus
               placeholder="Search by name or email…"
@@ -132,7 +132,7 @@ export default function UserPicker({
               <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#D85A30" }} />
             </div>
           ) : users.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 py-8">
+            <p className="text-center text-sm text-muted-foreground py-8">
               {search ? "No users found" : "No staff members yet"}
             </p>
           ) : (
@@ -142,7 +142,7 @@ export default function UserPicker({
                 <button
                   key={u._id}
                   onClick={() => toggle(u)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left group"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/60 transition-colors text-left group"
                 >
                   <Avatar className="h-9 w-9 shrink-0">
                     <AvatarFallback
@@ -153,10 +153,10 @@ export default function UserPicker({
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-foreground truncate">
                       {displayName(u)}
                     </p>
-                    <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                    <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge className={`text-xs capitalize ${ROLE_COLOR[u.role] ?? ""}`} variant="secondary">
@@ -174,8 +174,8 @@ export default function UserPicker({
 
         {/* Multi confirm */}
         {multi && (
-          <div className="px-5 pb-5 pt-2 border-t border-gray-100 flex items-center justify-between">
-            <span className="text-xs text-gray-400">{selected.length} selected</span>
+          <div className="px-5 pb-5 pt-2 border-t border-border flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">{selected.length} selected</span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
               <Button size="sm" disabled={selected.length === 0} onClick={confirm}>

@@ -221,7 +221,7 @@ exports.listWorkspace = async (req, res, next) => {
 
     const [users, total] = await Promise.all([
       User.find(base)
-        .select('_id firstName lastName email role avatar jobTitle isActive isOnline isEmailVerified')
+        .select('_id firstName lastName email role avatar jobTitle isActive isOnline isEmailVerified twoFactorEnabled')
         .sort({ role: 1, firstName: 1, lastName: 1 })
         .skip(skip)
         .limit(Number(limit)),

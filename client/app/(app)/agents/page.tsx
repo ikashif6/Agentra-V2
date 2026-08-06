@@ -97,7 +97,7 @@ export default function AgentsPage() {
         )}
       </div>
 
-      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] overflow-hidden">
         {/* Table header */}
         <div className="grid grid-cols-[2.5fr_2.5fr_1fr_1fr] gap-4 px-5 py-3 border-b border-border/60 bg-muted/30">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Member</span>
@@ -177,19 +177,19 @@ export default function AgentsPage() {
               <div className="space-y-1">
                 <Label>First name</Label>
                 <Input {...register("firstName")} placeholder="Jane" className="focus-visible:ring-primary/30" />
-                {errors.firstName && <p className="text-xs text-red-500">{errors.firstName.message}</p>}
+                {errors.firstName && <p className="text-xs text-destructive">{errors.firstName.message}</p>}
               </div>
               <div className="space-y-1">
                 <Label>Last name</Label>
                 <Input {...register("lastName")} placeholder="Doe" className="focus-visible:ring-primary/30" />
-                {errors.lastName && <p className="text-xs text-red-500">{errors.lastName.message}</p>}
+                {errors.lastName && <p className="text-xs text-destructive">{errors.lastName.message}</p>}
               </div>
             </div>
             <div className="space-y-1">
               <Label>Email</Label>
               <Input type="email" {...register("email")} placeholder="jane@company.com"
                 className="focus-visible:ring-primary/30" />
-              {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
+              {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
             </div>
             <div className="space-y-1">
               <Label>Role</Label>

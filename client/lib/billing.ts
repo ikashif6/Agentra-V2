@@ -38,7 +38,8 @@ export type BillingInvoice = {
   currency: string;
   status: "paid" | "open" | "void" | "draft";
   description: string;
-  pdfUrl?: string;
+  hasPdf?: boolean;
+  paddleTransactionId?: string;
 };
 
 export type BillingOverview = {

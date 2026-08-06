@@ -30,6 +30,7 @@ export interface User {
   isEmailVerified: boolean;
   isActive: boolean;
   isOnline?: boolean;
+  twoFactorEnabled?: boolean;
   onboardingCompleted?: boolean;
   jobTitle?: string;
   bio?: string;

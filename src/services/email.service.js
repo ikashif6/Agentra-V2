@@ -293,7 +293,7 @@ function emailCallout(title, bodyHtml) {
           ${titleHtml}
           <div style="color:${BRAND.muted};font-size:14px;line-height:1.55;font-family:${FONT_BODY};">
             ${bodyHtml}
-          </div>
+        </div>
         </td>
       </tr>
     </table>`;
@@ -345,8 +345,8 @@ function emailLinkedInIcon() {
 }
 
 /**
- * Netflix-inspired layout: white canvas, bold hierarchy, light footer.
- * No login button, no address — Help Center beside Terms; LinkedIn square icon only.
+ * Agentra product email shell (auth, billing, workspace invites).
+ * Gray canvas + white card; Agentra logo, legal links, LinkedIn.
  */
 function emailShell(input) {
   const options =
@@ -368,6 +368,111 @@ function emailShell(input) {
   const year = new Date().getFullYear();
   const preheaderHtml = preheader
     ? `<div style="display:none;font-size:1px;color:${BRAND.canvas};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeHtml(preheader)}</div>`
+    : '';
+
+  return buildEmailDocument({
+    title,
+    preheaderHtml,
+    bodyHtml,
+    headerHtml: `
+      <a href="${LEGAL.marketingSite}" style="text-decoration:none;display:inline-block;line-height:0;">
+        <img src="${logoSrc}" alt="Agentra" width="132" height="30" style="display:block;width:132px;max-width:132px;height:auto;border:0;outline:none;" />
+      </a>`,
+    footerBrandHtml: `
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+        <tr>
+          <td valign="middle" bgcolor="${BRAND.white}" style="background-color:${BRAND.white};">
+            <a href="${LEGAL.marketingSite}" style="text-decoration:none;display:inline-block;line-height:0;">
+              <img src="${logoSrc}" alt="Agentra" width="100" height="23" style="display:block;width:100px;max-width:100px;height:auto;border:0;" />
+            </a>
+          </td>
+          <td valign="middle" align="right" bgcolor="${BRAND.white}" style="background-color:${BRAND.white};">
+            ${emailLinkedInIcon()}
+          </td>
+        </tr>
+      </table>`,
+    footerLinksHtml: `
+      <a href="${LEGAL.termsAndConditions}" style="color:${BRAND.faint};text-decoration:underline;">Terms &amp; Conditions</a>
+      &nbsp;&nbsp;|&nbsp;&nbsp;
+      <a href="${LEGAL.privacyPolicy}" style="color:${BRAND.faint};text-decoration:underline;">Privacy Policy</a>
+      &nbsp;&nbsp;|&nbsp;&nbsp;
+      <a href="${LEGAL.helpCenter}" style="color:${BRAND.faint};text-decoration:underline;">Help Center</a>`,
+    footerNoteHtml: footerNote
+      ? `<p style="margin:0 0 12px;">${footerNote}</p>`
+      : `<p style="margin:0 0 12px;">You received this email because you have an Agentra account.</p>`,
+    copyrightHtml: `<p style="margin:0;">© ${year} Agentra Technologies (Private) Limited. All rights reserved.</p>`,
+  });
+}
+
+/**
+ * Merchant / customer-facing email shell (chat transcripts, ticket updates, etc.).
+ * Uses the workspace brand — no Agentra logo, legal links, or LinkedIn.
+ */
+function merchantEmailShell({
+  title = 'Support',
+  preheader = '',
+  bodyHtml = '',
+  brandName = 'Support',
+  logoUrl = '',
+  websiteUrl = '',
+  footerNote = '',
+} = {}) {
+  const year = new Date().getFullYear();
+  const name = String(brandName || 'Support').trim() || 'Support';
+  const site = String(websiteUrl || '').trim();
+  const logo = String(logoUrl || '').trim();
+  const preheaderHtml = preheader
+    ? `<div style="display:none;font-size:1px;color:${BRAND.canvas};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeHtml(preheader)}</div>`
+    : '';
+
+  const logoImg = logo
+    ? `<img src="${escapeHtml(logo)}" alt="${escapeHtml(name)}" style="display:block;max-height:36px;max-width:180px;width:auto;height:auto;border:0;outline:none;" />`
+    : `<span style="display:inline-block;color:${BRAND.text};font-size:20px;font-weight:700;line-height:1.2;font-family:${FONT_HEADING};">${escapeHtml(name)}</span>`;
+
+  const headerInner = site
+    ? `<a href="${escapeHtml(site)}" style="text-decoration:none;display:inline-block;line-height:0;color:${BRAND.text};">${logoImg}</a>`
+    : `<div style="display:inline-block;line-height:0;">${logoImg}</div>`;
+
+  const footerLogo = logo
+    ? `<img src="${escapeHtml(logo)}" alt="${escapeHtml(name)}" style="display:block;max-height:28px;max-width:140px;width:auto;height:auto;border:0;" />`
+    : `<span style="color:${BRAND.text};font-size:14px;font-weight:700;font-family:${FONT_BODY};">${escapeHtml(name)}</span>`;
+
+  const footerBrand = site
+    ? `<a href="${escapeHtml(site)}" style="text-decoration:none;display:inline-block;line-height:0;color:${BRAND.text};">${footerLogo}</a>`
+    : footerLogo;
+
+  return buildEmailDocument({
+    title,
+    preheaderHtml,
+    bodyHtml,
+    headerHtml: headerInner,
+    footerBrandHtml: footerBrand,
+    footerLinksHtml: site
+      ? `<a href="${escapeHtml(site)}" style="color:${BRAND.faint};text-decoration:underline;">Visit our website</a>`
+      : '',
+    footerNoteHtml: footerNote
+      ? `<p style="margin:0 0 12px;">${footerNote}</p>`
+      : `<p style="margin:0 0 12px;">You received this email because you contacted ${escapeHtml(name)} support.</p>`,
+    copyrightHtml: `<p style="margin:0;">© ${year} ${escapeHtml(name)}. All rights reserved.</p>`,
+  });
+}
+
+function buildEmailDocument({
+  title,
+  preheaderHtml,
+  bodyHtml,
+  headerHtml,
+  footerBrandHtml,
+  footerLinksHtml,
+  footerNoteHtml,
+  copyrightHtml,
+}) {
+  const footerLinksRow = footerLinksHtml
+    ? `<tr>
+            <td bgcolor="${BRAND.white}" style="padding:8px 40px 16px;font-family:${FONT_BODY};font-size:12px;line-height:1.8;color:${BRAND.faint};background-color:${BRAND.white};">
+              ${footerLinksHtml}
+            </td>
+          </tr>`
     : '';
 
   return `<!DOCTYPE html>
@@ -412,9 +517,7 @@ function emailShell(input) {
         <table role="presentation" class="email-card" cellspacing="0" cellpadding="0" border="0" width="100%" bgcolor="${BRAND.white}" style="max-width:600px;width:100%;background-color:${BRAND.white};">
           <tr>
             <td bgcolor="${BRAND.white}" style="padding:40px 40px 24px;background-color:${BRAND.white};">
-              <a href="${LEGAL.marketingSite}" style="text-decoration:none;display:inline-block;line-height:0;">
-                <img src="${logoSrc}" alt="Agentra" width="132" height="30" style="display:block;width:132px;max-width:132px;height:auto;border:0;outline:none;" />
-              </a>
+              ${headerHtml}
             </td>
           </tr>
           <tr>
@@ -431,37 +534,14 @@ function emailShell(input) {
           </tr>
           <tr>
             <td bgcolor="${BRAND.white}" style="padding:28px 40px 14px;background-color:${BRAND.white};">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                <tr>
-                  <td valign="middle" bgcolor="${BRAND.white}" style="background-color:${BRAND.white};">
-                    <a href="${LEGAL.marketingSite}" style="text-decoration:none;display:inline-block;line-height:0;">
-                      <img src="${logoSrc}" alt="Agentra" width="100" height="23" style="display:block;width:100px;max-width:100px;height:auto;border:0;" />
-                    </a>
-                  </td>
-                  <td valign="middle" align="right" bgcolor="${BRAND.white}" style="background-color:${BRAND.white};">
-                    ${emailLinkedInIcon()}
-                  </td>
-                </tr>
-              </table>
+              ${footerBrandHtml}
             </td>
           </tr>
-          <tr>
-            <td bgcolor="${BRAND.white}" style="padding:8px 40px 16px;font-family:${FONT_BODY};font-size:12px;line-height:1.8;color:${BRAND.faint};background-color:${BRAND.white};">
-              <a href="${LEGAL.termsAndConditions}" style="color:${BRAND.faint};text-decoration:underline;">Terms &amp; Conditions</a>
-              &nbsp;&nbsp;|&nbsp;&nbsp;
-              <a href="${LEGAL.privacyPolicy}" style="color:${BRAND.faint};text-decoration:underline;">Privacy Policy</a>
-              &nbsp;&nbsp;|&nbsp;&nbsp;
-              <a href="${LEGAL.helpCenter}" style="color:${BRAND.faint};text-decoration:underline;">Help Center</a>
-            </td>
-          </tr>
+          ${footerLinksRow}
           <tr>
             <td bgcolor="${BRAND.white}" style="padding:4px 40px 40px;font-family:${FONT_BODY};font-size:12px;line-height:1.7;color:${BRAND.faint};background-color:${BRAND.white};">
-              ${
-                footerNote
-                  ? `<p style="margin:0 0 12px;">${footerNote}</p>`
-                  : `<p style="margin:0 0 12px;">You received this email because you have an Agentra account.</p>`
-              }
-              <p style="margin:0;">© ${year} Agentra Technologies (Private) Limited. All rights reserved.</p>
+              ${footerNoteHtml}
+              ${copyrightHtml}
             </td>
           </tr>
         </table>
@@ -604,6 +684,67 @@ async function sendOtpCode({ user, otp, subdomain }) {
         ${emailParagraph(
           `Use this code to finish signing in to <strong>Agentra</strong>. Enter it on the screen where you started and we’ll take it from there.`,
         )}
+        ${emailCodeBlock(otp)}
+        ${emailNotice(`This code expires after ${expiresMinutes} minutes.`)}
+        ${emailSection(
+          'Keep your account secure:',
+          `Never share this code. Agentra will never ask for it by phone or chat.`,
+        )}
+        ${emailSection(
+          'We’re here to help',
+          `Didn’t request this? Visit the <a href="${LEGAL.helpCenter}" style="color:${BRAND.link};text-decoration:underline;">Help Center</a>.`,
+        )}
+        ${emailSignOff()}
+      `,
+    }),
+  });
+}
+
+/**
+ * Send 2FA email OTP (login challenge, enable, or disable).
+ */
+async function sendTwoFactorOtp({ user, otp, subdomain, purpose = '2fa_login' }) {
+  const expiresMinutes = process.env.OTP_EXPIRES_MINUTES || 10;
+  const firstName = displayFirstName(user);
+  const workspace = subdomain ? `${subdomain}.${BASE_DOMAIN}` : 'your Agentra workspace';
+
+  const copy = {
+    '2fa_login': {
+      subject: `${otp} is your Agentra sign-in code`,
+      title: 'Confirm it’s you',
+      heading: 'Two-factor verification',
+      lead: `You’re signing in to <strong>${escapeHtml(workspace)}</strong>. Enter this code to finish.`,
+    },
+    '2fa_enable': {
+      subject: `${otp} — turn on two-factor authentication`,
+      title: 'Enable two-factor authentication',
+      heading: 'Confirm to turn on 2FA',
+      lead: `You’re enabling email two-factor authentication on <strong>${escapeHtml(workspace)}</strong>. Enter this code to confirm.`,
+    },
+    '2fa_disable': {
+      subject: `${otp} — turn off two-factor authentication`,
+      title: 'Disable two-factor authentication',
+      heading: 'Confirm to turn off 2FA',
+      lead: `You’re turning off email two-factor authentication on <strong>${escapeHtml(workspace)}</strong>. Enter this code to confirm.`,
+    },
+  }[purpose] || {
+    subject: `${otp} is your Agentra verification code`,
+    title: 'Your verification code',
+    heading: 'Your verification code',
+    lead: `Use this code to continue on <strong>${escapeHtml(workspace)}</strong>.`,
+  };
+
+  await sendEmail({
+    to: user.email,
+    subject: copy.subject,
+    text: `Hi ${firstName},\n\n${otp} is your Agentra verification code.\n\nThis code expires in ${expiresMinutes} minutes.\n\nIf you didn't request this, secure your account and contact support.`,
+    html: emailShell({
+      title: copy.title,
+      preheader: `${otp} expires in ${expiresMinutes} minutes.`,
+      bodyHtml: `
+        ${emailHeading(copy.heading)}
+        ${emailParagraph(`Hi ${escapeHtml(firstName)},`)}
+        ${emailParagraph(copy.lead)}
         ${emailCodeBlock(otp)}
         ${emailNotice(`This code expires after ${expiresMinutes} minutes.`)}
         ${emailSection(
@@ -851,6 +992,7 @@ module.exports = {
   LOGO_WHITE_CID,
   sendEmail,
   emailShell,
+  merchantEmailShell,
   emailButton,
   emailNotice,
   emailSteps,
@@ -867,6 +1009,7 @@ module.exports = {
   sendEmailVerification,
   sendMagicLink,
   sendOtpCode,
+  sendTwoFactorOtp,
   sendPasswordReset,
   sendWelcomeEmail,
   sendTicketTrackOtp,

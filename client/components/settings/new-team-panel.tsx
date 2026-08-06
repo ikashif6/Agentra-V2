@@ -116,10 +116,10 @@ export default function NewTeamPanel({ onBack, onCreated, hideBack }: NewTeamPan
       <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-2xl space-y-5">
         <div className="space-y-1.5">
           <Label htmlFor="team-name">
-            Team name <span className="text-red-500">*</span>
+            Team name <span className="text-destructive">*</span>
           </Label>
           <Input id="team-name" placeholder="North America support" {...register("name")} />
-          {errors.name ? <p className="text-xs text-red-500">{errors.name.message}</p> : null}
+          {errors.name ? <p className="text-xs text-destructive">{errors.name.message}</p> : null}
         </div>
 
         <div className="space-y-1.5">
@@ -155,7 +155,7 @@ export default function NewTeamPanel({ onBack, onCreated, hideBack }: NewTeamPan
 
         <div className="space-y-1.5">
           <Label>
-            Team lead <span className="text-red-500">*</span>
+            Team lead <span className="text-destructive">*</span>
           </Label>
           <div className="flex flex-wrap items-center gap-2">
             {teamLead ? (

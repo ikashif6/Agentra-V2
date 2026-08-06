@@ -99,7 +99,7 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
   return (
     <div className="space-y-6 max-w-4xl">
       <button onClick={() => router.push("/departments")}
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-gray-800 transition-colors">
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ChevronLeft className="h-4 w-4" /> Back to departments
       </button>
 
@@ -118,7 +118,7 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         {/* Heads section */}
-        <div className="pt-3 border-t border-gray-100">
+        <div className="pt-3 border-t border-border">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-semibold text-foreground/80">Department Heads</p>
             {isOwnerAdmin && (
@@ -145,7 +145,7 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
                     <button
                       onClick={() => handleRemoveHead(h._id)}
                       disabled={removingHead === h._id}
-                      className="ml-0.5 text-orange-300 hover:text-red-500 transition-colors"
+                      className="ml-0.5 text-orange-300 hover:text-destructive transition-colors"
                     >
                       {removingHead === h._id
                         ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -182,7 +182,7 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
                   <Badge variant="secondary" className="text-xs">{team.members.length} members</Badge>
                 </div>
                 {team.description && <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{team.description}</p>}
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-2 border-t border-gray-50">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-2 border-t border-border/50">
                   <Crown className="h-3 w-3 text-primary" />
                   <span>{team.teamLead.firstName} {team.teamLead.lastName}</span>
                 </div>
@@ -232,7 +232,7 @@ export default function DepartmentDetailPage({ params }: { params: Promise<{ id:
                     <p className="text-sm font-medium text-foreground">{teamLead.firstName} {teamLead.lastName}</p>
                     <p className="text-xs text-muted-foreground">{teamLead.email}</p>
                   </div>
-                  <button onClick={() => setTeamLead(null)} className="text-muted-foreground hover:text-red-500 text-xs">
+                  <button onClick={() => setTeamLead(null)} className="text-muted-foreground hover:text-destructive text-xs">
                     Change
                   </button>
                 </div>

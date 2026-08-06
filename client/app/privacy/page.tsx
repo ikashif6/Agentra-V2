@@ -15,7 +15,7 @@ export default function PrivacyPolicyPage() {
   return (
     <LegalDocumentLayout
       title="Privacy Policy"
-      description={`This policy describes how ${LEGAL.companyName} handles personal information across the ${LEGAL.productName} platform — including workspaces, connected channels, help centers, and commerce integrations.`}
+      description={`This policy describes how ${LEGAL.companyName} handles personal information across the ${LEGAL.productName} platform, including workspaces, connected channels, help centers, and commerce integrations.`}
       alternateHref={`${PORTAL_ORIGIN}/terms`}
       alternateLabel="Terms of Service"
     >

@@ -61,12 +61,38 @@ const start = async () => {
     }
   };
   let emailPollTimer;
+  let instagramPollTimer;
   if (disableBackgroundJobs) {
     console.log('   Background jobs: disabled (DISABLE_BACKGROUND_JOBS=true)');
   } else {
     emailPollTimer = setInterval(runEmailPoll, emailPollMs);
     // Kick off shortly after boot (let DB settle).
     setTimeout(runEmailPoll, 10 * 1000);
+
+    // Local-only Instagram DM poll — Meta often withholds IG message webhooks until
+    // Advanced Access. Outbound Graph polling works with the stored Page token.
+    const enableInstagramPoll =
+      process.env.ENABLE_INSTAGRAM_POLL === 'true' ||
+      (process.env.NODE_ENV !== 'production' && process.env.ENABLE_INSTAGRAM_POLL !== 'false');
+    if (enableInstagramPoll) {
+      const { pollAllInstagramInboxes } = require('./services/instagram-poll.service');
+      const instagramPollMs = parseInt(process.env.INSTAGRAM_POLL_INTERVAL_MS, 10) || 20 * 1000;
+      let instagramPolling = false;
+      const runInstagramPoll = async () => {
+        if (instagramPolling) return;
+        instagramPolling = true;
+        try {
+          await pollAllInstagramInboxes();
+        } catch (err) {
+          console.error('[instagram poll]', err.message);
+        } finally {
+          instagramPolling = false;
+        }
+      };
+      instagramPollTimer = setInterval(runInstagramPoll, instagramPollMs);
+      setTimeout(runInstagramPoll, 5 * 1000);
+      console.log(`   Instagram DM poll: every ${Math.round(instagramPollMs / 1000)}s (local/dev only)`);
+    }
   }
 
   // ── Store order sync (fallback for missed webhooks) ────────────────────────
@@ -110,6 +136,7 @@ const start = async () => {
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('exit', () => {
     if (emailPollTimer) clearInterval(emailPollTimer);
+    if (instagramPollTimer) clearInterval(instagramPollTimer);
     if (storeSyncTimer) clearInterval(storeSyncTimer);
   });
 

@@ -8,7 +8,7 @@ export function PrivacyPolicyContent() {
         <p>
           This Privacy Policy explains how {LEGAL.companyName} (&quot;{LEGAL.companyName}&quot;,
           &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) collects, uses, discloses, and protects
-          information when you use the {LEGAL.productName} platform — including our web application
+          information when you use the {LEGAL.productName} platform, including our web application
           at <a href={LEGAL.portal}>{LEGAL.portal}</a>, workspace subdomains such as{" "}
           <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm text-gray-800">
             yourcompany.agentraa.com
@@ -149,7 +149,7 @@ export function PrivacyPolicyContent() {
             Paid workspaces may provide billing details. Payment card data is processed by our
             payment provider (Paddle, as Merchant of Record). We may store subscription identifiers, plan status,
             billing cycle, trial dates, invoice history, and limited payment method metadata (for
-            example card brand and last four digits) — not full card numbers.
+            example card brand and last four digits), not full card numbers.
           </p>
         </LegalSubsection>
 
@@ -207,10 +207,10 @@ export function PrivacyPolicyContent() {
         </p>
         <LegalList
           items={[
-            "Performance of a contract — to provide the Service you or your organization requested",
-            "Legitimate interests — to secure the Service, prevent abuse, improve features, and support business operations, balanced against your rights",
-            "Consent — where required for optional features or marketing communications",
-            "Legal obligation — where we must retain or disclose information under applicable law",
+            "Performance of a contract: to provide the Service you or your organization requested",
+            "Legitimate interests: to secure the Service, prevent abuse, improve features, and support business operations, balanced against your rights",
+            "Consent: where required for optional features or marketing communications",
+            "Legal obligation: where we must retain or disclose information under applicable law",
           ]}
         />
       </LegalSection>

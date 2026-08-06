@@ -14,9 +14,9 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Sparkles,
   X,
 } from "lucide-react";
-import { AiAgentIcon } from "@/components/icons/ai-agent-icon";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -861,27 +861,22 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-card">
+    <div className="flex h-full min-h-0 flex-col bg-background">
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {sidebarOpen ? (
           <aside className="flex w-[220px] shrink-0 flex-col border-r border-border/70 bg-muted/15">
-            <div className={cn(
-              "border-b border-border/60 px-4",
-              isLiveChat ? "py-2" : "flex items-center justify-between py-3",
-            )}>
-              {!isLiveChat ? (
-                <>
-                  <h2 className="text-sm font-semibold text-foreground">Conversations</h2>
-                  {!isOwner ? (
-                    <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setCreateOpen(true)}>
-                      <Plus className="size-4" />
-                    </Button>
-                  ) : null}
-                </>
-              ) : (
-                <span className="sr-only">AI Agent views</span>
-              )}
-            </div>
+            {!isLiveChat ? (
+              <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+                <h2 className="text-sm font-semibold text-foreground">Conversations</h2>
+                {!isOwner ? (
+                  <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setCreateOpen(true)}>
+                    <Plus className="size-4" />
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              <span className="sr-only">AI Agent views</span>
+            )}
             <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
               {sidebarViews.map((v) => {
                 const Icon = v.icon;
@@ -1006,20 +1001,20 @@ export function ConversationWorkspace({ scope }: ConversationWorkspaceProps) {
             ) : tickets.length === 0 ? (
               <div className="flex flex-col items-center px-6 py-16 text-center">
                 {isLiveChat ? (
-                  <AiAgentIcon className="mb-3 size-10 text-muted-foreground/70" />
+                  <Sparkles className="mb-3 size-10 text-muted-foreground/70" strokeWidth={1.5} />
                 ) : (
                   <Inbox className="mb-3 size-10 text-muted-foreground/70" />
                 )}
                 <p className="text-sm font-medium text-foreground">
-                  {isLiveChat ? "No AI Agent conversations in this view" : "No conversations in this view"}
+                  {isLiveChat ? "No AI Agent conversations to show here" : "No conversations to show here"}
                 </p>
                 <p className="mt-1 max-w-xs text-xs text-muted-foreground">
                   {isStaff
                     ? isLiveChat
                       ? "AI-owned threads across email, chat, and social appear here until they are handed to a human agent."
                       : search || channelFilter !== "all"
-                        ? "Try a different search or channel filter."
-                        : "Human-owned conversations — including live chat after handoff — appear here."
+                        ? "Try adjusting your search or channel filter."
+                        : "Human-owned conversations, including live chat after handoff, appear here."
                     : "When you open a support request it will appear here."}
                 </p>
               </div>

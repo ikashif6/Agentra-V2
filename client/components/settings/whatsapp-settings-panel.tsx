@@ -49,7 +49,7 @@ const CAPABILITIES = [
   {
     icon: Reply,
     title: "Reply from Agentra",
-    description: "Answer from the shared inbox — it's delivered on WhatsApp.",
+    description: "Reply from the shared inbox, and messages are delivered on WhatsApp.",
   },
   {
     icon: UserRound,
@@ -405,7 +405,7 @@ export default function WhatsAppSettingsPanel() {
           </h4>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
             Connect your existing WhatsApp Business number so incoming messages become tickets your
-            whole team can answer — without leaving Agentra.
+            whole team can answer without leaving Agentra.
           </p>
           <Button
             type="button"

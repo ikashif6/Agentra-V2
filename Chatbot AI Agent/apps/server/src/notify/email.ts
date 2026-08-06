@@ -2,7 +2,7 @@ import { env } from "../config/env.js";
 
 function fromHeader(): string {
   const email = env.resendFromEmail || env.emailFrom || "noreply@agentraa.com";
-  const name = (env.resendFromName || "Agentraa").trim();
+  const name = (env.resendFromName || "Agentra").trim();
   return name ? `${name} <${email}>` : email;
 }
 

@@ -181,7 +181,7 @@ export default function CustomersSettingsPanel() {
         <div>
           <h2 className="text-xl font-bold text-foreground">Customers</h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Everyone who has contacted your workspace or placed an order — channels, tickets, and
+            Everyone who has contacted your workspace or placed an order, with channels, tickets, and
             purchases in one place.
           </p>
         </div>
@@ -197,7 +197,7 @@ export default function CustomersSettingsPanel() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
         <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.4fr)] gap-4 border-b border-border/60 bg-muted/20 px-5 py-3">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Customer
@@ -224,7 +224,7 @@ export default function CustomersSettingsPanel() {
           <div className="px-5 py-16 text-center text-sm text-muted-foreground">
             {search
               ? "No customers match your search."
-              : "No customers yet. They appear here when people message you or place store orders."}
+              : "No customers yet. They'll appear here when people message you or place store orders."}
           </div>
         ) : (
           <div className="divide-y divide-border/40">

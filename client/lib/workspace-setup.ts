@@ -38,7 +38,7 @@ export const WORKSPACE_SETUP_FLOW: WorkspaceSetupStep[] = [
     id: "store",
     label: "Store",
     title: "Link your commerce store",
-    description: "Sync orders and customer context so agents can help without leaving Agentra.",
+    description: "Sync orders and customer context so agents can help without switching tools.",
     tasks: [
       {
         id: "store",
@@ -128,7 +128,7 @@ export const WORKSPACE_SETUP_FLOW: WorkspaceSetupStep[] = [
     id: "workspace",
     label: "Workspace",
     title: "Customize your workspace",
-    description: "Make Agentra feel like your brand before you invite the full team.",
+    description: "Make Agentra feel like your brand before you invite the rest of your team.",
     tasks: [
       {
         id: "customize",
@@ -157,7 +157,7 @@ export const WORKSPACE_SETUP_FLOW: WorkspaceSetupStep[] = [
       {
         id: "teams",
         title: "Create a team",
-        description: "Optional — groups for routing and ownership.",
+        description: "Optional. Groups help with routing and ownership.",
         href: "/settings?item=teams&view=new",
         action: "Create team",
         panel: "create-team",

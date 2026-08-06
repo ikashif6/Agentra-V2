@@ -26,6 +26,7 @@ const {
   escapeHtml,
   getEmailLogoPreviewSrc,
 } = require('../../src/services/email.service');
+const { buildTranscriptHtml } = require('../../src/services/conversation-transcript-email.service');
 
 const PORT = Number(process.env.EMAIL_PREVIEW_PORT || 5055);
 const LOGO_DIR = path.join(__dirname, '../../client/public/email');
@@ -235,13 +236,82 @@ function buildTemplate(id) {
         ].join(''),
       }),
     },
+    transcript: {
+      label: 'Chat transcript',
+      html: buildTranscriptHtml({
+        company: {
+          name: 'Acme',
+          website: 'https://acme.example',
+          logo: 'https://placehold.co/180x40/png?text=Acme',
+          liveChat: {
+            widgetKey: 'preview-widget',
+            content: { agentName: 'Acme Support' },
+          },
+          businessHours: { default: { timezone: 'UTC' } },
+        },
+        ticket: {
+          ticket_code: 'ACM-1042',
+          createdAt: new Date('2026-07-31T14:20:00Z'),
+        },
+        session: {
+          sessionToken: 'preview-session',
+          createdAt: new Date('2026-07-31T14:20:00Z'),
+          feedback: {},
+        },
+        toEmail: 'sam@example.com',
+        customerName: 'Sam Rivera',
+        includeRating: true,
+        entries: [
+          {
+            sentAt: new Date('2026-07-31T14:20:00Z'),
+            speaker: 'You',
+            side: 'customer',
+            isSystem: false,
+            html: 'Hi — my tracking link still shows “label created” for order #4821. Can you check?',
+            attachments: [],
+          },
+          {
+            sentAt: new Date('2026-07-31T14:21:10Z'),
+            speaker: 'Maya',
+            side: 'support',
+            isSystem: false,
+            html: 'Happy to help, Sam. I’ve looked this up — the carrier scanned it this morning, so tracking should update within a few hours.',
+            attachments: [],
+          },
+          {
+            sentAt: new Date('2026-07-31T14:21:40Z'),
+            speaker: 'System',
+            side: 'system',
+            isSystem: true,
+            html: 'Maya joined the conversation',
+            attachments: [],
+          },
+          {
+            sentAt: new Date('2026-07-31T14:22:05Z'),
+            speaker: 'You',
+            side: 'customer',
+            isSystem: false,
+            html: 'Perfect, thank you!',
+            attachments: [],
+          },
+          {
+            sentAt: new Date('2026-07-31T14:22:30Z'),
+            speaker: 'Maya',
+            side: 'support',
+            isSystem: false,
+            html: 'You’re welcome. I’ll leave this open until tracking moves — reply anytime if you need anything else.',
+            attachments: [],
+          },
+        ],
+      }),
+    },
   };
 
   return templates[id] || null;
 }
 
 function renderAppPage() {
-  const templateIds = ['reset', 'verification', 'otp', 'magic', 'welcome', 'invite'];
+  const templateIds = ['reset', 'verification', 'otp', 'magic', 'welcome', 'invite', 'transcript'];
   return `<!DOCTYPE html>
 <html lang="en">
 <head>

@@ -123,7 +123,7 @@ const FEATURES: {
   {
     key: "draftArticles",
     label: "AI knowledge drafts",
-    description: "Generate draft help articles and macros from gaps — publish only after approval.",
+    description: "Generate draft help articles and macros from gaps, and publish only after approval.",
   },
   {
     key: "outdatedKnowledge",
@@ -217,8 +217,8 @@ export default function HelpdeskAiSettingsPanel() {
         </div>
         <h2 className="text-xl font-bold text-foreground">Helpdesk AI</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Copilot for human agents, customer context, ticket ops, manager QA, and knowledge gaps —
-          toggle each capability as your team is ready.
+          Copilot tools for your team, customer context, ticket ops, manager QA, and knowledge gaps.
+          Toggle each capability as you&apos;re ready.
         </p>
       </div>
 

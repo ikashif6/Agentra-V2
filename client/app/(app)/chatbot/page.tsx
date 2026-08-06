@@ -186,9 +186,9 @@ export default function ChatbotPlaygroundPage() {
             <div className="relative max-w-md space-y-2">
               <p className="text-sm font-semibold text-foreground">Storefront canvas</p>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                This page stands in for your Shopify storefront. Open the chat launcher to exercise
-                knowledge, order lookup, and product tools against the connected store — without
-                touching helpdesk.
+                This page stands in for your Shopify storefront. Open the chat launcher to try
+                knowledge, order lookup, and product tools against the connected store, without
+                opening the helpdesk.
               </p>
             </div>
           </section>

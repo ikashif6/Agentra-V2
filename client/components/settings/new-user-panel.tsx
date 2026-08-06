@@ -91,7 +91,7 @@ export default function NewUserPanel({ onBack, onCreated, hideBack }: NewUserPan
       <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-2xl space-y-6">
         <div className="space-y-1.5">
           <Label htmlFor="name">
-            Name <span className="text-red-500">*</span>
+            Name <span className="text-destructive">*</span>
           </Label>
           <Input
             id="name"
@@ -99,12 +99,12 @@ export default function NewUserPanel({ onBack, onCreated, hideBack }: NewUserPan
             {...register("name")}
             className="focus-visible:ring-primary/30"
           />
-          {errors.name ? <p className="text-xs text-red-500">{errors.name.message}</p> : null}
+          {errors.name ? <p className="text-xs text-destructive">{errors.name.message}</p> : null}
         </div>
 
         <div className="space-y-1.5">
           <Label htmlFor="email">
-            Email <span className="text-red-500">*</span>
+            Email <span className="text-destructive">*</span>
           </Label>
           <Input
             id="email"
@@ -113,7 +113,7 @@ export default function NewUserPanel({ onBack, onCreated, hideBack }: NewUserPan
             {...register("email")}
             className="focus-visible:ring-primary/30"
           />
-          {errors.email ? <p className="text-xs text-red-500">{errors.email.message}</p> : null}
+          {errors.email ? <p className="text-xs text-destructive">{errors.email.message}</p> : null}
         </div>
 
         <div className="space-y-3">

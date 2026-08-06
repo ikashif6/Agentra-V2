@@ -31,11 +31,11 @@ export default function GeneratingWorkspacePage() {
   }, [loading, router]);
 
   return (
-    <div className="flex min-h-svh flex-col items-center bg-white px-6 py-12">
+    <div className="flex min-h-svh flex-col items-center bg-background px-6 py-12">
       <AuthLogo href="/dashboard" imgClassName="h-7" />
 
       <h1 className="mt-10 text-center text-[1.35rem] font-semibold tracking-tight text-[#111827] sm:text-[1.5rem]">
-        Generating your Agentra workspace...
+        Preparing your Agentra workspace…
       </h1>
 
       {subdomain ? (

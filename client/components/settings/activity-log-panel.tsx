@@ -176,7 +176,7 @@ export default function ActivityLogPanel() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
         <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(0,1.2fr)] gap-4 border-b border-border/60 bg-muted/20 px-5 py-3.5">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Member

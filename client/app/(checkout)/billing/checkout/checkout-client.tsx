@@ -128,7 +128,7 @@ export default function BillingCheckoutPage() {
                 setBooting(false);
               }
               if (event.name === "checkout.completed") {
-                toast.success("Payment received — activating your plan…");
+                toast.success("Payment received. Activating your plan…");
                 window.setTimeout(() => {
                   router.replace("/settings?item=billing&paddle=success");
                 }, 600);

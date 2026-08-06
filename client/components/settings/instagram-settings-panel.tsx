@@ -39,7 +39,7 @@ const CAPABILITIES = [
   {
     icon: Reply,
     title: "Reply from Agentra",
-    description: "Answer from the shared inbox — it's delivered on Instagram.",
+    description: "Reply from the shared inbox, and messages are delivered on Instagram.",
   },
   {
     icon: UserRound,
@@ -336,7 +336,7 @@ export default function InstagramSettingsPanel({ returnTo }: InstagramSettingsPa
             </h4>
             <p className="mt-1 text-sm text-muted-foreground">
               We found more than one Instagram account linked to your Pages. Pick the one you use
-              for customer DMs — you can switch later.
+              for customer DMs. You can switch later if needed.
             </p>
           </div>
           <div className="space-y-2.5">
@@ -394,7 +394,7 @@ export default function InstagramSettingsPanel({ returnTo }: InstagramSettingsPa
           </h4>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
             Connect your Instagram professional account so direct messages become tickets your
-            whole team can answer — without leaving Agentra.
+            whole team can answer without leaving Agentra.
           </p>
           <Button type="button" className="mt-6" size="lg" onClick={() => void startConnect()} disabled={connecting}>
             {connecting ? (

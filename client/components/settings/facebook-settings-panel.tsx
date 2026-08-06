@@ -39,7 +39,7 @@ const CAPABILITIES = [
   {
     icon: Reply,
     title: "Reply from Agentra",
-    description: "Answer from the shared inbox — it's delivered on Messenger.",
+    description: "Reply from the shared inbox, and messages are delivered on Messenger.",
   },
   {
     icon: UserRound,
@@ -329,7 +329,7 @@ export default function FacebookSettingsPanel({ returnTo }: FacebookSettingsPane
             </h4>
             <p className="mt-1 text-sm text-muted-foreground">
               We found more than one Page on your account. Pick the one you use to chat with
-              customers — you can switch later.
+              customers. You can switch later if needed.
             </p>
           </div>
           <div className="space-y-2.5">
@@ -388,7 +388,7 @@ export default function FacebookSettingsPanel({ returnTo }: FacebookSettingsPane
           </h4>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
             Connect your Facebook Page so customer messages become tickets your whole team can
-            answer — right from Agentra.
+            answer, right from Agentra.
           </p>
           <Button type="button" className="mt-6" size="lg" onClick={() => void startConnect()} disabled={connecting}>
             {connecting ? (

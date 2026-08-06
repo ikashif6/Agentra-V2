@@ -71,7 +71,7 @@ export function WorkspaceDiscoveryForm() {
           Sign in to your workspace
         </h1>
         <p className="mt-1.5 mb-6 text-sm text-muted-foreground">
-          Enter the workspace name your team uses on Agentra.
+          We&apos;ll take you to the workspace your team already uses.
         </p>
       </div>
 
@@ -79,16 +79,16 @@ export function WorkspaceDiscoveryForm() {
         <div className="space-y-3">
           <Label htmlFor="subdomain">Workspace name</Label>
           <div
-            className={`flex items-center overflow-hidden border border-input focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 ${authRadiusClass}`}
+            className={`flex h-10 items-stretch overflow-hidden border border-input focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 ${authRadiusClass}`}
           >
             <Input
               id="subdomain"
               {...register("subdomain")}
               placeholder="brightpath"
               autoComplete="organization"
-              className="rounded-none border-0 focus-visible:ring-0"
+              className="h-full min-h-0 rounded-none border-0 bg-transparent shadow-none focus-visible:border-0 focus-visible:ring-0"
             />
-            <span className="shrink-0 border-l border-input bg-muted px-3 py-2 text-sm text-muted-foreground">
+            <span className="flex shrink-0 items-center border-l border-input bg-muted px-3 text-sm text-muted-foreground">
               .agentraa.com
             </span>
           </div>

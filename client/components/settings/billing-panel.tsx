@@ -36,6 +36,7 @@ export default function BillingPanel() {
   const [reactivating, setReactivating] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
+  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,7 +61,7 @@ export default function BillingPanel() {
 
   useEffect(() => {
     if (searchParams.get("paddle") !== "success") return;
-    toast.success("Payment received — your plan is updating");
+    toast.success("Payment received. Your plan is updating");
     void load();
     const t = window.setTimeout(() => void load(), 2500);
     const url = new URL(window.location.href);
@@ -101,6 +102,21 @@ export default function BillingPanel() {
 
   const goToCheckout = () => {
     router.push(`/billing/checkout?cycle=${cycle}`);
+  };
+
+  const openInvoicePdf = async (invoiceNumber: string) => {
+    setPdfLoading(invoiceNumber);
+    try {
+      const { data } = await billingApi.invoicePdf(invoiceNumber);
+      const url = data.data.url as string;
+      if (!url) throw new Error("No PDF url returned");
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err: unknown) {
+      const { message } = getApiError(err, "Could not open invoice PDF");
+      toast.error(message);
+    } finally {
+      setPdfLoading(null);
+    }
   };
 
   const handlePortal = async () => {
@@ -376,16 +392,22 @@ export default function BillingPanel() {
                       {invoiceStatusLabel(invoice.status)}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      {invoice.pdfUrl ? (
-                        <a
-                          href={invoice.pdfUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-8")}
+                      {invoice.hasPdf !== false ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8"
+                          disabled={pdfLoading === invoice.number}
+                          onClick={() => void openInvoicePdf(invoice.number)}
                         >
-                          <Download className="mr-1 size-3.5" />
+                          {pdfLoading === invoice.number ? (
+                            <Loader2 className="mr-1 size-3.5 animate-spin" />
+                          ) : (
+                            <Download className="mr-1 size-3.5" />
+                          )}
                           PDF
-                        </a>
+                        </Button>
                       ) : (
                         <span className="text-muted-foreground/50">None</span>
                       )}

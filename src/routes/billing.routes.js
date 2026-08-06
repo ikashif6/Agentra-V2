@@ -26,4 +26,6 @@ router.post('/cancel', billingController.cancelPlan);
 
 router.post('/reactivate', billingController.reactivatePlan);
 
+router.get('/invoices/:invoiceNumber/pdf', billingController.getInvoicePdf);
+
 module.exports = router;

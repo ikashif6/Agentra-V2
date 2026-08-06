@@ -80,7 +80,7 @@ export function OnboardingWizard() {
   };
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-white">
+    <div className="relative min-h-svh overflow-hidden bg-background">
       <div className="absolute left-6 top-6 z-20 sm:left-8 sm:top-8">
         <AuthLogo href="/dashboard" />
       </div>
@@ -98,7 +98,7 @@ export function OnboardingWizard() {
 
         <div
           className={cn(
-            "w-full max-w-[480px] border border-border/80 bg-white p-6 shadow-lg sm:p-8",
+            "w-full max-w-[480px] border border-border/80 bg-card p-6 shadow-lg sm:p-8",
             authRadiusClass,
           )}
         >

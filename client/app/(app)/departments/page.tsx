@@ -95,7 +95,7 @@ export default function DepartmentsPage() {
       </div>
 
       {/* List */}
-      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] overflow-hidden">
         {/* Header row */}
         <div className="grid grid-cols-[2fr_3fr_1fr_40px] gap-4 px-5 py-3 border-b border-border/60 bg-muted/30">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Department</span>
@@ -159,7 +159,7 @@ export default function DepartmentsPage() {
 
                 {/* Status */}
                 <Badge variant="secondary"
-                  className={dept.isActive ? "bg-green-50 text-green-700 border-green-100" : "bg-gray-100 text-muted-foreground"}>
+                  className={dept.isActive ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:text-emerald-300" : "bg-muted text-muted-foreground"}>
                   {dept.isActive ? "Active" : "Inactive"}
                 </Badge>
 
@@ -167,7 +167,7 @@ export default function DepartmentsPage() {
                 <div className="flex items-center justify-end gap-1">
                   {isOwnerAdmin && (
                     <button onClick={(e) => handleDelete(dept._id, e)}
-                      className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 text-muted-foreground/50 hover:text-red-400 transition-all">
+                      className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground/50 hover:text-red-400 transition-all">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}

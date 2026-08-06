@@ -19,8 +19,8 @@ import {
   type WorkspaceSetupStatus,
 } from "@/lib/home-setup-status";
 
-const MONO_BADGE = "border border-neutral-200 bg-neutral-100 text-neutral-700";
-const DASHBOARD_CARD = "border-neutral-200 shadow-[0_1px_2px_rgba(0,0,0,0.05)]";
+const MONO_BADGE = "border border-border/70 bg-muted text-muted-foreground";
+const DASHBOARD_CARD = "border-border/70 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -124,12 +124,12 @@ export default function HomePage() {
   }, [isAgent, isWorkspaceAdmin, isManager]);
 
   return (
-    <div className="dashboard-monochrome w-full space-y-8 text-neutral-900">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
+    <div className="dashboard-monochrome w-full space-y-7 text-foreground">
+      <div className="space-y-1.5">
+        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-foreground">
           {greeting}, {user?.firstName}
         </h1>
-        <p className="text-sm text-neutral-500">Your workspace overview and quick actions.</p>
+        <p className="text-[14px] tracking-[-0.01em] text-muted-foreground">Your workspace overview and quick actions.</p>
       </div>
 
       {showSetupReminders ? (
@@ -160,7 +160,7 @@ export default function HomePage() {
           action={
             <Link
               href="/inbox"
-              className="inline-flex items-center gap-1 text-xs font-medium text-neutral-900 hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-foreground hover:underline"
             >
               Open inbox <ChevronRight className="size-3" />
             </Link>
@@ -177,13 +177,13 @@ export default function HomePage() {
                 {i > 0 ? <AppListDivider /> : null}
                 <AppListRowLink
                   href={`/inbox?ticket=${t.ticket_code}`}
-                  className="hover:bg-neutral-100"
+                  className="hover:bg-muted/60"
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="shrink-0 font-mono text-xs font-semibold text-neutral-700">
+                    <span className="shrink-0 font-mono text-xs font-semibold text-muted-foreground">
                       {t.ticket_code}
                     </span>
-                    <span className="truncate text-sm font-medium text-neutral-900 group-hover:text-neutral-700">
+                    <span className="truncate text-sm font-medium text-foreground group-hover:text-foreground/80">
                       {t.ticket_title}
                     </span>
                   </div>

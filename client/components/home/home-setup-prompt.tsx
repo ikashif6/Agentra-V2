@@ -15,7 +15,7 @@ export function HomeSetupPrompt({ onDefer, monochrome = false }: HomeSetupPrompt
   return (
     <section className={cn(APP_CARD, "flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6", monochrome && "border-neutral-200 shadow-[0_1px_2px_rgba(0,0,0,0.05)]")}>
       <div className="space-y-1">
-        <h2 className="text-base font-semibold text-foreground">Finish setting up your workspace?</h2>
+        <h2 className="text-base font-semibold text-foreground">Ready to finish setting up your workspace?</h2>
         <p className="max-w-xl text-sm text-muted-foreground">
           Connect your channels and invite your team when you&apos;re ready.
         </p>

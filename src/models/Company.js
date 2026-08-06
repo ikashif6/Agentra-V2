@@ -183,6 +183,7 @@ const companySchema = new mongoose.Schema(
           },
           description: String,
           pdfUrl: String,
+          paddleTransactionId: String,
         },
       ],
     },

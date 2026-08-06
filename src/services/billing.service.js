@@ -26,9 +26,16 @@ function sanitizeInvoices(invoices) {
       currency: inv.currency || 'USD',
       status: inv.status,
       description: inv.description || 'Agentra Pro',
-      pdfUrl: inv.pdfUrl || undefined,
+      hasPdf: true,
+      paddleTransactionId: inv.paddleTransactionId || undefined,
     }))
     .sort((a, b) => new Date(b.issuedAt) - new Date(a.issuedAt));
+}
+
+function extractTxnIdFromUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  const match = url.match(/[?&]_ptxn=(txn_[a-z0-9]+)/i);
+  return match?.[1] || null;
 }
 
 function getAccessEndsAt(company) {
@@ -232,7 +239,7 @@ function applySubscriptionToCompany(company, data) {
   company.markModified('plan');
 }
 
-function appendInvoice(company, { number, issuedAt, amount, currency, status, description, pdfUrl }) {
+function appendInvoice(company, { number, issuedAt, amount, currency, status, description, pdfUrl, paddleTransactionId }) {
   if (!company.billing) company.billing = {};
   if (!Array.isArray(company.billing.invoices)) company.billing.invoices = [];
 
@@ -247,6 +254,7 @@ function appendInvoice(company, { number, issuedAt, amount, currency, status, de
     status: status || 'paid',
     description: description || 'Agentra Pro',
     pdfUrl: pdfUrl || undefined,
+    paddleTransactionId: paddleTransactionId || undefined,
   });
   company.billing.invoices = company.billing.invoices.slice(0, 50);
   company.markModified('billing');
@@ -308,7 +316,7 @@ async function handlePaddleWebhookEvent(eventType, data) {
       currency: data.currency_code || 'USD',
       status: 'paid',
       description: 'Agentra Pro',
-      pdfUrl: data.checkout?.url || undefined,
+      paddleTransactionId: data.id || undefined,
     });
 
     const method = data.payments?.[0]?.method_details?.card;
@@ -338,6 +346,58 @@ async function handlePaddleWebhookEvent(eventType, data) {
   return { handled: false, reason: 'unhandled_event', eventType };
 }
 
+function resolveInvoiceTransactionId(invoice) {
+  if (!invoice) return null;
+  if (invoice.paddleTransactionId) return invoice.paddleTransactionId;
+  if (String(invoice.number || '').startsWith('txn_')) return invoice.number;
+  return extractTxnIdFromUrl(invoice.pdfUrl);
+}
+
+async function findTransactionIdForInvoice(company, invoice) {
+  const fromUrl = extractTxnIdFromUrl(invoice.pdfUrl);
+  if (fromUrl) return fromUrl;
+
+  const customerId = company.plan?.paddleCustomerId;
+  if (!customerId || !invoice.number) return null;
+
+  const result = await paddle.listCustomerTransactions(customerId, { perPage: 30 });
+  const rows = result?.data || [];
+  const match = rows.find(
+    (txn) => txn.invoice_number === invoice.number || txn.id === invoice.number,
+  );
+  return match?.id || null;
+}
+
+async function getInvoicePdfUrl(company, invoiceNumber) {
+  const invoices = company.billing?.invoices || [];
+  const invoice = invoices.find((inv) => inv.number === invoiceNumber);
+  if (!invoice) {
+    const err = new Error('Invoice not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  let transactionId = resolveInvoiceTransactionId(invoice);
+  if (!transactionId) {
+    transactionId = await findTransactionIdForInvoice(company, invoice);
+  }
+
+  if (!transactionId) {
+    const err = new Error('No Paddle transaction linked to this invoice yet');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (!invoice.paddleTransactionId) {
+    invoice.paddleTransactionId = transactionId;
+    company.markModified('billing');
+    await company.save();
+  }
+
+  const url = await paddle.getTransactionInvoicePdfUrl(transactionId, { disposition: 'inline' });
+  return { url };
+}
+
 module.exports = {
   AGENTRA_PRO_PLAN,
   getBillingOverview,
@@ -347,6 +407,7 @@ module.exports = {
   cancelSubscription,
   reactivateSubscription,
   handlePaddleWebhookEvent,
+  getInvoicePdfUrl,
   sanitizePaymentMethod,
   sanitizeInvoices,
 };

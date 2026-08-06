@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { uploadApi, workspaceApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
+import { clearTokens } from "@/lib/auth";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMainLoginUrl } from "@/hooks/use-main-login-url";
 import {
   applyWorkspaceBranding,
   cacheWorkspaceBranding,
@@ -27,10 +29,16 @@ import { WorkspaceLogoImg } from "@/components/app/workspace-logo-img";
 
 type CustomizeWorkspacePanelProps = {
   onUpdated?: () => void;
+  /** Hide delete workspace (e.g. during onboarding setup). Default true in settings. */
+  showDangerZone?: boolean;
 };
 
-export default function CustomizeWorkspacePanel({ onUpdated }: CustomizeWorkspacePanelProps) {
-  const { applyCompanyBranding } = useAuth();
+export default function CustomizeWorkspacePanel({
+  onUpdated,
+  showDangerZone = true,
+}: CustomizeWorkspacePanelProps) {
+  const { applyCompanyBranding, user, company } = useAuth();
+  const mainLoginUrl = useMainLoginUrl();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const darkLogoInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
@@ -42,6 +50,8 @@ export default function CustomizeWorkspacePanel({ onUpdated }: CustomizeWorkspac
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingDarkLogo, setUploadingDarkLogo] = useState(false);
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
+  const [confirmSubdomain, setConfirmSubdomain] = useState("");
+  const [deletingWorkspace, setDeletingWorkspace] = useState(false);
 
   useEffect(() => {
     brandingRef.current = branding;
@@ -220,12 +230,33 @@ export default function CustomizeWorkspacePanel({ onUpdated }: CustomizeWorkspac
 
   if (!branding) return null;
 
+  const canDeleteWorkspace =
+    showDangerZone && (user?.role === "owner" || user?.role === "admin");
+  const expectedSubdomain = company?.subdomain || "";
+  const confirmMatches =
+    confirmSubdomain.trim().toLowerCase() === expectedSubdomain.trim().toLowerCase();
+
+  const handleDeleteWorkspace = async () => {
+    if (!confirmMatches || !expectedSubdomain) return;
+    setDeletingWorkspace(true);
+    try {
+      await workspaceApi.deleteWorkspace({ confirmSubdomain: expectedSubdomain });
+      clearTokens();
+      toast.success("Workspace deleted");
+      window.location.href = mainLoginUrl;
+    } catch (err: unknown) {
+      const { message } = getApiError(err, "Could not delete workspace");
+      toast.error(message);
+      setDeletingWorkspace(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-foreground">Customize workspace</h2>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Make this workspace feel like your brand — name in the browser tab, logos, favicon, colors,
+          Make this workspace feel like your brand: name in the browser tab, logos, favicon, colors,
           and theme. Changes apply for everyone on your team.
         </p>
       </div>
@@ -234,7 +265,7 @@ export default function CustomizeWorkspacePanel({ onUpdated }: CustomizeWorkspac
         <div className="border-b border-border/60 px-5 py-4">
           <p className="text-sm font-medium text-foreground">Browser identity</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Tab title adapts to where you are — e.g. Home shows{" "}
+            The tab title adapts to where you are. For example, Home shows{" "}
             <span className="font-medium text-foreground">Title | Tagline</span>, and Workspace
             settings show <span className="font-medium text-foreground">Workspace | Title</span>.
           </p>
@@ -566,7 +597,8 @@ export default function CustomizeWorkspacePanel({ onUpdated }: CustomizeWorkspac
         <div className="border-b border-border/60 px-5 py-4">
           <p className="text-sm font-medium text-foreground">Appearance</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Choose light or dark. Light is the default — your device dark mode is not applied automatically.
+            Choose light or dark. Light is the default; your device dark mode is not applied
+            automatically.
           </p>
         </div>
         <div className="grid gap-3 p-5 sm:grid-cols-3">
@@ -599,6 +631,44 @@ export default function CustomizeWorkspacePanel({ onUpdated }: CustomizeWorkspac
           })}
         </div>
       </section>
+
+      {canDeleteWorkspace ? (
+        <section className="overflow-hidden rounded-xl border border-destructive/30 bg-card">
+          <div className="border-b border-destructive/20 px-5 py-4">
+            <p className="text-sm font-medium text-destructive">Danger zone</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Deleting this workspace removes all of its data. This can’t be undone.
+            </p>
+          </div>
+          <div className="space-y-4 px-5 py-5">
+            <div className="space-y-2">
+              <Label htmlFor="confirm-subdomain">
+                Type <span className="font-mono font-medium text-foreground">{expectedSubdomain}</span>{" "}
+                to confirm
+              </Label>
+              <Input
+                id="confirm-subdomain"
+                value={confirmSubdomain}
+                autoComplete="off"
+                spellCheck={false}
+                disabled={deletingWorkspace}
+                placeholder={expectedSubdomain}
+                onChange={(e) => setConfirmSubdomain(e.target.value)}
+                className="max-w-sm font-mono"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!confirmMatches || deletingWorkspace || !expectedSubdomain}
+              onClick={() => void handleDeleteWorkspace()}
+            >
+              {deletingWorkspace ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              Delete workspace
+            </Button>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

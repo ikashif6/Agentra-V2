@@ -152,6 +152,24 @@ export const authApi = {
     returnOrigin?: string;
   }) => api.post("/auth/microsoft/signup-url", data),
   completeOAuthLogin: (code: string) => api.post("/auth/oauth/complete", { code }),
+  verifyTwoFactor: (data: { email: string; otp: string; workspace?: string }) =>
+    api.post("/auth/2fa/verify", data, {
+      headers: data.workspace ? { "x-tenant": data.workspace } : undefined,
+    }),
+  resendTwoFactor: (data: { email: string; workspace?: string }) =>
+    api.post(
+      "/auth/2fa/resend",
+      { email: data.email },
+      {
+        headers: data.workspace ? { "x-tenant": data.workspace } : undefined,
+      },
+    ),
+  enableTwoFactor: () => api.post("/auth/2fa/enable"),
+  confirmEnableTwoFactor: (data: { otp: string }) =>
+    api.post("/auth/2fa/enable/confirm", data),
+  disableTwoFactor: () => api.post("/auth/2fa/disable"),
+  confirmDisableTwoFactor: (data: { otp: string }) =>
+    api.post("/auth/2fa/disable/confirm", data),
 };
 
 export const onboardingApi = {
@@ -263,6 +281,8 @@ export const billingApi = {
   portal: () => api.post("/billing/portal"),
   cancelPlan: () => api.post("/billing/cancel"),
   reactivatePlan: () => api.post("/billing/reactivate"),
+  invoicePdf: (invoiceNumber: string) =>
+    api.get(`/billing/invoices/${encodeURIComponent(invoiceNumber)}/pdf`),
 };
 
 export const activityLogApi = {
@@ -290,6 +310,8 @@ export const workspaceApi = {
     logoWidth?: number;
     logoHeight?: number;
   }) => api.patch("/workspace/branding", data),
+  deleteWorkspace: (data: { confirmSubdomain: string }) =>
+    api.delete("/workspace", { data }),
 };
 
 export const notificationsApi = {

@@ -1,17 +1,14 @@
 import {
-  Home,
+  ChartLine,
+  House,
   Inbox,
   Settings,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
-import { AiAgentIcon } from "@/components/icons/ai-agent-icon";
-import { AnalyticsIcon } from "@/components/icons/analytics-icon";
 import { Role } from "@/lib/types";
 
-export type AppNavIcon =
-  | LucideIcon
-  | typeof AiAgentIcon
-  | typeof AnalyticsIcon;
+export type AppNavIcon = LucideIcon;
 
 export type AppNavItem = {
   label: string;
@@ -25,7 +22,7 @@ export const PRIMARY_NAV: AppNavItem[] = [
   {
     label: "Home",
     href: "/dashboard",
-    icon: Home,
+    icon: House,
     roles: ["owner", "admin", "manager", "agent", "customer"],
   },
   {
@@ -38,13 +35,13 @@ export const PRIMARY_NAV: AppNavItem[] = [
   {
     label: "AI Agent",
     href: "/ai-agent",
-    icon: AiAgentIcon,
+    icon: Sparkles,
     roles: ["owner", "admin", "manager", "agent"],
   },
   {
     label: "Analytics",
     href: "/analytics",
-    icon: AnalyticsIcon,
+    icon: ChartLine,
     roles: ["owner", "admin", "manager"],
   },
   {

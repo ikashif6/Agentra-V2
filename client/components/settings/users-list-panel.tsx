@@ -99,7 +99,7 @@ export default function UsersListPanel({
   };
 
   const pages = pagination?.pages ?? 1;
-  const planHint = "Agentra Pro includes unlimited members, tickets, and all features.";
+  const planHint = "On Agentra Pro, your workspace includes unlimited members, tickets, and every feature.";
   const canManageAny = ["owner", "admin", "manager"].includes(currentUser?.role ?? "");
 
   return (
@@ -126,7 +126,7 @@ export default function UsersListPanel({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
         <div
           className={cn(
             "grid gap-4 border-b border-border/60 bg-muted/20 px-5 py-3",
@@ -189,7 +189,7 @@ export default function UsersListPanel({
                         </AvatarFallback>
                       </Avatar>
                       {user.isOnline ? (
-                        <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-white bg-emerald-500" />
+                        <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-card bg-emerald-500" />
                       ) : null}
                     </div>
                     <p className="truncate text-sm font-medium text-foreground">{displayName(user)}</p>
@@ -206,9 +206,14 @@ export default function UsersListPanel({
 
                   <Badge
                     variant="outline"
-                    className="w-fit text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                    className={cn(
+                      "w-fit text-[10px] font-medium uppercase tracking-wide",
+                      user.twoFactorEnabled
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+                        : "text-muted-foreground",
+                    )}
                   >
-                    Not enabled
+                    {user.twoFactorEnabled ? "Enabled" : "Not enabled"}
                   </Badge>
 
                   {canManageAny ? (
@@ -292,7 +297,7 @@ export default function UsersListPanel({
             <DialogDescription>
               {deleteUser
                 ? `${displayName(deleteUser)} will lose access to this workspace. Their account will be deactivated.`
-                : "This user will lose access to this workspace."}
+                : "This person will lose access to this workspace."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

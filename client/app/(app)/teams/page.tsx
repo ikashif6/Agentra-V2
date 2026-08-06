@@ -42,7 +42,7 @@ export default function TeamsPage() {
           value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] overflow-hidden">
         {/* Header */}
         <div className="grid grid-cols-[2fr_2fr_1fr_1fr_32px] gap-4 px-5 py-3 border-b border-border/60 bg-muted/30">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Team</span>

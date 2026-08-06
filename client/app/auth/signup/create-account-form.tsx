@@ -273,21 +273,21 @@ export function CreateAccountForm() {
 
   const title =
     step === 1
-      ? "Create account"
+      ? "Create your account"
       : step === 2
-        ? "Your details"
+        ? "About you"
         : isSocialPath
           ? "Your workspace"
-          : "Company details";
+          : "Your company";
 
   const subtitle =
     step === 1
-      ? "Set up your Agentra workspace and start your 14-day free trial."
+      ? "Create your Agentra workspace and begin a 14-day free trial."
       : step === 2
-        ? "Tell us who you are and choose a password."
+        ? "A few details to get your account ready."
         : isSocialPath
-          ? `Enter your company details to continue with ${socialProvider === "google" ? "Google" : "Microsoft"}.`
-          : "Add your company so we can create your workspace.";
+          ? `Share a little about your company to continue with ${socialProvider === "google" ? "Google" : "Microsoft"}.`
+          : "A little about your company helps us set up the right workspace.";
 
   return (
     <div className="space-y-6">

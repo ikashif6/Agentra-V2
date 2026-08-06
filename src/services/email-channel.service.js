@@ -329,6 +329,75 @@ async function sendReplyForTicket(companyId, ticket, content) {
   return info;
 }
 
+/**
+ * Send a customer-facing email as the workspace (transcripts, etc.).
+ * Uses the connected support mailbox when available; otherwise Resend with Reply-To.
+ */
+async function sendCompanyCustomerEmail(companyIdOrDoc, { to, subject, html, text, headers = {} }) {
+  if (!to) throw new Error('Missing recipient email');
+
+  const Company = require('../models/Company');
+  const company = await Company.findById(companyIdOrDoc?._id || companyIdOrDoc).select(
+    '+channelIntegrations.email.secret',
+  );
+  if (!company) throw new Error('Company not found');
+
+  const integration = company.channelIntegrations?.email;
+  const displayName =
+    integration?.displayName || company.name || company.liveChat?.content?.agentName || 'Support';
+  const supportAddress = integration?.address || company.settings?.supportEmail || null;
+
+  if (integration?.status === 'connected' && integration.provider === 'google') {
+    const gmailApi = require('./gmail-api.service');
+    return gmailApi.sendGmailMessage(company, { to, subject, html, text, headers });
+  }
+
+  if (integration?.status === 'connected' && integration.provider === 'microsoft') {
+    const msMail = require('./microsoft-mail.service');
+    return msMail.sendMicrosoftMessage(company, { to, subject, html, text, headers });
+  }
+
+  if (integration?.status === 'connected' && integration.provider === 'imap') {
+    const stored = getStoredImapConfig(company);
+    if (!stored) throw new Error('Email credentials are unavailable');
+    const from = `${stored.displayName} <${stored.address}>`;
+    if (integration.outboundVia === 'resend') {
+      const { sendChannelReplyViaResend } = require('./email.service');
+      return sendChannelReplyViaResend({
+        displayName: stored.displayName,
+        fromAddress: stored.address,
+        to,
+        subject,
+        html,
+        text,
+        headers,
+      });
+    }
+    return imapService.sendMail(stored.cfg, stored.password, {
+      from,
+      to,
+      subject,
+      html,
+      text,
+      headers,
+    });
+  }
+
+  const { sendChannelReplyViaResend } = require('./email.service');
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error('No support mailbox connected and RESEND_API_KEY is not configured');
+  }
+  return sendChannelReplyViaResend({
+    displayName,
+    fromAddress: supportAddress || process.env.RESEND_FROM_EMAIL || 'noreply@agentraa.com',
+    to,
+    subject,
+    html,
+    text,
+    headers,
+  });
+}
+
 // ─── Polling ──────────────────────────────────────────────────────────────────
 async function pollCompany(company) {
   const provider = company.channelIntegrations?.email?.provider;
@@ -438,6 +507,7 @@ module.exports = {
   connectMicrosoftOAuth,
   disconnectEmail,
   sendReplyForTicket,
+  sendCompanyCustomerEmail,
   formatSupportEmail,
   pollCompany,
   pollAllMailboxes,

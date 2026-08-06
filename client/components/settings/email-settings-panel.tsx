@@ -35,7 +35,7 @@ const CAPABILITIES = [
   {
     icon: Reply,
     title: "Reply from your address",
-    description: "Answers are sent from your own email — customers see you.",
+    description: "Replies are sent from your own email address, so customers see your brand.",
   },
   {
     icon: UserRound,
@@ -181,7 +181,7 @@ export default function EmailSettingsPanel() {
       });
       toast.success(
         data.data.email?.outboundVia === "resend"
-          ? "Email connected — inbound via IMAP; replies sent via secure relay (Reply-To: your address)"
+          ? "Email connected. Inbound mail uses IMAP; replies go through a secure relay with Reply-To set to your address."
           : "Email connected",
       );
     } catch (err: unknown) {
@@ -274,8 +274,8 @@ export default function EmailSettingsPanel() {
               <>
                 {" "}
                 Replies are delivered via Agentra&apos;s mail relay with{" "}
-                <span className="font-medium text-foreground">Reply-To: {email.address}</span> — customer
-                replies still land in your inbox.
+                <span className="font-medium text-foreground">Reply-To: {email.address}</span>, so
+                customer replies still arrive in your inbox.
               </>
             ) : (
               <> Replies you send are delivered from your own address, so conversations stay threaded for the customer.</>
@@ -314,7 +314,7 @@ export default function EmailSettingsPanel() {
             Connect your support email
           </h4>
           <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-            Bring your existing mailbox into Agentra — Gmail, Outlook, or any address like
+            Bring your existing mailbox into Agentra, whether Gmail, Outlook, or an address like
             support@yourcompany.com. Incoming email becomes tickets and replies are sent from your
             own address.
           </p>

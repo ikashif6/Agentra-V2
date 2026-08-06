@@ -32,7 +32,7 @@ function useDocumentTheme() {
 const toastShell = cn(
   "group toast-shell pointer-events-auto flex w-[min(100vw-2rem,22rem)] items-center gap-3",
   "rounded-[10px] border border-border/80 bg-card px-3.5 py-3",
-  "text-card-foreground shadow-[0_1px_2px_rgba(15,15,15,0.04),0_14px_36px_rgba(15,15,15,0.10)]",
+  "text-card-foreground shadow-[0_1px_2px_rgba(15,15,15,0.04),0_14px_36px_rgba(15,15,15,0.10)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_14px_36px_rgba(0,0,0,0.45)]",
   "ring-1 ring-black/[0.03] dark:ring-white/[0.06]",
 )
 

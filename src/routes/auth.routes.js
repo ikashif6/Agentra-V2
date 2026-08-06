@@ -109,6 +109,10 @@ router.post('/magic-link/verify', authLimiter, resolveTenant, tokenBodyRule, val
 router.post('/otp/request', otpLimiter, resolveTenant, emailRules, validate, authController.requestOtp);
 router.post('/otp/verify', authLimiter, resolveTenant, otpVerifyRules, validate, authController.verifyOtp);
 
+// Email OTP 2FA (login challenge)
+router.post('/2fa/verify', authLimiter, resolveTenant, otpVerifyRules, validate, authController.verifyTwoFactorLogin);
+router.post('/2fa/resend', otpLimiter, resolveTenant, emailRules, validate, authController.resendTwoFactorLogin);
+
 // Email verification
 router.post('/verify-email', tokenBodyRule, validate, authController.verifyEmail);
 
@@ -169,5 +173,14 @@ router.patch('/me', authController.updateMe);
 
 router.post('/verify-email/resend', authController.resendVerification);
 router.post('/change-password', changePasswordRules, validate, authController.changePassword);
+
+const otpOnlyRules = [
+  body('otp').isLength({ min: 6, max: 6 }).isNumeric().withMessage('OTP must be a 6-digit number'),
+];
+
+router.post('/2fa/enable', authController.enableTwoFactor);
+router.post('/2fa/enable/confirm', otpOnlyRules, validate, authController.confirmEnableTwoFactor);
+router.post('/2fa/disable', authController.disableTwoFactor);
+router.post('/2fa/disable/confirm', otpOnlyRules, validate, authController.confirmDisableTwoFactor);
 
 module.exports = router;

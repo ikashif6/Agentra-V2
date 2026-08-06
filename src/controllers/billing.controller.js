@@ -5,6 +5,7 @@ const {
   getPortalUrl,
   cancelSubscription,
   reactivateSubscription,
+  getInvoicePdfUrl,
 } = require('../services/billing.service');
 const {
   logBillingPlanCanceled,
@@ -91,6 +92,23 @@ exports.reactivatePlan = async (req, res, next) => {
     return response.success(res, { billing }, 'Your plan will continue as normal');
   } catch (err) {
     if (err.statusCode === 400) {
+      return response.badRequest(res, err.message);
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /billing/invoices/:invoiceNumber/pdf
+ * Returns a short-lived Paddle invoice PDF URL.
+ */
+exports.getInvoicePdf = async (req, res, next) => {
+  try {
+    const invoiceNumber = decodeURIComponent(req.params.invoiceNumber || '');
+    const pdf = await getInvoicePdfUrl(req.company, invoiceNumber);
+    return response.success(res, pdf);
+  } catch (err) {
+    if (err.statusCode === 400 || err.statusCode === 404 || err.statusCode === 502) {
       return response.badRequest(res, err.message);
     }
     next(err);

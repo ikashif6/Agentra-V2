@@ -66,15 +66,39 @@ function RadioOption({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-1 py-2 transition-colors hover:border-border/60">
-      <input
-        type="radio"
-        name={name}
-        value={value}
-        checked={checked}
-        onChange={() => onChange(value)}
-        className="mt-0.5 size-4 shrink-0 accent-primary"
-      />
+    <label
+      className={cn(
+        "flex cursor-pointer items-start gap-3 rounded-lg border py-2.5 pl-3.5 pr-3 transition-colors",
+        checked
+          ? "border-primary/30 bg-primary/[0.04]"
+          : "border-border/60 hover:bg-muted/20",
+      )}
+    >
+      <span className="relative mt-0.5 size-4 shrink-0">
+        <input
+          type="radio"
+          name={name}
+          value={value}
+          checked={checked}
+          onChange={() => onChange(value)}
+          className="peer sr-only"
+        />
+        <span
+          aria-hidden
+          className={cn(
+            "flex size-4 items-center justify-center rounded-full border transition-colors",
+            "peer-focus-visible:ring-2 peer-focus-visible:ring-ring/50",
+            checked ? "border-primary" : "border-muted-foreground/35 bg-background",
+          )}
+        >
+          <span
+            className={cn(
+              "size-2 rounded-full transition-colors",
+              checked ? "bg-primary" : "bg-transparent",
+            )}
+          />
+        </span>
+      </span>
       <span className="min-w-0">
         <span className="block text-sm font-medium text-foreground">{label}</span>
         {description ? (
@@ -177,7 +201,7 @@ export default function ProfileSettings() {
   return (
     <form onSubmit={form.handleSubmit(onSave)} className="space-y-6">
       {/* Profile photo */}
-      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] overflow-hidden">
         <div className="px-6 py-4 border-b border-border/60">
           <h3 className="font-semibold text-foreground">Profile photo</h3>
           <p className="text-xs text-muted-foreground mt-0.5">Update your avatar across Agentra</p>
@@ -219,7 +243,7 @@ export default function ProfileSettings() {
       </div>
 
       {/* Name & bio */}
-      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] overflow-hidden">
         <div className="px-6 py-4 border-b border-border/60">
           <h3 className="font-semibold text-foreground">Profile</h3>
           <p className="text-xs text-muted-foreground mt-0.5">Your name and bio visible to your team</p>
@@ -230,14 +254,14 @@ export default function ProfileSettings() {
               <Label className="text-xs font-medium text-muted-foreground">First name</Label>
               <Input {...form.register("firstName")} className="focus-visible:ring-primary/30" />
               {form.formState.errors.firstName ? (
-                <p className="text-xs text-red-500">{form.formState.errors.firstName.message}</p>
+                <p className="text-xs text-destructive">{form.formState.errors.firstName.message}</p>
               ) : null}
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">Last name</Label>
               <Input {...form.register("lastName")} className="focus-visible:ring-primary/30" />
               {form.formState.errors.lastName ? (
-                <p className="text-xs text-red-500">{form.formState.errors.lastName.message}</p>
+                <p className="text-xs text-destructive">{form.formState.errors.lastName.message}</p>
               ) : null}
             </div>
           </div>
@@ -261,7 +285,7 @@ export default function ProfileSettings() {
       </div>
 
       {/* Date and time settings */}
-      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="rounded-[10px] border border-border/80 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] dark:border-white/[0.06] dark:shadow-[0_1px_2px_rgba(0,0,0,0.35)] overflow-hidden">
         <div className="px-6 py-4 border-b border-border/60">
           <h3 className="font-semibold text-foreground">Date and time settings</h3>
         </div>

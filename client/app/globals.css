@@ -4,31 +4,30 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* 60% White base */
+  /* Lovable-like neutrals + Agentra coral accent */
   --background: 0 0% 100%;
-  --foreground: 0 0% 8%;
+  --foreground: 0 0% 10%;
 
-  /* Brand: Coral #D85A30, hover Coral Light #F0997B */
+  /* Brand: Coral #D85A30 — CTAs / focus only */
   --brand: 16 69% 52%;
   --brand-foreground: 0 0% 100%;
   --brand-hover: 16 81% 72%;
-  --brand-muted: 16 81% 94%;
-  --brand-muted-foreground: 16 55% 40%;
+  --brand-muted: 16 81% 96%;
+  --brand-muted-foreground: 16 45% 38%;
 
-  /* 10% Black accents */
   --card: 0 0% 100%;
-  --card-foreground: 0 0% 8%;
+  --card-foreground: 0 0% 10%;
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 8%;
+  --popover-foreground: 0 0% 10%;
   --primary: 16 69% 52%;
   --primary-foreground: 0 0% 100%;
-  --primary-hover: 16 81% 72%;
-  --secondary: 0 0% 96%;
-  --secondary-foreground: 0 0% 8%;
+  --primary-hover: 16 75% 48%;
+  --secondary: 0 0% 96%; /* soft neutral wash */
+  --secondary-foreground: 0 0% 10%;
   --muted: 0 0% 96%;
-  --muted-foreground: 0 0% 45%;
-  --accent: 16 81% 94%;
-  --accent-foreground: 16 55% 40%;
+  --muted-foreground: 0 0% 40%;
+  --accent: 0 0% 94%; /* #f0f0f0-adjacent hover wash */
+  --accent-foreground: 0 0% 10%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
   --border: 0 0% 90%;
@@ -36,40 +35,52 @@
   --ring: 16 69% 52%;
   --radius: 0.625rem;
 
-  --sidebar: 0 0% 98%;
-  --sidebar-foreground: 0 0% 8%;
+  /* Soft canvas sidebar — Lovable #f0f0f0 */
+  --sidebar: 0 0% 94.1%;
+  --sidebar-foreground: 0 0% 10%;
   --sidebar-border: 0 0% 90%;
-  --sidebar-accent: 16 81% 94%;
-  --sidebar-accent-foreground: 16 55% 40%;
+  --sidebar-accent: 0 0% 87.1%; /* #dedede active chalk */
+  --sidebar-accent-foreground: 0 0% 10%;
+
+  /* Type / spacing rhythm */
+  --app-font-size: 14px;
+  --app-leading: 1.45;
+  --app-tracking: -0.01em;
 }
 
 .dark {
-  --background: 0 0% 7%;
+  color-scheme: dark;
+  /* Lovable-like soft charcoal: layered near-blacks, soft borders, warm coral accent */
+  --background: 0 0% 9%; /* elevated stage */
   --foreground: 0 0% 96%;
-  --card: 0 0% 10%;
+  --card: 0 0% 11%;
   --card-foreground: 0 0% 96%;
-  --popover: 0 0% 10%;
+  --popover: 0 0% 12%;
   --popover-foreground: 0 0% 96%;
-  --primary: 16 69% 52%;
+  --primary: 16 69% 56%;
   --primary-foreground: 0 0% 100%;
+  --primary-hover: 16 72% 62%;
   --secondary: 0 0% 14%;
   --secondary-foreground: 0 0% 96%;
   --muted: 0 0% 14%;
-  --muted-foreground: 0 0% 62%;
-  --accent: 0 0% 14%;
+  --muted-foreground: 0 0% 64%;
+  --accent: 0 0% 15%;
   --accent-foreground: 0 0% 96%;
-  --brand-muted: 16 35% 16%;
-  --brand-muted-foreground: 16 55% 72%;
-  --destructive: 0 72% 55%;
+  --brand: 16 69% 56%;
+  --brand-hover: 16 72% 64%;
+  --brand-muted: 16 28% 14%;
+  --brand-muted-foreground: 16 55% 74%;
+  --destructive: 0 72% 58%;
   --destructive-foreground: 0 0% 100%;
   --border: 0 0% 18%;
   --input: 0 0% 18%;
-  --ring: 16 69% 52%;
-  --sidebar: 0 0% 9%;
+  --ring: 16 69% 56%;
+  /* Canvas + sidebar sit slightly under the stage */
+  --sidebar: 0 0% 6.5%;
   --sidebar-foreground: 0 0% 96%;
-  --sidebar-border: 0 0% 18%;
+  --sidebar-border: 0 0% 14%;
   --sidebar-accent: 0 0% 14%;
-  --sidebar-accent-foreground: 0 0% 96%;
+  --sidebar-accent-foreground: 0 0% 98%;
 }
 
 @theme inline {
@@ -106,6 +117,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
 }
 
 * {
@@ -115,7 +127,12 @@
 body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: var(--app-font-size);
+  line-height: var(--app-leading);
+  letter-spacing: var(--app-tracking);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a[href],
@@ -136,6 +153,45 @@ button:disabled,
 [disabled]:not(input):not(select):not(textarea),
 [aria-disabled="true"] {
   cursor: not-allowed;
+}
+
+/* Browser autofill — cover Chromium tint without squaring the field */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active {
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
+  caret-color: hsl(var(--foreground));
+  background-color: transparent !important;
+  /* Chromium often resets radius on autofill; restore the shared control radius */
+  border-radius: var(--radius-lg) !important;
+  transition: background-color 99999s ease-out 0s;
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+  box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+}
+
+/* Compound fields (workspace + suffix) stay square so the wrapper clips them */
+input.rounded-none:-webkit-autofill,
+input.rounded-none:-webkit-autofill:hover,
+input.rounded-none:-webkit-autofill:focus,
+input.rounded-none:-webkit-autofill:active {
+  border-radius: 0 !important;
+}
+
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover,
+.dark input:-webkit-autofill:focus,
+.dark input:-webkit-autofill:active,
+.dark textarea:-webkit-autofill,
+.dark textarea:-webkit-autofill:hover,
+.dark textarea:-webkit-autofill:focus,
+.dark textarea:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--card)) inset !important;
+  box-shadow: 0 0 0 1000px hsl(var(--card)) inset !important;
 }
 
 /* Scrollbar */
@@ -594,9 +650,14 @@ button:disabled,
   display: none !important;
 }
 
-/* App shell â€” flat canvas (no brand gradient wash) */
+/* App shell — Lovable soft gray canvas; content stage floats beside the sidebar */
 .app-shell {
-  background: hsl(var(--background));
+  --app-shell-canvas: 0 0% 94.1%; /* #f0f0f0 */
+  background: hsl(var(--app-shell-canvas));
+  color: hsl(var(--foreground));
+  font-size: var(--app-font-size);
+  line-height: var(--app-leading);
+  letter-spacing: var(--app-tracking);
 }
 
 .app-shell-grid {
@@ -604,16 +665,33 @@ button:disabled,
 }
 
 .dark .app-shell {
-  background: hsl(var(--background));
+  --app-shell-canvas: 0 0% 6.5%; /* soft charcoal canvas, matches sidebar */
+  background: hsl(var(--app-shell-canvas));
+  color-scheme: dark;
 }
 
 .dark .app-shell-grid {
   display: none;
 }
 
-/* Flat canvas pages â€” no grid or brand gradient wash */
 .app-shell-flat {
+  background: hsl(var(--app-shell-canvas));
+}
+
+.app-shell-stage {
   background: hsl(var(--background));
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 2px 2px -1px rgba(0, 0, 0, 0.04),
+    0 4px 4px -2px rgba(0, 0, 0, 0.02);
+}
+
+.dark .app-shell-stage {
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 8px 24px -12px rgba(0, 0, 0, 0.55),
+    0 2px 6px -2px rgba(0, 0, 0, 0.35);
 }
 
 /* Toasts â€” plain icons for every type (no tinted circles / richColors wash) */

@@ -103,41 +103,75 @@ function hslString({ h, s, l }: Hsl) {
   return `${h} ${s}% ${l}%`;
 }
 
-export function generateBrandCssVars(hex: string) {
+export function generateBrandCssVars(hex: string, appearance: "light" | "dark" = "light") {
   const rgb = hexToRgb(hex);
   if (!rgb) return null;
 
   const base = rgbToHsl(rgb);
-  const hover: Hsl = {
-    h: base.h,
-    s: Math.min(base.s + 8, 100),
-    l: Math.min(base.l + 16, 78),
-  };
-  const muted: Hsl = {
-    h: base.h,
-    s: Math.max(base.s - 18, 20),
-    l: Math.min(base.l + 40, 96),
-  };
-  const mutedForeground: Hsl = {
-    h: base.h,
-    s: Math.max(base.s - 8, 25),
-    l: Math.max(base.l - 12, 22),
-  };
+  const isDark = appearance === "dark";
 
-  const brand = hslString(base);
-  return {
+  const hover: Hsl = isDark
+    ? {
+        h: base.h,
+        s: Math.min(base.s + 6, 100),
+        l: Math.min(base.l + 10, 68),
+      }
+    : {
+        h: base.h,
+        s: Math.min(base.s + 8, 100),
+        l: Math.min(base.l + 16, 78),
+      };
+
+  const muted: Hsl = isDark
+    ? {
+        h: base.h,
+        s: Math.max(base.s - 30, 16),
+        l: 14,
+      }
+    : {
+        h: base.h,
+        s: Math.max(base.s - 18, 20),
+        l: Math.min(base.l + 40, 96),
+      };
+
+  const mutedForeground: Hsl = isDark
+    ? {
+        h: base.h,
+        s: Math.max(base.s - 12, 28),
+        l: Math.min(Math.max(base.l + 18, 68), 78),
+      }
+    : {
+        h: base.h,
+        s: Math.max(base.s - 8, 25),
+        l: Math.max(base.l - 12, 22),
+      };
+
+  const brand = hslString({
+    h: base.h,
+    s: base.s,
+    l: isDark ? Math.min(Math.max(base.l + 4, 48), 60) : base.l,
+  });
+
+  const vars: Record<string, string> = {
     "--brand": brand,
     "--primary": brand,
     "--ring": brand,
     "--brand-hover": hslString(hover),
     "--primary-hover": hslString(hover),
     "--brand-muted": hslString(muted),
-    "--accent": hslString(muted),
     "--brand-muted-foreground": hslString(mutedForeground),
-    "--accent-foreground": hslString(mutedForeground),
-    "--sidebar-accent": hslString(muted),
-    "--sidebar-accent-foreground": hslString(mutedForeground),
-  } as Record<string, string>;
+  };
+
+  // Light: soft brand washes for accent surfaces.
+  // Dark: leave accent/sidebar-accent to .dark CSS so charcoal neutrals stay Lovable-like.
+  if (!isDark) {
+    vars["--accent"] = hslString(muted);
+    vars["--accent-foreground"] = hslString(mutedForeground);
+    vars["--sidebar-accent"] = hslString(muted);
+    vars["--sidebar-accent-foreground"] = hslString(mutedForeground);
+  }
+
+  return vars;
 }
 
 export function resolveWorkspaceTheme(theme: WorkspaceTheme): "light" | "dark" {
@@ -277,11 +311,21 @@ export function applyWorkspaceBranding(branding: Partial<WorkspaceBranding>) {
   root.classList.add(resolved);
   root.style.colorScheme = resolved;
 
-  const vars = generateBrandCssVars(normalized.primaryColor);
+  const vars = generateBrandCssVars(normalized.primaryColor, resolved);
   if (vars) {
     Object.entries(vars).forEach(([key, value]) => {
       root.style.setProperty(key, value);
     });
+  }
+
+  // Drop light-mode accent washes so .dark charcoal tokens can apply cleanly.
+  if (resolved === "dark") {
+    [
+      "--accent",
+      "--accent-foreground",
+      "--sidebar-accent",
+      "--sidebar-accent-foreground",
+    ].forEach((key) => root.style.removeProperty(key));
   }
 
   applyWorkspaceFavicon(normalized.favicon);

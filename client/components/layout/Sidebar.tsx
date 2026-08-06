@@ -4,13 +4,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronLeft, ChevronRight, CircleHelp, LogOut, Moon, Sun, UserRound } from "lucide-react";
+import { CircleHelp, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { Role } from "@/lib/types";
 import { PRIMARY_NAV, isNavActive, type AppNavItem } from "@/lib/app-navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { WorkspaceChromeActions } from "@/components/layout/workspace-chrome-actions";
 import { Switch } from "@/components/ui/switch";
 import { api, ticketApi } from "@/lib/api";
 import { WorkspaceLogoImg } from "@/components/app/workspace-logo-img";
@@ -50,10 +51,10 @@ function NavLink({
       href={item.href}
       title={collapsed ? (showBadge ? `${label} (${badgeLabel})` : label) : undefined}
       className={cn(
-        "group flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-medium transition-colors",
+        "group flex items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[14px] font-[450] tracking-[-0.01em] transition-colors",
         active
           ? "bg-primary/10 text-primary"
-          : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+          : "text-muted-foreground hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]",
         collapsed && "justify-center px-2",
       )}
     >
@@ -61,8 +62,11 @@ function NavLink({
         <Icon
           className={cn(
             "size-[18px]",
-            active ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
+            active
+              ? "text-primary opacity-80"
+              : "text-muted-foreground/80 group-hover:text-foreground",
           )}
+          strokeWidth={1.75}
           aria-hidden="true"
         />
         {collapsed && showBadge ? (
@@ -75,7 +79,7 @@ function NavLink({
         <>
           <span className="min-w-0 flex-1 truncate">{label}</span>
           {showBadge ? (
-            <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold tabular-nums text-primary-foreground shadow-sm">
+            <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold tabular-nums text-primary-foreground">
               {badgeLabel}
             </span>
           ) : null}
@@ -143,11 +147,7 @@ function ProfileAvatar({
   );
 }
 
-function SidebarAccountMenu({
-  collapsed = false,
-}: {
-  collapsed?: boolean;
-}) {
+function SidebarAccountMenu() {
   const { user, company, logout, refreshUser } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -159,11 +159,6 @@ function SidebarAccountMenu({
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
   const anchorRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-
-  const displayName =
-    [namePart(user?.firstName), namePart(user?.lastName)].filter(Boolean).join(" ") ||
-    (user?.fullName || "").trim().replace(/\s+-\s*$/, "") ||
-    "Account";
 
   useEffect(() => {
     setMounted(true);
@@ -254,8 +249,8 @@ function SidebarAccountMenu({
     if (!anchorRef.current) return;
     const rect = anchorRef.current.getBoundingClientRect();
     const panelWidth = 224;
-    const gap = 8;
-    const panelHeight = panelRef.current?.offsetHeight ?? 280;
+    const gap = 10;
+    const panelHeight = panelRef.current?.offsetHeight ?? 360;
 
     let left = rect.left;
     if (left + panelWidth > window.innerWidth - gap) {
@@ -287,106 +282,124 @@ function SidebarAccountMenu({
     });
   }
 
+  const displayName =
+    [namePart(user?.firstName), namePart(user?.lastName)].filter(Boolean).join(" ") ||
+    (user?.fullName || "").trim().replace(/\s+-\s*$/, "") ||
+    "Account";
+
+  const menuItemClass =
+    "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] text-foreground transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]";
+
   const menuPanel = (
     <div
       ref={panelRef}
       style={panelStyle}
-      className="overflow-hidden rounded-lg border border-border bg-card shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+      className="overflow-hidden rounded-xl border border-black/[0.06] bg-card shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:border-white/10 dark:shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
     >
-      <div className="flex items-center gap-3 border-b border-border/60 px-3 py-3">
+      <div className="flex items-center gap-2.5 px-3.5 pb-2 pt-2.5">
         <ProfileAvatar user={user} online={online} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-foreground">{user?.email}</p>
-          <p className="text-xs text-muted-foreground">{online ? "Available" : "Offline"}</p>
+          <p className="truncate text-[13px] font-semibold leading-tight tracking-[-0.01em] text-foreground">
+            {displayName}
+          </p>
+          <p className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground">{user?.email}</p>
         </div>
       </div>
 
-      <Link
-        href="/profile"
-        onClick={() => setMenuOpen(false)}
-        className="flex items-center gap-2 px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-muted"
-      >
-        <UserRound className="size-4 shrink-0 text-muted-foreground" />
-        Edit profile
-      </Link>
+      <div className="h-px bg-black/[0.06] dark:bg-white/10" />
 
-      <div className="h-px bg-border" />
-
-      <div className="flex items-center justify-between px-3 py-2.5">
-        <span className="text-sm text-foreground">Available</span>
-        <Switch
-          checked={online}
-          disabled={savingStatus}
-          onCheckedChange={(checked) => void handleOnlineChange(checked)}
-        />
+      <div className="space-y-0.5 px-1.5 py-1">
+        <Link href="/profile" onClick={() => setMenuOpen(false)} className={menuItemClass}>
+          <UserRound className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+          Profile
+        </Link>
+        <Link href="/settings" onClick={() => setMenuOpen(false)} className={menuItemClass}>
+          <Settings className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+          Settings
+        </Link>
       </div>
 
-      <div className="h-px bg-border" />
+      <div className="h-px bg-black/[0.06] dark:bg-white/10" />
 
-      <div className="flex items-center justify-between px-3 py-2.5">
-        <span className="text-sm text-foreground">Appearance</span>
-        <div
-          className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/30 p-0.5"
-          role="group"
-          aria-label="Theme"
+      <div className="space-y-0.5 px-1.5 py-1">
+        <div className="flex items-center justify-between gap-3 rounded-md px-2.5 py-1.5">
+          <span className="text-[13px] text-foreground">Available</span>
+          <Switch
+            checked={online}
+            disabled={savingStatus}
+            onCheckedChange={(checked) => void handleOnlineChange(checked)}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3 rounded-md px-2.5 py-1.5">
+          <span className="text-[13px] text-foreground">Appearance</span>
+          <div
+            className="flex items-center gap-0.5 rounded-lg border border-black/[0.08] bg-muted/40 p-0.5 dark:border-white/10"
+            role="group"
+            aria-label="Theme"
+          >
+            <button
+              type="button"
+              aria-label="Light mode"
+              aria-pressed={theme === "light"}
+              disabled={savingTheme}
+              onClick={() => void handleThemeChange("light")}
+              className={cn(
+                "flex size-6 items-center justify-center rounded-md transition-colors",
+                theme === "light"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <Sun className="size-3.5" strokeWidth={1.75} />
+            </button>
+            <button
+              type="button"
+              aria-label="Dark mode"
+              aria-pressed={theme === "dark"}
+              disabled={savingTheme}
+              onClick={() => void handleThemeChange("dark")}
+              className={cn(
+                "flex size-6 items-center justify-center rounded-md transition-colors",
+                theme === "dark"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <Moon className="size-3.5" strokeWidth={1.75} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="h-px bg-black/[0.06] dark:bg-white/10" />
+
+      <div className="px-1.5 py-1">
+        <a
+          href={SITE_LEGAL.helpCenter}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setMenuOpen(false)}
+          className={menuItemClass}
         >
-          <button
-            type="button"
-            aria-label="Light mode"
-            aria-pressed={theme === "light"}
-            disabled={savingTheme}
-            onClick={() => void handleThemeChange("light")}
-            className={cn(
-              "flex size-7 items-center justify-center rounded-md transition-colors",
-              theme === "light"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <Sun className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            aria-label="Dark mode"
-            aria-pressed={theme === "dark"}
-            disabled={savingTheme}
-            onClick={() => void handleThemeChange("dark")}
-            className={cn(
-              "flex size-7 items-center justify-center rounded-md transition-colors",
-              theme === "dark"
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <Moon className="size-3.5" />
-          </button>
-        </div>
+          <CircleHelp className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+          Support
+        </a>
       </div>
 
-      <div className="h-px bg-border" />
+      <div className="h-px bg-black/[0.06] dark:bg-white/10" />
 
-      <a
-        href={SITE_LEGAL.helpCenter}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={() => setMenuOpen(false)}
-        className="flex items-center gap-2 px-3 py-2.5 text-sm text-foreground transition-colors hover:bg-muted"
-      >
-        <CircleHelp className="size-4 shrink-0 text-muted-foreground" />
-        Help Center
-      </a>
-
-      <div className="h-px bg-border" />
-
-      <button
-        type="button"
-        disabled={loggingOut}
-        onClick={() => void handleLogout()}
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-destructive transition-colors hover:bg-destructive/5 disabled:opacity-50"
-      >
-        <LogOut className="size-4 shrink-0" />
-        {loggingOut ? "Signing out…" : "Sign out"}
-      </button>
+      <div className="px-1.5 py-1 pb-2.5">
+        <button
+          type="button"
+          disabled={loggingOut}
+          onClick={() => void handleLogout()}
+          className={cn(menuItemClass, "disabled:opacity-50")}
+        >
+          <LogOut className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+          {loggingOut ? "Signing out…" : "Sign out"}
+        </button>
+      </div>
     </div>
   );
 
@@ -399,22 +412,11 @@ function SidebarAccountMenu({
         aria-expanded={menuOpen}
         onClick={toggleMenu}
         className={cn(
-          "flex w-full items-center gap-3 rounded-[10px] px-1 py-1 text-left transition-colors hover:bg-muted/70",
-          collapsed && "justify-center px-0 py-1",
-          menuOpen && "bg-muted/50",
+          "flex size-8 items-center justify-center rounded-lg transition-colors hover:bg-black/[0.05]",
+          menuOpen && "bg-black/[0.05]",
         )}
       >
         <ProfileAvatar user={user} online={online} />
-        {!collapsed ? (
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium leading-tight text-foreground">
-              {displayName}
-            </p>
-            <p className="truncate text-xs leading-tight text-muted-foreground">
-              {user?.email}
-            </p>
-          </div>
-        ) : null}
       </button>
 
       {menuOpen && mounted ? createPortal(menuPanel, document.body) : null}
@@ -479,15 +481,18 @@ export default function Sidebar({ embedded = false }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "flex h-full min-h-0 flex-col border-r border-border/80 bg-card transition-[width] duration-200",
-        embedded ? "flex w-full" : "hidden md:flex h-full shrink-0",
+        "flex h-full min-h-0 flex-col transition-[width] duration-200",
+        embedded
+          ? "flex w-full border-r border-sidebar-border bg-sidebar"
+          : "hidden h-full shrink-0 bg-transparent md:flex",
         !embedded && (isCollapsed ? "w-[68px]" : "w-[220px]"),
       )}
     >
       <div
         className={cn(
-          "flex h-14 shrink-0 items-center border-b border-border/60 px-3",
-          isCollapsed ? "justify-center" : "justify-between",
+          "flex h-14 shrink-0 items-center px-3",
+          embedded && "border-b border-border/60",
+          isCollapsed ? "justify-center px-2" : "justify-between",
         )}
       >
         <Link
@@ -528,10 +533,10 @@ export default function Sidebar({ embedded = false }: SidebarProps) {
           <button
             type="button"
             onClick={() => setCollapsed(true)}
-            className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-black/[0.05] hover:text-foreground"
             aria-label="Collapse sidebar"
           >
-            <ChevronLeft className="size-3.5" />
+            <PanelLeftClose className="size-4" strokeWidth={1.75} />
           </button>
         ) : null}
       </div>
@@ -540,14 +545,14 @@ export default function Sidebar({ embedded = false }: SidebarProps) {
         <button
           type="button"
           onClick={() => setCollapsed(false)}
-          className="mx-auto mt-2 flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="mx-auto mt-1.5 flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-black/[0.05] hover:text-foreground"
           aria-label="Expand sidebar"
         >
-          <ChevronRight className="size-3.5" />
+          <PanelLeftOpen className="size-4" strokeWidth={1.75} />
         </button>
       ) : null}
 
-      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-3">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-1.5">
         {primaryNav.map((item) => (
           <NavLink
             key={item.href}
@@ -560,8 +565,14 @@ export default function Sidebar({ embedded = false }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="shrink-0 border-t border-border/60 p-3">
-        <SidebarAccountMenu collapsed={isCollapsed} />
+      <div
+        className={cn(
+          "flex shrink-0 items-center px-2 pb-3 pt-2",
+          isCollapsed ? "flex-col gap-1" : "justify-between gap-2",
+        )}
+      >
+        <SidebarAccountMenu />
+        <WorkspaceChromeActions collapsed={isCollapsed} />
       </div>
     </aside>
   );

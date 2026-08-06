@@ -1,14 +1,14 @@
 const ChatSession = require('../models/ChatSession');
 const {
-  sendEmail,
-  emailShell,
+  merchantEmailShell,
   emailHeading,
   emailParagraph,
-  emailCallout,
+  emailSection,
   escapeHtml,
   BRAND,
-  FONT,
+  FONT_BODY,
 } = require('./email.service');
+const { sendCompanyCustomerEmail } = require('./email-channel.service');
 const { agentDisplayName } = require('./ticket-system-events.service');
 
 const RATING_META = [
@@ -40,7 +40,7 @@ function stripHtml(value) {
 function linkify(text) {
   return escapeHtml(text).replace(
     /(https?:\/\/[^\s<]+)/g,
-    `<a href="$1" style="color:${BRAND.orange};text-decoration:underline;" target="_blank" rel="noopener">$1</a>`,
+    `<a href="$1" style="color:${BRAND.link};text-decoration:underline;" target="_blank" rel="noopener">$1</a>`,
   );
 }
 
@@ -134,14 +134,23 @@ function transcriptEntriesFromSession(session, brandName) {
     .filter((m) => m.body || m.contentType === 'order_card' || m.contentType === 'product_cards' || (m.attachments && m.attachments.length))
     .map((m) => {
       let speaker = brandName || 'Support';
-      if (m.role === 'customer') speaker = 'You';
-      else if (m.role === 'agent') speaker = m.senderName || 'Agent';
-      else if (m.role === 'bot') speaker = m.senderName || brandName || 'Support Assistant';
-      else if (m.role === 'system' || m.contentType === 'system_event') speaker = 'System';
+      let side = 'support';
+      if (m.role === 'customer') {
+        speaker = 'You';
+        side = 'customer';
+      } else if (m.role === 'agent') {
+        speaker = m.senderName || 'Agent';
+      } else if (m.role === 'bot') {
+        speaker = m.senderName || brandName || 'Support Assistant';
+      } else if (m.role === 'system' || m.contentType === 'system_event') {
+        speaker = 'System';
+        side = 'system';
+      }
       return {
         sentAt: m.sentAt || session.createdAt,
         speaker,
-        isSystem: m.role === 'system' || m.contentType === 'system_event',
+        side,
+        isSystem: side === 'system',
         html: messageBodyHtml(m),
         attachments: Array.isArray(m.attachments) ? m.attachments : [],
       };
@@ -153,11 +162,15 @@ function transcriptEntriesFromTicket(ticket, brandName) {
     .filter((m) => m.body && !m.isInternal)
     .map((m) => {
       let speaker = brandName || 'Support';
-      if (m.isSystem) speaker = 'System';
-      else if (m.isAi || String(m.senderEmail || '').includes('bot@agentra')) {
+      let side = 'support';
+      if (m.isSystem) {
+        speaker = 'System';
+        side = 'system';
+      } else if (m.isAi || String(m.senderEmail || '').includes('bot@agentra')) {
         speaker = m.senderName || brandName || 'Support Assistant';
       } else if (m.sender && typeof m.sender === 'object' && m.sender.role === 'customer') {
         speaker = 'You';
+        side = 'customer';
       } else if (m.sender && typeof m.sender === 'object') {
         speaker = agentDisplayName(m.sender) || m.senderName || 'Agent';
       } else if (m.senderName) {
@@ -166,7 +179,8 @@ function transcriptEntriesFromTicket(ticket, brandName) {
       return {
         sentAt: m.sentAt || ticket.createdAt,
         speaker,
-        isSystem: Boolean(m.isSystem),
+        side,
+        isSystem: side === 'system',
         html: messageBodyHtml(m),
         attachments: Array.isArray(m.attachments) ? m.attachments : [],
       };
@@ -175,33 +189,139 @@ function transcriptEntriesFromTicket(ticket, brandName) {
 
 function buildRatingBlock({ widgetKey, sessionToken, alreadyRated }) {
   if (alreadyRated) {
-    return emailCallout(
+    return emailSection(
       'Feedback received',
-      `<p style="margin:0;">Thanks — your feedback for this conversation was already recorded.</p>`,
+      `<p style="margin:0;color:${BRAND.muted};font-size:15px;line-height:1.65;font-family:${FONT_BODY};">Thanks — your rating for this conversation was already recorded.</p>`,
     );
   }
   if (!widgetKey || !sessionToken) return '';
 
   const buttons = RATING_META.map(
     (option) => `
-      <a href="${escapeHtml(feedbackUrl({ widgetKey, sessionToken, rating: option.value }))}"
-         style="display:inline-block;margin:0 6px;text-decoration:none;text-align:center;min-width:56px;">
-        <span style="display:block;font-size:32px;line-height:1;">${option.emoji}</span>
-        <span style="display:block;margin-top:6px;font-size:11px;font-weight:600;color:${option.color};font-family:${FONT};">${escapeHtml(option.label)}</span>
-      </a>`,
+      <td align="center" style="padding:4px 2px;vertical-align:top;">
+        <a href="${escapeHtml(feedbackUrl({ widgetKey, sessionToken, rating: option.value }))}"
+           style="display:block;text-decoration:none;text-align:center;min-width:52px;padding:10px 4px;border-radius:10px;background-color:${BRAND.white};border:1px solid ${BRAND.border};">
+          <span style="display:block;font-size:28px;line-height:1;">${option.emoji}</span>
+          <span style="display:block;margin-top:6px;font-size:11px;font-weight:600;color:${option.color};font-family:${FONT_BODY};">${escapeHtml(option.label)}</span>
+        </a>
+      </td>`,
   ).join('');
 
   return `
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:28px 0 0;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:28px 0 0;width:100%;">
       <tr>
-        <td style="background:${BRAND.surface};border:1px solid ${BRAND.border};border-radius:12px;padding:20px 16px;text-align:center;">
-          <p style="margin:0 0 14px;color:${BRAND.text};font-size:15px;font-weight:600;font-family:${FONT};">
+        <td style="background-color:${BRAND.surface};border-radius:12px;padding:22px 18px;">
+          <p style="margin:0 0 6px;color:${BRAND.text};font-size:16px;font-weight:700;font-family:${FONT_BODY};">
             How was your support experience?
           </p>
-          <div>${buttons}</div>
+          <p style="margin:0 0 16px;color:${BRAND.muted};font-size:13px;line-height:1.5;font-family:${FONT_BODY};">
+            Tap a rating — it only takes a second.
+          </p>
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="width:100%;">
+            <tr>
+              ${buttons}
+            </tr>
+          </table>
         </td>
       </tr>
     </table>`;
+}
+
+function attachmentHtml(attachments = []) {
+  return (attachments || [])
+    .filter((a) => a?.url)
+    .map((a) => {
+      const isImage = /^image\//i.test(a.contentType || '') || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(a.url);
+      if (isImage) {
+        return `<div style="margin-top:10px;"><img src="${escapeHtml(a.url)}" alt="${escapeHtml(a.filename || 'Image')}" style="max-width:100%;height:auto;border-radius:8px;border:1px solid ${BRAND.border};display:block;" /></div>`;
+      }
+      return `<div style="margin-top:8px;"><a href="${escapeHtml(a.url)}" style="color:${BRAND.link};font-size:13px;font-family:${FONT_BODY};text-decoration:underline;" target="_blank" rel="noopener">${escapeHtml(a.filename || 'Attachment')}</a></div>`;
+    })
+    .join('');
+}
+
+function buildTranscriptThread(entries, timeZone) {
+  if (!entries.length) {
+    return `
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:8px 0 0;width:100%;">
+        <tr>
+          <td style="padding:16px;background-color:${BRAND.surface};border-radius:10px;color:${BRAND.muted};font-size:14px;font-family:${FONT_BODY};">
+            No messages were recorded for this conversation.
+          </td>
+        </tr>
+      </table>`;
+  }
+
+  const rows = entries
+    .map((entry, index) => {
+      const time = formatMessageTime(entry.sentAt, timeZone);
+      const attachments = attachmentHtml(entry.attachments);
+      const isLast = index === entries.length - 1;
+
+      if (entry.isSystem) {
+        const text = escapeHtml(stripHtml(String(entry.html || '').replace(/<[^>]+>/g, ' '))) || escapeHtml(entry.speaker);
+        return `
+          <tr>
+            <td style="padding:0 0 ${isLast ? '0' : '12px'};">
+              <p style="margin:0;text-align:center;color:${BRAND.faint};font-size:12px;line-height:1.5;font-family:${FONT_BODY};">
+                ${text}
+              </p>
+            </td>
+          </tr>`;
+      }
+
+      const isCustomer = entry.side === 'customer';
+      const bubbleBg = isCustomer ? BRAND.surface : '#FFF7F3';
+      const bubbleBorder = isCustomer ? BRAND.border : '#F0D0C2';
+      const label = isCustomer ? 'You' : escapeHtml(entry.speaker);
+
+      return `
+        <tr>
+          <td style="padding:0 0 ${isLast ? '0' : '12px'};">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="width:100%;background-color:${bubbleBg};border:1px solid ${bubbleBorder};border-radius:12px;">
+              <tr>
+                <td style="padding:14px 16px;">
+                  <p style="margin:0 0 8px;font-family:${FONT_BODY};font-size:12px;line-height:1.4;">
+                    <strong style="color:${BRAND.text};">${label}</strong>
+                    <span style="color:${BRAND.faint};">&nbsp;·&nbsp;${escapeHtml(time)}</span>
+                  </p>
+                  <div style="color:${BRAND.text};font-size:15px;line-height:1.6;font-family:${FONT_BODY};">${entry.html}</div>
+                  ${attachments}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>`;
+    })
+    .join('');
+
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:8px 0 0;width:100%;">
+      ${rows}
+    </table>`;
+}
+
+function brandSignOff(brand) {
+  return `<p style="margin:36px 0 0;color:${BRAND.text};font-size:15px;line-height:1.6;font-family:${FONT_BODY};">Thanks,<br/>The <strong>${escapeHtml(brand)}</strong> team</p>`;
+}
+
+function merchantWebsite(company) {
+  const shopifyDomain = company?.storeIntegration?.shopify?.shopDomain;
+  if (shopifyDomain) {
+    return String(shopifyDomain).startsWith('http')
+      ? shopifyDomain
+      : `https://${shopifyDomain}`;
+  }
+  return (
+    company?.website ||
+    company?.storeIntegration?.woocommerce?.storeUrl ||
+    company?.storeIntegration?.custom?.storeUrl ||
+    ''
+  );
+}
+
+function merchantLogo(company) {
+  return company?.logo || company?.liveChat?.appearance?.logoUrl || '';
 }
 
 function buildTranscriptHtml({
@@ -214,7 +334,8 @@ function buildTranscriptHtml({
   includeRating,
 }) {
   const brand = company?.name || company?.liveChat?.content?.agentName || 'Support';
-  const logo = company?.logo || company?.liveChat?.appearance?.logoUrl || '';
+  const logo = merchantLogo(company);
+  const websiteUrl = merchantWebsite(company);
   const sessionId = ticket?.ticket_code || String(session?._id || '').slice(-8);
   const sessionDate = formatSessionDate(
     session?.createdAt || ticket?.createdAt || new Date(),
@@ -224,43 +345,6 @@ function buildTranscriptHtml({
   const hello = greet ? `Hi ${escapeHtml(greet)},` : 'Hi there,';
   const timeZone = company?.businessHours?.default?.timezone;
 
-  const lines = entries
-    .map((entry) => {
-      const time = formatMessageTime(entry.sentAt, timeZone);
-      const attachments = (entry.attachments || [])
-        .filter((a) => a?.url)
-        .map((a) => {
-          const isImage = /^image\//i.test(a.contentType || '') || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(a.url);
-          if (isImage) {
-            return `<div style="margin-top:8px;"><img src="${escapeHtml(a.url)}" alt="${escapeHtml(a.filename || 'Image')}" style="max-width:100%;height:auto;border-radius:8px;border:1px solid ${BRAND.border};" /></div>`;
-          }
-          return `<div style="margin-top:6px;"><a href="${escapeHtml(a.url)}" style="color:${BRAND.orange};font-size:13px;font-family:${FONT};" target="_blank" rel="noopener">${escapeHtml(a.filename || 'Attachment')}</a></div>`;
-        })
-        .join('');
-      if (entry.isSystem) {
-        return `
-          <tr>
-            <td style="padding:10px 0;border-bottom:1px solid ${BRAND.border};">
-              <p style="margin:0;text-align:center;color:${BRAND.muted};font-size:12px;font-style:italic;font-family:${FONT};">
-                ${escapeHtml(stripHtml(entry.html.replace(/<[^>]+>/g, ' '))) || escapeHtml(entry.speaker)}
-              </p>
-            </td>
-          </tr>`;
-      }
-      return `
-        <tr>
-          <td style="padding:12px 0;border-bottom:1px solid ${BRAND.border};vertical-align:top;">
-            <p style="margin:0 0 4px;color:${BRAND.muted};font-size:12px;font-family:${FONT};">
-              <span style="font-variant-numeric:tabular-nums;">${escapeHtml(time)}</span>
-              &nbsp;<strong style="color:${BRAND.text};">${escapeHtml(entry.speaker)}</strong>
-            </p>
-            <div style="color:${BRAND.text};font-size:14px;line-height:1.55;font-family:${FONT};">${entry.html}</div>
-            ${attachments}
-          </td>
-        </tr>`;
-    })
-    .join('');
-
   const ratingBlock = includeRating
     ? buildRatingBlock({
         widgetKey: company?.liveChat?.widgetKey,
@@ -269,37 +353,33 @@ function buildTranscriptHtml({
       })
     : '';
 
-  const merchantBrand = logo
-    ? `<div style="margin:0 0 20px;"><img src="${escapeHtml(logo)}" alt="${escapeHtml(brand)}" style="max-height:36px;max-width:160px;display:block;" /></div>`
-    : '';
-
   const bodyHtml = `
-    ${merchantBrand}
     ${emailHeading('Your conversation transcript')}
     ${emailParagraph(hello)}
     ${emailParagraph(
-      `Thank you for contacting <strong style="color:${BRAND.text};">${escapeHtml(brand)}</strong>. A copy of your support chat is below.`,
+      `Thanks for chatting with <strong>${escapeHtml(brand)}</strong>. Here’s a copy of your support conversation so you can keep it for your records.`,
+    )}
+    ${emailParagraph(
+      `Session <strong>${escapeHtml(sessionId)}</strong> · ${escapeHtml(sessionDate)}`,
+      { muted: true, size: 13 },
     )}
     ${ratingBlock}
-    ${emailCallout(
-      'Session details',
-      `<p style="margin:0 0 6px;"><strong>Session ID:</strong> ${escapeHtml(sessionId)}</p>
-       <p style="margin:0;"><strong>Date:</strong> ${escapeHtml(sessionDate)}</p>`,
+    ${emailSection('Conversation', buildTranscriptThread(entries, timeZone))}
+    ${emailSection(
+      'Need more help?',
+      `<p style="margin:0;">Reply to this email or start a new chat on our store anytime.</p>`,
     )}
-    <p style="margin:28px 0 8px;color:${BRAND.text};font-size:15px;font-weight:700;font-family:${FONT};">Conversation</p>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-      ${lines || `<tr><td style="padding:12px 0;color:${BRAND.muted};font-size:14px;font-family:${FONT};">No messages were recorded for this conversation.</td></tr>`}
-    </table>
-    ${emailParagraph(
-      'Thank you again for your time. If you need more help, reply to this email or start a new chat on our store.',
-      { muted: true },
-    )}
+    ${brandSignOff(brand)}
   `;
 
-  return emailShell({
+  return merchantEmailShell({
     title: `${brand} support chat`,
     preheader: `A copy of your ${brand} support conversation (${sessionId}).`,
     bodyHtml,
+    brandName: brand,
+    logoUrl: logo,
+    websiteUrl,
+    footerNote: `You received this email because you contacted ${escapeHtml(brand)} support.`,
   });
 }
 
@@ -307,23 +387,26 @@ function buildTranscriptText({ brand, sessionId, sessionDate, entries, greet }) 
   const hello = greet ? `Hi ${greet},` : 'Hi there,';
   const lines = entries.map((entry) => {
     const time = formatMessageTime(entry.sentAt);
-    const body = stripHtml(entry.html.replace(/<br\s*\/?>/gi, '\n'));
+    const body = stripHtml(String(entry.html || '').replace(/<br\s*\/?>/gi, '\n'));
     if (entry.isSystem) return `[${time}] ${body}`;
     return `[${time}] ${entry.speaker}: ${body}`;
   });
   return [
     hello,
     '',
-    `Thank you for contacting ${brand}. A copy of your support chat session is provided below.`,
+    `Thanks for chatting with ${brand}. Here’s a copy of your support conversation.`,
     '',
-    `Session ID: ${sessionId}`,
+    `Session: ${sessionId}`,
     `Date: ${sessionDate}`,
     '',
     'Conversation',
     '-----------',
     ...lines,
     '',
-    'Thank you again for your time.',
+    'Need more help? Reply to this email or start a new chat on our store.',
+    '',
+    `Thanks,`,
+    `The ${brand} team`,
   ].join('\n');
 }
 
@@ -384,19 +467,24 @@ async function sendConversationTranscriptEmail(company, ticket, { force = false 
   });
 
   const subject = `${brand} Support Chat Logged [${sessionId}]`;
-  const result = await sendEmail({ to, subject, html, text });
+  const result = await sendCompanyCustomerEmail(company, { to, subject, html, text });
 
   if (session) {
     session.transcriptEmail = {
       sentAt: new Date(),
       to,
-      messageId: result?.id || undefined,
+      messageId: result?.messageId || result?.id || undefined,
     };
     session.markModified('transcriptEmail');
     await session.save();
   }
 
-  return { skipped: false, to, messageId: result?.id || null, sessionId };
+  return {
+    skipped: false,
+    to,
+    messageId: result?.messageId || result?.id || null,
+    sessionId,
+  };
 }
 
 module.exports = {
