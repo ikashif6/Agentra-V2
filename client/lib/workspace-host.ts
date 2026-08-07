@@ -71,6 +71,39 @@ function isLocalDevHost(hostname: string): boolean {
   return host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost");
 }
 
+export function isPortalHostname(hostname: string): boolean {
+  const host = normalizeHostname(hostname);
+  if (host === PORTAL_HOST) return true;
+  if (host === "app.localhost" || host === "localhost" || host === "127.0.0.1") return true;
+  return false;
+}
+
+/**
+ * Billing checkout must run on the approved portal host (app.agentraa.com),
+ * not on tenant subdomains (demo.agentraa.com, …).
+ */
+export function buildPortalCheckoutUrl(
+  cycle: "monthly" | "yearly",
+  returnSubdomain?: string | null,
+): string {
+  if (typeof window !== "undefined" && isLocalDevHost(window.location.hostname)) {
+    const url = new URL("/billing/checkout", window.location.origin);
+    url.searchParams.set("cycle", cycle);
+    return url.toString();
+  }
+
+  const url = new URL(`https://${PORTAL_HOST}/billing/checkout`);
+  url.searchParams.set("cycle", cycle);
+  if (returnSubdomain) url.searchParams.set("return", returnSubdomain);
+  return url.toString();
+}
+
+export function shouldRedirectCheckoutToPortal(): boolean {
+  if (typeof window === "undefined") return false;
+  if (isLocalDevHost(window.location.hostname)) return false;
+  return !isPortalHostname(window.location.hostname);
+}
+
 export function buildWorkspaceOrigin(subdomain: string): string {
   if (typeof window !== "undefined") {
     const protocol = window.location.protocol;

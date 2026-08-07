@@ -2,6 +2,7 @@ import axios, { AxiosError } from "axios";
 import Cookies from "js-cookie";
 import type { StoreOrderAddress, StoreProvider, StoreSyncSettings } from "./types";
 import { API_BASE, FACEBOOK_API_BASE } from "./constants";
+import { setTokens } from "./auth";
 
 export const api = axios.create({
   baseURL: API_BASE,
@@ -72,8 +73,7 @@ api.interceptors.response.use(
         const newAccess = data.data.accessToken;
         const newRefresh = data.data.refreshToken;
 
-        Cookies.set("accessToken", newAccess, { expires: 7, sameSite: "lax" });
-        Cookies.set("refreshToken", newRefresh, { expires: 30, sameSite: "lax" });
+        setTokens(newAccess, newRefresh);
 
         refreshQueue.forEach((cb) => cb(newAccess));
         refreshQueue = [];

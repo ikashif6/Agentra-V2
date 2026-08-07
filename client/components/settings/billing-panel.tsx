@@ -6,6 +6,7 @@ import { CreditCard, Download, Loader2, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { billingApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
+import { getSubdomain, mirrorAuthCookiesToParentDomain } from "@/lib/auth";
 import {
   AGENTRA_PRO_PLAN,
   formatBillingDate,
@@ -15,6 +16,10 @@ import {
   type BillingCycle,
   type BillingOverview,
 } from "@/lib/billing";
+import {
+  buildPortalCheckoutUrl,
+  shouldRedirectCheckoutToPortal,
+} from "@/lib/workspace-host";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
@@ -101,6 +106,12 @@ export default function BillingPanel() {
   };
 
   const goToCheckout = () => {
+    if (shouldRedirectCheckoutToPortal()) {
+      mirrorAuthCookiesToParentDomain();
+      const returnSub = getSubdomain();
+      window.location.href = buildPortalCheckoutUrl(cycle, returnSub);
+      return;
+    }
     router.push(`/billing/checkout?cycle=${cycle}`);
   };
 

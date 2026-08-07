@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { billingApi } from "@/lib/api";
 import { getApiError } from "@/lib/api-error";
+import { getSubdomain, mirrorAuthCookiesToParentDomain } from "@/lib/auth";
 import {
   AGENTRA_PRO_PLAN,
   formatMoney,
@@ -16,6 +17,11 @@ import {
   type PaddleCheckoutPayload,
 } from "@/lib/billing";
 import { cn } from "@/lib/utils";
+import {
+  buildPortalCheckoutUrl,
+  buildWorkspaceOrigin,
+  shouldRedirectCheckoutToPortal,
+} from "@/lib/workspace-host";
 
 const FRAME_CLASS = "paddle-checkout-frame";
 const LOAD_TIMEOUT_MS = 20000;
@@ -38,6 +44,7 @@ export default function BillingCheckoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const cycle = (searchParams.get("cycle") === "yearly" ? "yearly" : "monthly") as BillingCycle;
+  const returnSubdomain = searchParams.get("return") || getSubdomain() || null;
 
   const [booting, setBooting] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,8 +78,15 @@ export default function BillingCheckoutPage() {
 
   const successUrl = useMemo(() => {
     if (typeof window === "undefined") return "/settings?item=billing&paddle=success";
+    if (returnSubdomain) {
+      return `${buildWorkspaceOrigin(returnSubdomain)}/settings?item=billing&paddle=success`;
+    }
     return `${window.location.origin}/settings?item=billing&paddle=success`;
-  }, []);
+  }, [returnSubdomain]);
+
+  const billingHomeHref = returnSubdomain
+    ? `${buildWorkspaceOrigin(returnSubdomain)}/settings?item=billing`
+    : "/settings?item=billing";
 
   const checkoutSettings = useMemo(
     () => ({
@@ -151,16 +165,33 @@ export default function BillingCheckoutPage() {
                 return;
               }
               if (event.name === "checkout.error") {
+                const e = event as {
+                  detail?: string;
+                  code?: string;
+                  type?: string;
+                  data?: {
+                    detail?: string;
+                    error?: { detail?: string; message?: string; code?: string };
+                  };
+                };
                 const detail =
-                  (event as { data?: { error?: { detail?: string; message?: string } } }).data
-                    ?.error?.detail ||
-                  (event as { data?: { error?: { detail?: string; message?: string } } }).data
-                    ?.error?.message ||
+                  e.detail ||
+                  e.data?.detail ||
+                  e.data?.error?.detail ||
+                  e.data?.error?.message ||
                   "Checkout failed. Please try again.";
+                const code = e.code || e.data?.error?.code || "";
                 console.error("[paddle checkout.error]", event);
                 if (timeoutId) window.clearTimeout(timeoutId);
-                setError(detail);
-                toast.error(detail);
+
+                const lower = `${detail} ${code}`.toLowerCase();
+                const message =
+                  lower.includes("domain") || lower.includes("not approved")
+                    ? domainApprovalHint()
+                    : detail;
+
+                setError(message);
+                toast.error(message);
                 setBooting(false);
               }
             },
@@ -195,10 +226,17 @@ export default function BillingCheckoutPage() {
     return () => window.cancelAnimationFrame(t);
   }, []);
 
+  // Never run live Paddle on tenant subdomains — only app.agentraa.com is approved.
   useEffect(() => {
+    if (!shouldRedirectCheckoutToPortal()) return;
+    mirrorAuthCookiesToParentDomain();
+    window.location.replace(buildPortalCheckoutUrl(cycle, returnSubdomain || getSubdomain()));
+  }, [cycle, returnSubdomain]);
+
+  useEffect(() => {
+    if (shouldRedirectCheckoutToPortal()) return;
     void startCheckout();
     return () => {
-      // Invalidate in-flight work when cycle changes / unmounts
       runIdRef.current += 1;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount/cycle bootstrap
@@ -216,13 +254,13 @@ export default function BillingCheckoutPage() {
         <div className="ml-auto flex w-full max-w-[520px] flex-1 flex-col py-8 pl-10 pr-8 sm:pl-12 sm:pr-10 lg:py-12 lg:pl-4 lg:pr-16 xl:pr-20">
           <div className="flex items-center gap-3">
             <Link
-              href="/settings?item=billing"
+              href={billingHomeHref}
               className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/10 hover:text-white"
               aria-label="Back to billing"
             >
               <ArrowLeft className="size-4" />
             </Link>
-            <Link href="/settings?item=billing" className="inline-flex items-center">
+            <Link href={billingHomeHref} className="inline-flex items-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/agentraa-logo-white.png"
@@ -253,7 +291,11 @@ export default function BillingCheckoutPage() {
             <div className="mt-6 inline-flex rounded-xl border border-white/[0.06] bg-white/[0.03] p-1">
               <button
                 type="button"
-                onClick={() => router.replace(`/billing/checkout?cycle=monthly`)}
+                onClick={() => {
+                  const qs = new URLSearchParams({ cycle: "monthly" });
+                  if (returnSubdomain) qs.set("return", returnSubdomain);
+                  router.replace(`/billing/checkout?${qs.toString()}`);
+                }}
                 className={cn(
                   "rounded-lg px-3.5 py-1.5 text-[13px] font-medium transition-colors",
                   cycle === "monthly"
@@ -265,7 +307,11 @@ export default function BillingCheckoutPage() {
               </button>
               <button
                 type="button"
-                onClick={() => router.replace(`/billing/checkout?cycle=yearly`)}
+                onClick={() => {
+                  const qs = new URLSearchParams({ cycle: "yearly" });
+                  if (returnSubdomain) qs.set("return", returnSubdomain);
+                  router.replace(`/billing/checkout?${qs.toString()}`);
+                }}
                 className={cn(
                   "rounded-lg px-3.5 py-1.5 text-[13px] font-medium transition-colors",
                   cycle === "yearly"
