@@ -18,14 +18,20 @@ import {
 import { cn } from "@/lib/utils";
 
 const FRAME_CLASS = "paddle-checkout-frame";
+const LOAD_TIMEOUT_MS = 20000;
 
-async function waitForFrame(className: string, attempts = 40) {
+async function waitForFrame(className: string, attempts = 60) {
   for (let i = 0; i < attempts; i += 1) {
     const el = document.querySelector(`.${className}`);
     if (el) return el;
     await new Promise((r) => window.setTimeout(r, 50));
   }
   throw new Error("Checkout frame is not ready. Please refresh and try again.");
+}
+
+function domainApprovalHint() {
+  const host = typeof window !== "undefined" ? window.location.hostname : "this domain";
+  return `Checkout did not load on ${host}. In Paddle → Checkout → Website approval, add and approve this exact domain (subdomains are approved separately), then try again.`;
 }
 
 export default function BillingCheckoutPage() {
@@ -37,6 +43,8 @@ export default function BillingCheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [entered, setEntered] = useState(false);
   const paddleRef = useRef<Paddle | null>(null);
+  const runIdRef = useRef(0);
+  const loadedRef = useRef(false);
 
   const price = useMemo(() => {
     if (cycle === "yearly") {
@@ -66,11 +74,8 @@ export default function BillingCheckoutPage() {
     return `${window.location.origin}/settings?item=billing&paddle=success`;
   }, []);
 
-  const openInlineCheckout = async (instance: Paddle, payload: PaddleCheckoutPayload) => {
-    await waitForFrame(FRAME_CLASS);
-    await new Promise((r) => window.requestAnimationFrame(() => r(null)));
-
-    const settings = {
+  const checkoutSettings = useMemo(
+    () => ({
       displayMode: "inline" as const,
       frameTarget: FRAME_CLASS,
       frameInitialHeight: 520,
@@ -78,10 +83,20 @@ export default function BillingCheckoutPage() {
       theme: "light" as const,
       successUrl,
       variant: "one-page" as const,
-    };
+    }),
+    [successUrl],
+  );
+
+  const openInlineCheckout = async (instance: Paddle, payload: PaddleCheckoutPayload) => {
+    await waitForFrame(FRAME_CLASS);
+    // Clear previous iframe nodes so reopen / cycle switch doesn't stall
+    const frame = document.querySelector(`.${FRAME_CLASS}`);
+    if (frame) frame.innerHTML = "";
+
+    await new Promise((r) => window.requestAnimationFrame(() => r(null)));
 
     if (payload.transactionId) {
-      instance.Checkout.open({ transactionId: payload.transactionId, settings });
+      instance.Checkout.open({ transactionId: payload.transactionId, settings: checkoutSettings });
       return;
     }
 
@@ -93,17 +108,26 @@ export default function BillingCheckoutPage() {
         : payload.customerAuthEmail
           ? { email: payload.customerAuthEmail }
           : undefined,
-      settings,
+      settings: checkoutSettings,
     });
   };
 
-  const startCheckout = async (isCancelled?: () => boolean) => {
+  const startCheckout = async () => {
+    const runId = ++runIdRef.current;
+    const isStale = () => runId !== runIdRef.current;
+
+    loadedRef.current = false;
     setBooting(true);
     setError(null);
+
+    let timeoutId: number | undefined;
     try {
       const { data } = await billingApi.checkout(cycle);
-      if (isCancelled?.()) return;
+      if (isStale()) return;
       const payload = data.data.checkout as PaddleCheckoutPayload;
+
+      await waitForFrame(FRAME_CLASS);
+      if (isStale()) return;
 
       let instance: Paddle | null = paddleRef.current;
       if (!instance) {
@@ -111,21 +135,13 @@ export default function BillingCheckoutPage() {
           (await initializePaddle({
             token: payload.clientToken,
             environment: payload.env === "live" ? "production" : "sandbox",
-            checkout: {
-              settings: {
-                displayMode: "inline",
-                frameTarget: FRAME_CLASS,
-                frameInitialHeight: 520,
-                frameStyle:
-                  "width:100%; min-width:312px; background-color:transparent; border:none;",
-                theme: "light",
-                successUrl,
-                variant: "one-page",
-              },
-            },
             eventCallback: (event) => {
+              if (isStale()) return;
               if (event.name === "checkout.loaded") {
+                loadedRef.current = true;
+                if (timeoutId) window.clearTimeout(timeoutId);
                 setBooting(false);
+                setError(null);
               }
               if (event.name === "checkout.completed") {
                 toast.success("Payment received. Activating your plan…");
@@ -142,6 +158,7 @@ export default function BillingCheckoutPage() {
                     ?.error?.message ||
                   "Checkout failed. Please try again.";
                 console.error("[paddle checkout.error]", event);
+                if (timeoutId) window.clearTimeout(timeoutId);
                 setError(detail);
                 toast.error(detail);
                 setBooting(false);
@@ -150,16 +167,22 @@ export default function BillingCheckoutPage() {
           })) ?? null;
       }
 
-      if (isCancelled?.()) return;
+      if (isStale()) return;
       if (!instance) throw new Error("Could not load Paddle Checkout");
       paddleRef.current = instance;
 
-      setBooting(false);
-      await new Promise((r) => window.setTimeout(r, 80));
-      if (isCancelled?.()) return;
+      timeoutId = window.setTimeout(() => {
+        if (isStale() || loadedRef.current) return;
+        const message = domainApprovalHint();
+        setError(message);
+        toast.error("Checkout is taking too long to load");
+        setBooting(false);
+      }, LOAD_TIMEOUT_MS);
+
       await openInlineCheckout(instance, payload);
     } catch (err: unknown) {
-      if (isCancelled?.()) return;
+      if (isStale()) return;
+      if (timeoutId) window.clearTimeout(timeoutId);
       const { message } = getApiError(err, "Could not start checkout");
       setError(message);
       toast.error(message);
@@ -173,10 +196,10 @@ export default function BillingCheckoutPage() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    void startCheckout(() => cancelled);
+    void startCheckout();
     return () => {
-      cancelled = true;
+      // Invalidate in-flight work when cycle changes / unmounts
+      runIdRef.current += 1;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional mount/cycle bootstrap
   }, [cycle]);
@@ -189,7 +212,6 @@ export default function BillingCheckoutPage() {
         entered ? "opacity-100" : "opacity-0",
       )}
     >
-      {/* Full-bleed black half — stays fixed while payment scrolls */}
       <aside className="flex min-h-[50vh] flex-col bg-black text-white lg:sticky lg:top-0 lg:h-screen lg:min-h-0 lg:self-start lg:overflow-y-auto">
         <div className="ml-auto flex w-full max-w-[520px] flex-1 flex-col py-8 pl-10 pr-8 sm:pl-12 sm:pr-10 lg:py-12 lg:pl-4 lg:pr-16 xl:pr-20">
           <div className="flex items-center gap-3">
@@ -299,7 +321,6 @@ export default function BillingCheckoutPage() {
         </div>
       </aside>
 
-      {/* Full-bleed white half — form column constrained */}
       <section
         className={cn(
           "flex min-h-[50vh] flex-col bg-white transition-all delay-100 duration-500 ease-out lg:min-h-screen",

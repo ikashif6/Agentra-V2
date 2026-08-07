@@ -9,10 +9,10 @@ import { AuthGlassChatVisual } from "@/components/auth/auth-glass-chat-visual";
 export function FloatingMorphHero() {
   return (
     <aside
-      className="auth-morph-shell relative hidden h-full min-h-svh lg:block"
+      className="auth-morph-shell relative z-0 hidden min-h-0 lg:block lg:min-h-svh lg:overflow-hidden"
       aria-label="Product preview"
     >
-      <div className="auth-morph-float relative h-full w-full overflow-hidden [contain:paint]">
+      <div className="auth-morph-float relative h-full min-h-[calc(100svh-28px)] w-full overflow-hidden [contain:paint]">
         <div className="pointer-events-none absolute inset-0 blur-[10px]" aria-hidden="true">
           <div className="auth-morph-pulse-frame absolute max-w-none">
             {/* eslint-disable-next-line @next/next/no-img-element */}

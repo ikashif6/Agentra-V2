@@ -162,40 +162,205 @@ export default function BillingPanel() {
   const accessEndsLabel = formatBillingDate(billing.plan.accessEndsAt);
   const isCanceled = billing.plan.status === "canceled";
   const isCancelScheduled = Boolean(billing.plan.cancelAtPeriodEnd);
+  const isTrialing = billing.plan.status === "trialing";
   const needsSubscribe =
     billing.plan.status === "trialing" ||
     billing.plan.status === "canceled" ||
     billing.plan.status === "unpaid";
   const isPastDue = billing.plan.status === "past_due";
+  const isSubscribed =
+    billing.plan.status === "active" ||
+    billing.plan.status === "past_due" ||
+    (isCancelScheduled && billing.plan.status !== "canceled");
   const canManagePayment = Boolean(billing.plan.hasPaddleSubscription || billing.paymentMethod);
+  const planCycleLabel =
+    billing.plan.billingCycle === "yearly" ? "Yearly billing" : "Monthly billing";
+
+  const membership = (() => {
+    if (isTrialing) {
+      return {
+        title: "Not subscribed",
+        detail: accessEndsLabel
+          ? `You're on a free trial of Agentra Pro until ${accessEndsLabel}.`
+          : "You're on a free trial of Agentra Pro.",
+        badge: "Trial",
+        badgeClass:
+          "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+      };
+    }
+    if (isCanceled || billing.plan.status === "unpaid") {
+      return {
+        title: "Not subscribed",
+        detail: "Your Agentra Pro subscription is not active. Subscribe to restore full access.",
+        badge: status,
+        badgeClass: "border-border bg-muted text-muted-foreground",
+      };
+    }
+    if (isPastDue) {
+      return {
+        title: "Subscribed · payment issue",
+        detail: "You're on Agentra Pro, but the last payment failed. Update your card to keep access.",
+        badge: "Past due",
+        badgeClass:
+          "border-destructive/30 bg-destructive/10 text-destructive",
+      };
+    }
+    if (isCancelScheduled) {
+      return {
+        title: "Subscribed · canceling",
+        detail: accessEndsLabel
+          ? `You're on Agentra Pro until ${accessEndsLabel}, then billing stops.`
+          : "You're on Agentra Pro, and cancellation is scheduled.",
+        badge: "Canceling",
+        badgeClass:
+          "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+      };
+    }
+    return {
+      title: "Subscribed",
+      detail: `You're subscribed to Agentra Pro (${planCycleLabel.toLowerCase()}).`,
+      badge: "Active",
+      badgeClass:
+        "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
+    };
+  })();
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-foreground">Plan & billing</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your workspace runs on Agentra Pro, one plan with everything included. Payments are
-          processed securely by Paddle.
+          Manage your Agentra Pro subscription. Payments are processed securely by Paddle.
           {billing.paddleEnv === "sandbox" ? " (Sandbox mode)" : null}
         </p>
       </div>
 
       <section className="overflow-hidden rounded-xl border border-border/80 bg-card">
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/60 px-5 py-4">
-          <div>
-            <p className="text-sm font-medium text-foreground">{AGENTRA_PRO_PLAN.label}</p>
-            <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-              {priceHeadline.main}
-              <span className="text-base font-normal text-muted-foreground">
-                {" "}
-                {priceHeadline.suffix}
-              </span>
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">{priceHeadline.note}</p>
+        <div className="border-b border-border/60 px-5 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  Current plan
+                </p>
+                <span
+                  className={cn(
+                    "rounded-md border px-2 py-0.5 text-xs font-medium",
+                    membership.badgeClass,
+                  )}
+                >
+                  {membership.badge}
+                </span>
+              </div>
+              <h3 className="text-xl font-semibold tracking-tight text-foreground">
+                Agentra Pro
+              </h3>
+              <p className="text-sm font-medium text-foreground">{membership.title}</p>
+              <p className="max-w-xl text-sm text-muted-foreground">{membership.detail}</p>
+            </div>
+
+            <div className="text-left sm:text-right">
+              <p className="text-2xl font-semibold tracking-tight text-foreground">
+                {isSubscribed && billing.plan.billingCycle === "yearly"
+                  ? AGENTRA_PRO_PLAN.yearlyPerMonthLabel
+                  : needsSubscribe
+                    ? priceHeadline.main
+                    : AGENTRA_PRO_PLAN.priceLabel}
+                <span className="text-base font-normal text-muted-foreground"> / month</span>
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {isSubscribed
+                  ? planCycleLabel
+                  : needsSubscribe
+                    ? priceHeadline.note
+                    : "Billed monthly"}
+              </p>
+            </div>
           </div>
-          <span className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
-            {status}
-          </span>
+
+          {needsSubscribe ? (
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
+              <div
+                role="radiogroup"
+                aria-label="Billing cycle"
+                className="inline-flex rounded-lg border border-border bg-muted/40 p-1"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={cycle === "monthly"}
+                  onClick={() => setCycle("monthly")}
+                  className={cn(
+                    "rounded-md px-3.5 py-2 text-sm font-medium transition-colors",
+                    cycle === "monthly"
+                      ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Monthly
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={cycle === "yearly"}
+                  onClick={() => setCycle("yearly")}
+                  className={cn(
+                    "rounded-md px-3.5 py-2 text-sm font-medium transition-colors",
+                    cycle === "yearly"
+                      ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Yearly
+                  <span
+                    className={cn(
+                      "ml-1.5 text-xs font-semibold",
+                      cycle === "yearly" ? "text-primary" : "text-primary/80",
+                    )}
+                  >
+                    save 10%
+                  </span>
+                </button>
+              </div>
+
+              <div className="flex flex-col items-stretch gap-1 sm:items-end">
+                <Button
+                  type="button"
+                  onClick={goToCheckout}
+                  disabled={!billing.paddleConfigured}
+                  className="h-9 rounded-[10px] px-4"
+                >
+                  {isCanceled || billing.plan.status === "unpaid"
+                    ? "Resubscribe to Pro"
+                    : "Subscribe to Pro"}
+                </Button>
+                {!billing.paddleConfigured ? (
+                  <p className="text-xs text-muted-foreground">
+                    Paddle is not configured on this server yet.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    {cycle === "yearly"
+                      ? `${AGENTRA_PRO_PLAN.yearlyTotalLabel} billed yearly`
+                      : `${AGENTRA_PRO_PLAN.priceLabel} billed monthly`}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {isPastDue ? (
+            <div className="mt-5 border-t border-border/60 pt-4">
+              <Button
+                type="button"
+                onClick={() => void handlePortal()}
+                disabled={portalLoading || !billing.paddleConfigured}
+              >
+                {portalLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                Update payment method
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <div className="px-5 py-4">
@@ -207,58 +372,6 @@ export default function BillingPanel() {
               </li>
             ))}
           </ul>
-
-          {needsSubscribe ? (
-            <div className="mt-5 space-y-3">
-              <div className="inline-flex rounded-lg border border-border/70 p-1">
-                <button
-                  type="button"
-                  onClick={() => setCycle("monthly")}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                    cycle === "monthly"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  Monthly · {AGENTRA_PRO_PLAN.priceLabel}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCycle("yearly")}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                    cycle === "yearly"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  Yearly · {AGENTRA_PRO_PLAN.yearlyPerMonthLabel}/mo
-                </button>
-              </div>
-              <div>
-                <Button
-                  type="button"
-                  onClick={goToCheckout}
-                  disabled={!billing.paddleConfigured}
-                >
-                  Subscribe with Paddle
-                </Button>
-                {!billing.paddleConfigured ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Paddle is not configured on this server yet.
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ) : isPastDue ? (
-            <div className="mt-5">
-              <Button type="button" onClick={() => void handlePortal()} disabled={portalLoading || !billing.paddleConfigured}>
-                {portalLoading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                Update payment
-              </Button>
-            </div>
-          ) : null}
         </div>
 
         <div className="grid border-t border-border/60 sm:grid-cols-3">
@@ -281,15 +394,15 @@ export default function BillingPanel() {
           <p className="border-t border-border/60 px-5 py-3 text-sm text-muted-foreground">
             Trial ends{" "}
             {new Date(billing.plan.trialEndsAt).toLocaleDateString(undefined, { dateStyle: "medium" })}.
-            Subscribe with Paddle to continue on Pro after that date.
+            Subscribe to keep Agentra Pro after that date.
           </p>
         ) : isCancelScheduled && accessEndsLabel ? (
           <p className="border-t border-border/60 px-5 py-3 text-sm text-muted-foreground">
-            Your plan cancels on {accessEndsLabel}. You keep full access until then.
+            Access continues until {accessEndsLabel}.
           </p>
-        ) : billing.plan.currentPeriodEnd && !isCancelScheduled ? (
+        ) : billing.plan.currentPeriodEnd && isSubscribed && !isCancelScheduled ? (
           <p className="border-t border-border/60 px-5 py-3 text-sm text-muted-foreground">
-            Renews{" "}
+            Next renewal{" "}
             {new Date(billing.plan.currentPeriodEnd).toLocaleDateString(undefined, { dateStyle: "medium" })}.
           </p>
         ) : null}

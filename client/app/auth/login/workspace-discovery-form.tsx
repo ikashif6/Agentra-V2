@@ -58,6 +58,8 @@ export function WorkspaceDiscoveryForm() {
       }
 
       window.location.assign(buildWorkspaceLoginUrl(subdomain));
+      // Keep loading true through navigation; reset if the browser stays on this page.
+      window.setTimeout(() => setLoading(false), 8000);
     } catch {
       setNotFound(true);
       setLoading(false);

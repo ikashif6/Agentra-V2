@@ -110,40 +110,88 @@ function getCheckoutPayload({ company, billingCycle, email, name }) {
   };
 }
 
+function isMissingPaddleCustomerError(err) {
+  const message = String(err?.message || '').toLowerCase();
+  const detail = String(err?.paddle?.error?.detail || '').toLowerCase();
+  const code = String(err?.paddle?.error?.code || '').toLowerCase();
+  const blob = `${message} ${detail} ${code}`;
+  return (
+    blob.includes('customer') &&
+    (blob.includes('not found') || blob.includes('does not exist') || code.includes('customer_not_found'))
+  );
+}
+
 /**
  * Create a draft/automatic transaction so Checkout can open with transactionId
  * (more reliable than building the cart only in the browser).
+ *
+ * If the company still points at a stale paddleCustomerId (common after switching
+ * sandbox → live), clear it and retry with email only.
  */
 async function createCheckoutTransaction({ company, billingCycle, email, name }) {
-  const payload = getCheckoutPayload({ company, billingCycle, email, name });
-  const body = {
-    items: [{ price_id: payload.priceId, quantity: 1 }],
-    collection_mode: 'automatic',
-    currency_code: 'USD',
-    custom_data: payload.customData,
-  };
-  if (company.plan?.paddleCustomerId) {
-    body.customer_id = company.plan.paddleCustomerId;
-  } else if (email) {
-    body.customer = { email };
-  }
+  const attempt = async (useStoredCustomer) => {
+    const payload = getCheckoutPayload({ company, billingCycle, email, name });
+    if (!useStoredCustomer) {
+      delete payload.customer?.id;
+      if (email) {
+        payload.customer = { email };
+      } else {
+        payload.customer = undefined;
+      }
+    }
 
-  const result = await paddleFetch('/transactions', {
-    method: 'POST',
-    body,
-  });
-  const transactionId = result?.data?.id;
-  if (!transactionId) {
-    const err = new Error('Paddle did not return a transaction id');
-    err.statusCode = 502;
-    throw err;
-  }
+    const body = {
+      items: [{ price_id: payload.priceId, quantity: 1 }],
+      collection_mode: 'automatic',
+      currency_code: 'USD',
+      custom_data: payload.customData,
+    };
+    if (useStoredCustomer && company.plan?.paddleCustomerId) {
+      body.customer_id = company.plan.paddleCustomerId;
+    } else if (email) {
+      body.customer = { email };
+    }
 
-  return {
-    ...payload,
-    transactionId,
-    checkoutUrl: result?.data?.checkout?.url || null,
+    const result = await paddleFetch('/transactions', {
+      method: 'POST',
+      body,
+    });
+    const transactionId = result?.data?.id;
+    if (!transactionId) {
+      const err = new Error('Paddle did not return a transaction id');
+      err.statusCode = 502;
+      throw err;
+    }
+
+    return {
+      ...payload,
+      transactionId,
+      checkoutUrl: result?.data?.checkout?.url || null,
+    };
   };
+
+  try {
+    return await attempt(Boolean(company.plan?.paddleCustomerId));
+  } catch (err) {
+    if (!company.plan?.paddleCustomerId || !isMissingPaddleCustomerError(err)) {
+      throw err;
+    }
+
+    console.warn(
+      '[paddle] Clearing stale paddleCustomerId',
+      company.plan.paddleCustomerId,
+      'for company',
+      company.subdomain || company._id,
+    );
+    const Company = require('../models/Company');
+    await Company.updateOne(
+      { _id: company._id },
+      { $unset: { 'plan.paddleCustomerId': 1 } },
+    );
+    if (company.plan) company.plan.paddleCustomerId = undefined;
+
+    return attempt(false);
+  }
 }
 
 async function cancelPaddleSubscription(subscriptionId, { effectiveFrom = 'next_billing_period' } = {}) {

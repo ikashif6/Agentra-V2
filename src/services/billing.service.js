@@ -81,6 +81,7 @@ function getBillingOverview(company) {
 }
 
 async function getCheckoutSession(company, { billingCycle, email, name }) {
+  // Mutates + persists company when a stale paddleCustomerId is cleared.
   return paddle.createCheckoutTransaction({ company, billingCycle, email, name });
 }
 
